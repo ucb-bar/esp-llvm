@@ -51,37 +51,39 @@ def SRAI: InstI<"SRAI", 0b0010011, 0b000       , sra, GR32, imm32sx12> {
 
 //Unconditional Jumps
 //TODO:need to write test, systemZ test uses store
+let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 def J : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
           [(br bb:$target)]>;
 
 //Conditional Branches
 //TODO:refactor to class
 //TODO:write better test after loads implemented
-def BEQ : InstB<0b1100011, 0b000, (outs), 
+  def BEQ : InstB<0b1100011, 0b000, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BEQ\t$src1, $src2, $target", 
             //[(br_cc seteq, GR32:$src1, GR32:$src2, bb:$target)]>;
             [(brcond (i32 (seteq GR32:$src1,  GR32:$src2)), bb:$target)]>;
-def BNE : InstB<0b1100011, 0b001, (outs), 
+  def BNE : InstB<0b1100011, 0b001, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BNE\t$src1, $src2, $target", 
             [(brcond (i32 (setne GR32:$src1, GR32:$src2)), bb:$target)]>;
-def BLT : InstB<0b1100011, 0b100, (outs), 
+  def BLT : InstB<0b1100011, 0b100, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BLT\t$src1, $src2, $target", 
             [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
-def BGE : InstB<0b1100011, 0b101, (outs), 
+  def BGE : InstB<0b1100011, 0b101, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BGE\t$src1, $src2, $target", 
             [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
-def BLTU: InstB<0b1100011, 0b110, (outs), 
+  def BLTU: InstB<0b1100011, 0b110, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BLT\t$src1, $src2, $target", 
             [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
-def BGEU: InstB<0b1100011, 0b111, (outs), 
+  def BGEU: InstB<0b1100011, 0b111, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BGE\t$src1, $src2, $target", 
             [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
+}
 
 //Load/Store Instructions
 def LW : InstLoad <"LW" , 0b0000011, 0b010, GR32, imm32sx12>; 
