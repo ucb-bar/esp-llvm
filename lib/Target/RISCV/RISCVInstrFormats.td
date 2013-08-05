@@ -124,22 +124,22 @@ class InstR4<string mnemonic, bits<7> op, bits<5> funct5,
 //Load-Type
 class InstLoad<string mnemonic, bits<7> op, bits<3> funct3,
             RegisterOperand cls1, Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins imm:$src2, cls1:$src1), 
-  //: InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1), 
-                mnemonic#"\t$dst, $src1, $src2", 
-                //mnemonic#"\t$dst, $src1", 
-                [(set cls1:$dst, (load (add cls1:$src1, imm:$src2)))]> {
-                //[(set cls1:$dst, (load cls1:$src1))]> {
+  //: InstRISCV<4, (outs cls1:$dst), (ins imm:$src2, cls1:$src1), 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1), 
+                //mnemonic#"\t$dst, $src1, $src2", 
+                mnemonic#"\t$dst, $src1", 
+                //[(set cls1:$dst, (load (add cls1:$src1, imm:$src2)))]> {
+                [(set cls1:$dst, (load cls1:$src1))]> {
   field bits<32> Inst;
 
   bits<5> RD;
   bits<5> RS1;
-  bits<12> IMM;
+  //bits<12> IMM;
 
   let Inst{31-27} = RD;
   let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
+  //let Inst{21-17} = IMM{11-7};
+  //let Inst{16-10} = IMM{6 -0};
   let Inst{9 - 7} = funct3;
   let Inst{6 - 0} = op;
 }
