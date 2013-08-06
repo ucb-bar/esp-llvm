@@ -26,25 +26,21 @@ def ADDI: InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sx12>;
 def XORI: InstI<"XORI", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
 def ORI : InstI<"ORI" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
 def ANDI: InstI<"ANDI", 0b0010011, 0b111       , and, GR32, imm32sx12>;
-/*
 //TODO: enforce constraints here or up on level?
-def SLLI: InstI<"SLLI", 0b0010011, 0b000       , shl, GR32, imm32sx12> {
-  let Constraints = "$src2{11-6} = 0b000000";
+def SLLI: InstI<"SLLI", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
+  let IMM{11-6} = 0b000000; 
+  //trap if $imm{5}!=0 TODO:how to do this?
+}
+def SRLI: InstI<"SRLI", 0b0010011, 0b101       , srl, GR32, imm32sx12> {
+  let IMM{11-6} = 0b000000; 
   //trap if $src{5}!=0 TODO:how to do this?
-  }
-
-def SRLI: InstI<"SRLI", 0b0010011, 0b000       , srl, GR32, imm32sx12> {
-  let Constraints = "$src2{11-6} = 0b000000";
+}
+def SRAI: InstI<"SRAI", 0b0010011, 0b101       , sra, GR32, imm32sx12> {
+  let IMM{11-6} = 0b000001; 
   //trap if $src{5}!=0 TODO:how to do this?
-  }
-def SRAI: InstI<"SRAI", 0b0010011, 0b000       , sra, GR32, imm32sx12> {
-  let Constraints = "$src2{11-6} = 0b000000";
-  //trap if $src{5}!=0 TODO:how to do this?
-  }
-*/
-//TODO:more complicated select(lt, 1, 0) or something like this
-//def SLTI : InstR<"SLT", 0b1000000000, 0x33, shl, GR32, GR32>;
-//def SLTIU: InstR<"SLTU", 0b1000000000, 0x33, shl, GR32, GR32>;
+}
+def SLTI : InstI<"SLTI", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
+def SLTIU: InstI<"SLTIU",0b0010011, 0b011, setult,GR32, imm32sx12>;
 
 //Unconditional Jumps
 //TODO:need to write test, systemZ test uses store
@@ -74,12 +70,12 @@ def J : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target",
             [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLTU: InstB<0b1100011, 0b110, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BLT\t$src1, $src2, $target", 
-            [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
+            "BLTU\t$src1, $src2, $target", 
+            [(brcond (i32 (setult GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGEU: InstB<0b1100011, 0b111, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BGE\t$src1, $src2, $target", 
-            [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
+            "BGEU\t$src1, $src2, $target", 
+            [(brcond (i32 (setuge GR32:$src1, GR32:$src2)), bb:$target)]>;
 }
 
 //Load/Store Instructions
