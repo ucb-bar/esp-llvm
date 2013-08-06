@@ -65,6 +65,14 @@ private:
       return MO.getImm() << 1;
     llvm_unreachable("Branch with no immediate field");
   }
+  unsigned getPCImmEncoding(const MCInst &MI, unsigned int OpNum,
+                              SmallVectorImpl<MCFixup> &Fixups) const {
+    const MCOperand &MO = MI.getOperand(OpNum);
+    //TODO: do we need to sign extend explicitly?
+    if (MO.isImm())
+      return MO.getImm() << 12;
+    llvm_unreachable("Branch with no immediate field");
+  }
   //END RISCV
 
   // Operand OpNum of MI needs a PC-relative fixup of kind Kind at
