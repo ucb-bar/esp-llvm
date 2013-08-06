@@ -11,19 +11,16 @@
 *RISCV Instructions
 ********************/
 //Integer arithmetic register-register
-def ADD : InstR<"ADD" , 0b0110011, 0b0000000000, add, GR32, GR32>;
-def SUB : InstR<"SUB" , 0b0110011, 0b1000000000, sub, GR32, GR32>;
-def SLL : InstR<"SLL" , 0b0110011, 0b1000000001, shl, GR32, GR32>;
-//TODO:close perhaps
-//def SLT : InstR<"SLT",  0b0110011, 0b0000000010, setlt, GR32, GR32>;
-//TODO:more complicated select(lt, 1, 0) or something like this
-//def SLT : InstR<"SLT", 0b1000000000, 0x33, shl, GR32, GR32>;
-//def SLTU: InstR<"SLTU", 0b1000000000, 0x33, shl, GR32, GR32>;
-def XOR : InstR<"XOR" , 0b0110011, 0b0000000100, xor, GR32, GR32>;
-def SRL : InstR<"SRL" , 0b0110011, 0b0000000101, srl, GR32, GR32>;
-def SRA : InstR<"SRA" , 0b0110011, 0b1000000101, sra, GR32, GR32>;
-def OR  : InstR<"OR"  , 0b0110011, 0b0000000110, or , GR32, GR32>;
-def AND : InstR<"AND" , 0b0110011, 0b0000000111, and, GR32, GR32>;
+def ADD : InstR<"ADD" , 0b0110011, 0b0000000000, add   , GR32, GR32>;
+def SUB : InstR<"SUB" , 0b0110011, 0b1000000000, sub   , GR32, GR32>;
+def SLL : InstR<"SLL" , 0b0110011, 0b1000000001, shl   , GR32, GR32>;
+def SLT : InstR<"SLT" , 0b0110011, 0b0000000010, setlt , GR32, GR32>;
+def SLTU: InstR<"SLTU", 0b0110011, 0b0000000011, setult, GR32, GR32>;
+def XOR : InstR<"XOR" , 0b0110011, 0b0000000100, xor   , GR32, GR32>;
+def SRL : InstR<"SRL" , 0b0110011, 0b0000000101, srl   , GR32, GR32>;
+def SRA : InstR<"SRA" , 0b0110011, 0b1000000101, sra   , GR32, GR32>;
+def OR  : InstR<"OR"  , 0b0110011, 0b0000000110, or    , GR32, GR32>;
+def AND : InstR<"AND" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
 //Integer arithmetic register-immediate
 def ADDI: InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sx12>;
 def XORI: InstI<"XORI", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
