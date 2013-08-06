@@ -93,9 +93,10 @@ def SW : InstStore<"SW" , 0b0100011, 0b010, GR32, GR32, imm32sx12>;
 def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sx20:$imm),
                "LUI\t$dst, $imm",
                [(set GR32:$dst, (shl imm32sx20:$imm, 12))]>;
-def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins imm32sx20:$imm, PCReg:$pc),
-               "AUIPC\t$dst, $imm",
-               [(set GR32:$dst, (add PCReg:$pc, (shl imm32sx20:$imm, 12)))]>;
+
+def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
+               "AUIPC\t$dst, $target",
+               [(set GR32:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
 
 
 //===----------------------------------------------------------------------===//

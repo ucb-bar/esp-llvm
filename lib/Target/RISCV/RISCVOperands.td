@@ -329,6 +329,10 @@ def jumptarget : Operand<OtherVT> {
 def brtarget : Operand<OtherVT> {
   let EncoderMethod = "getBranchTargetEncoding";
 }
+
+def pcimm : PCRelAddress<i32, "pcimm"> {
+  let EncoderMethod = "getPCImmEncoding";
+}
 //END RISCV
 
 // PC-relative offsets of a basic block.  The offset is sign-extended
