@@ -113,6 +113,14 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   void getAddressOperands(const RISCVAddressingMode &AM, EVT VT,
                           SDValue &Base, SDValue &Disp, SDValue &Index);
 
+  //RISCV
+  bool selectMemRegAddr(SDValue Addr, SDValue &Base, SDValue &Offset) {
+      Base = Addr;
+      Offset = Addr.getOperand(1);
+      return true;
+  }
+  //End RISCV
+
   // Try to match Addr as a FormBD address with displacement type DR.
   // Return true on success, storing the base and displacement in
   // Base and Disp respectively.

@@ -43,14 +43,15 @@ def SLTI : InstI<"SLTI", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
 def SLTIU: InstI<"SLTIU",0b0010011, 0b011, setult,GR32, imm32sx12>;
 
 //Unconditional Jumps
-//TODO:need to write test, systemZ test uses store
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
-def J : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
+def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
           [(br bb:$target)]>;
+//TODO: how to write pc to register
+//def JAL: InstJ<0b1101111, (outs), (ins jumptarget:$target), "J\t$target", 
+          //[(br bb:$target)]>;
 
 //Conditional Branches
 //TODO:refactor to class
-//TODO:write better test after loads implemented
   def BEQ : InstB<0b1100011, 0b000, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BEQ\t$src1, $src2, $target", 
@@ -79,15 +80,18 @@ def J : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target",
 }
 
 //Load/Store Instructions
-def LW : InstLoad <"LW" , 0b0000011, 0b010, GR32, imm32sx12>; 
-//def LH : InstLoad <"LH" , 0b0000011, 0b001, GR32, imm32sx12>; 
-//def LHU: InstLoad <"LHU", 0b0000011, 0b101, GR32, imm32sx12>; 
-//def LB : InstLoad <"LB" , 0b0000011, 0b000, GR32, imm32sx12>; 
-//def LBU: InstLoad <"LBU", 0b0000011, 0b100, GR32, imm32sx12>; 
-//                                               trunc
-def SW : InstStore<"SW" , 0b0100011, 0b010, GR32, GR32, imm32sx12>;
-//def SH : InstLoad <"SH" , 0b0100011, 0b001, GR32, GR16,imm32sx12>; 
-//def SB : InstLoad <"SB" , 0b0100011, 0b000, GR32, GR8 , imm32sx12>; 
+let mayLoad = 1 in {
+  def LW : InstLoad <"LW" , 0b0000011, 0b010, load, GR32>; 
+  def LH : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR32>; 
+  def LHU: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR32>; 
+  def LB : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR32>; 
+  def LBU: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR32>; 
+}
+let mayStore = 1 in {
+  def SW : InstStore<"SW" , 0b0100011, 0b010, store        , GR32>;
+  def SH : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR32>; 
+  def SB : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR32>; 
+}
 
 //Upper Immediate
 def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sx20:$imm),
