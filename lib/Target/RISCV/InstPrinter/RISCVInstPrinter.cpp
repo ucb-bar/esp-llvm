@@ -51,6 +51,14 @@ void RISCVInstPrinter::printRegName(raw_ostream &O, unsigned RegNo) const {
   O << '%' << getRegisterName(RegNo);
 }
 
+void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum, 
+                                         raw_ostream &OS) {
+     OS << '%' << getRegisterName(MI->getOperand(opNum).getReg());
+     OS << "(";
+     printOperand(MI, opNum+1, OS);
+     OS << ")";
+}
+
 void RISCVInstPrinter::printU4ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
   int64_t Value = MI->getOperand(OpNum).getImm();

@@ -45,6 +45,7 @@ public:
                                      unsigned AsmVariant,
                                      const char *ExtraCode,
                                      raw_ostream &OS) LLVM_OVERRIDE;
+  void printMemOperand(const MachineInstr *MI, int opNum, raw_ostream &OS);
   virtual void EmitEndOfAsmFile(Module &M) LLVM_OVERRIDE;
 };
 } // end namespace llvm

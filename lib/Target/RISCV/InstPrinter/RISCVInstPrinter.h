@@ -57,6 +57,7 @@ private:
   void printU12ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printS20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
+  void printMemOperand(const MCInst *MI, int OpNUm, raw_ostream &O);
   //END RISCV
   void printS16ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU16ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
