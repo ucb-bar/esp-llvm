@@ -19,7 +19,7 @@ using namespace llvm;
 
 RISCVRegisterInfo::RISCVRegisterInfo(RISCVTargetMachine &tm,
                                          const RISCVInstrInfo &tii)
-  : RISCVGenRegisterInfo(RISCV::tp), TM(tm), TII(tii) {}
+  : RISCVGenRegisterInfo(RISCV::ra), TM(tm), TII(tii) {}
 
 const uint16_t*
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
@@ -53,30 +53,6 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // sp is the stack pointer.  Reserve all aliases.
   Reserved.set(RISCV::sp);
   return Reserved;
-}
-
-bool
-RISCVRegisterInfo::saveScavengerRegister(MachineBasicBlock &MBB,
-					   MachineBasicBlock::iterator SaveMBBI,
-					   MachineBasicBlock::iterator &UseMBBI,
-					   const TargetRegisterClass *RC,
-					   unsigned Reg) const {
-  MachineFunction &MF = *MBB.getParent();
-  const RISCVFrameLowering *TFI =
-    static_cast<const RISCVFrameLowering *>(TM.getFrameLowering());
-  unsigned Base = getFrameRegister(MF);
-  uint64_t Offset = TFI->getEmergencySpillSlotOffset(MF);
-  DebugLoc DL;
-
-  unsigned LoadOpcode, StoreOpcode;
-  TII.getLoadStoreOpcodes(RC, LoadOpcode, StoreOpcode);
-
-  // The offset must always be in range of a 12-bit unsigned displacement.
-  BuildMI(MBB, SaveMBBI, DL, TII.get(StoreOpcode))
-    .addReg(Reg, RegState::Kill).addReg(Base).addImm(Offset).addReg(0);
-  BuildMI(MBB, UseMBBI, DL, TII.get(LoadOpcode), Reg)
-    .addReg(Base).addImm(Offset).addReg(0);
-  return true;
 }
 
 void
