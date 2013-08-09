@@ -28,24 +28,20 @@ RISCVFrameLowering::RISCVFrameLowering(const RISCVTargetMachine &tm,
   // pointer.
   // TODO: check that this is correct, specifically which regs should be in this table
   static const unsigned SpillOffsetTable[][2] = {
-    { RISCV::X2,  0x10 },
-    { RISCV::X3,  0x18 },
-    { RISCV::X4,  0x20 },
-    { RISCV::X5,  0x28 },
-    { RISCV::X6,  0x30 },
-    { RISCV::X7,  0x38 },
-    { RISCV::X8,  0x40 },
-    { RISCV::X9,  0x48 },
-    { RISCV::X10, 0x50 },
-    { RISCV::X11, 0x58 },
-    { RISCV::X12, 0x60 },
-    { RISCV::X13, 0x68 },
-    { RISCV::X14, 0x70 },
-    { RISCV::X15, 0x78 },
-    { RISCV::F0,  0x80 },
-    { RISCV::F2,  0x88 },
-    { RISCV::F4,  0x90 },
-    { RISCV::F6,  0x98 }
+    { RISCV::fp,  0x10 },
+    { RISCV::s1,  0x18 },
+    { RISCV::s2,  0x20 },
+    { RISCV::s3,  0x28 },
+    { RISCV::s4,  0x30 },
+    { RISCV::s5,  0x38 },
+    { RISCV::s6,  0x40 },
+    { RISCV::s7,  0x48 },
+    { RISCV::s8,  0x50 },
+    { RISCV::s9,  0x58 },
+    { RISCV::s10, 0x60 },
+    { RISCV::s11, 0x68 },
+    { RISCV::sp,  0x70 },
+    { RISCV::tp,  0x78 }
   };
 
   // Create a mapping from register number to save slot offset.
@@ -76,12 +72,12 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   // If the function requires a frame pointer, record that the hard
   // frame pointer will be clobbered.
   if (HasFP)
-    MRI.setPhysRegUsed(RISCV::X2);
+    MRI.setPhysRegUsed(RISCV::fp);
 
   // If the function calls other functions, record that the return
   // address register will be clobbered.
   if (MFFrame->hasCalls())
-    MRI.setPhysRegUsed(RISCV::X1);
+    MRI.setPhysRegUsed(RISCV::ra);
 
 }
 
@@ -103,7 +99,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
   // Scan the call-saved GPRs and find the bounds of the register spill area.
   unsigned SavedGPRFrameSize = 0;
   unsigned LowGPR = 0;
-  unsigned HighGPR = RISCV::X31;
+  unsigned HighGPR = RISCV::a13;
   unsigned StartOffset = -1U;
   for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
     unsigned Reg = CSI[I].getReg();
@@ -282,7 +278,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
   if (StackSize) {
     // Allocate StackSize bytes.
     int64_t Delta = -int64_t(StackSize);
-    emitIncrement(MBB, MBBI, DL, RISCV::X15, Delta, ZII);
+    emitIncrement(MBB, MBBI, DL, RISCV::sp, Delta, ZII);
 
     // Add CFI for the allocation.
     MCSymbol *AdjustSPLabel = MMI.getContext().CreateTempSymbol();
@@ -300,7 +296,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
     MCSymbol *SetFPLabel = MMI.getContext().CreateTempSymbol();
     BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::PROLOG_LABEL))
       .addSym(SetFPLabel);
-    MachineLocation HardFP(RISCV::X2);
+    MachineLocation HardFP(RISCV::fp);
     MachineLocation VirtualFP(MachineLocation::VirtualFP);
     Moves.push_back(MachineMove(SetFPLabel, HardFP, VirtualFP));
 
@@ -309,7 +305,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
     // saving the GPRs.)
     for (MachineFunction::iterator
            I = llvm::next(MF.begin()), E = MF.end(); I != E; ++I)
-      I->addLiveIn(RISCV::X2);
+      I->addLiveIn(RISCV::fp);
   }
 
   // Skip over the FPR saves.
@@ -377,7 +373,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
     MBBI->getOperand(AddrOpNo + 1).ChangeToImmediate(Offset);
   } else if (StackSize) {
     DebugLoc DL = MBBI->getDebugLoc();
-    emitIncrement(MBB, MBBI, DL, RISCV::X15, StackSize, ZII);
+    emitIncrement(MBB, MBBI, DL, RISCV::sp, StackSize, ZII);
   }
 }
 

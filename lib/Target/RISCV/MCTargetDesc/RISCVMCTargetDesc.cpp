@@ -30,7 +30,7 @@ using namespace llvm;
 static MCAsmInfo *createRISCVMCAsmInfo(const Target &T, StringRef TT) {
   MCAsmInfo *MAI = new RISCVMCAsmInfo(T, TT);
   MachineLocation FPDst(MachineLocation::VirtualFP);
-  MachineLocation FPSrc(RISCV::X15, -RISCVMC::CFAOffsetFromInitialSP);
+  MachineLocation FPSrc(RISCV::sp, -RISCVMC::CFAOffsetFromInitialSP);
   MAI->addInitialFrameState(0, FPDst, FPSrc);
   return MAI;
 }
@@ -43,7 +43,7 @@ static MCInstrInfo *createRISCVMCInstrInfo() {
 
 static MCRegisterInfo *createRISCVMCRegisterInfo(StringRef TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitRISCVMCRegisterInfo(X, RISCV::X14);
+  InitRISCVMCRegisterInfo(X, RISCV::sp);
   return X;
 }
 
