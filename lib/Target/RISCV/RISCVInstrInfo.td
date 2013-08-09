@@ -44,14 +44,39 @@ def SLTIU: InstI<"SLTIU",0b0010011, 0b011, setult,GR32, imm32sx12>;
 
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
-def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
+  def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
           [(br bb:$target)]>;
+}
 //TODO: how to write pc to register
-//def JAL: InstJ<0b1101111, (outs), (ins jumptarget:$target), "J\t$target", 
-          //[(br bb:$target)]>;
+let isCall = 1 in {
+  let Defs = [X1] in {
+    def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "JAL\t$target", 
+          [(z_call pcrel32call:$target)]>;
+  }
+}
+let isCall = 1 in {
+    def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "JALR\t$target", 
+          //[(set GR32:$ra, (z_call addr:$target))]>{
+          []>{
+            field bits<32> Inst;
+
+            bits<5> RD;
+            bits<5> RS1;
+            bits<12> IMM;
+
+            let Inst{31-27} = RD;
+            let Inst{26-22} = RS1;
+            let Inst{21-17} = IMM{11-7};
+            let Inst{16-10} = IMM{6 -0};
+            let Inst{9 - 7} = 0b000;
+            let Inst{6 - 0} = 0b1101011;
+          }
+}
+ 
 
 //Conditional Branches
 //TODO:refactor to class
+let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def BEQ : InstB<0b1100011, 0b000, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BEQ\t$src1, $src2, $target", 

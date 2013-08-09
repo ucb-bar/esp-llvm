@@ -333,6 +333,10 @@ def brtarget : Operand<OtherVT> {
 def pcimm : PCRelAddress<i32, "pcimm"> {
   let EncoderMethod = "getPCImmEncoding";
 }
+def pcrel32call : PCRelAddress<i32, "pcrel32call"> {
+  let PrintMethod = "printCallOperand";
+  let EncoderMethod = "getPLT32DBLEncoding";
+}
 //END RISCV
 
 // PC-relative offsets of a basic block.  The offset is sign-extended
@@ -356,10 +360,12 @@ def pcrel16call : PCRelAddress<i64, "pcrel16call"> {
   let PrintMethod = "printCallOperand";
   let EncoderMethod = "getPLT16DBLEncoding";
 }
+/*
 def pcrel32call : PCRelAddress<i64, "pcrel32call"> {
   let PrintMethod = "printCallOperand";
   let EncoderMethod = "getPLT32DBLEncoding";
 }
+*/
 
 //===----------------------------------------------------------------------===//
 // Addressing modes
