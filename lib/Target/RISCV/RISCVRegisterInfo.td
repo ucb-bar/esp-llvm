@@ -37,16 +37,11 @@ multiclass RISCVRegClass<string name, ValueType type, int size, dag regList> {
 // General-purpose registers
 //===----------------------------------------------------------------------===//
 
-// Lower 32 bits of one of the 16 64-bit general-purpose registers
 class GPR32<bits<16> num, string n> : RISCVReg<n> {
   let HWEncoding = num;
 }
 
 // General-purpose registers
-/*foreach I = 0-31 in {
-  def X#I : GPR32<I, "x"#I>;
-}*/
-
 //ABI Names
 def zero : GPR32<0, "x0">;
 def ra   : GPR32<1, "x1">;
@@ -114,12 +109,7 @@ class FPR32<bits<16> num, string n> : RISCVReg<n> {
 
 
 // Floating-point registers
-/*foreach I = 0-31 in {
-  def F#I : FPR32<I, "f"#I>;
-}*/
-
 //ABI Names
-//TODO: not the way to do this: but would be nice to have
 //FP saved registers
 def fs0 : FPR32<0, "f0">;
 def fs1 : FPR32<1, "f1">;
