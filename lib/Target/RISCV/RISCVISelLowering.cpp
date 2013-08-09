@@ -961,6 +961,22 @@ SDValue RISCVTargetLowering::lowerSELECT_CC(SDValue Op,
   return DAG.getNode(RISCVISD::SELECT_CCMASK, DL, VTs, &Ops[0], Ops.size());
 }
 
+SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const {
+  // check the depth
+  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
+    "Return address can be determined only for current frame.");
+      
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo *MFI = MF.getFrameInfo();
+  MVT VT = Op.getSimpleValueType();
+  unsigned RA = RISCV::X1;
+  MFI->setReturnAddressIsTaken(true);
+
+  // Return RA, which contains the return address. Mark it an implicit live-in.
+  unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), Op.getDebugLoc(), Reg, VT);
+}
+
 SDValue RISCVTargetLowering::lowerGlobalAddress(GlobalAddressSDNode *Node,
                                                   SelectionDAG &DAG) const {
   DebugLoc DL = Node->getDebugLoc();
@@ -1340,6 +1356,8 @@ SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
 SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
                                               SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
+  case ISD::RETURNADDR:
+    return lowerRETURNADDR(Op, DAG);
   //case ISD::BR_CC:
     //return lowerBR_CC(Op, DAG);
   case ISD::SELECT_CC:
