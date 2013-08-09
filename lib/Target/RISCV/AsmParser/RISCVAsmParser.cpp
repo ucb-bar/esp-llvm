@@ -32,6 +32,7 @@ class RISCVOperand : public MCParsedAsmOperand {
 public:
   enum RegisterKind {
     PCReg,
+    PCRReg,
     GR32Reg,
     GR64Reg,
     GR128Reg,
@@ -227,6 +228,7 @@ public:
 
   // Used by the TableGen code to check for particular operand types.
   bool isPCReg() const { return isReg(PCReg); }
+  bool isPCRReg() const { return isReg(PCRReg); }
   bool isGR32() const { return isReg(GR32Reg); }
   bool isGR64() const { return isReg(GR64Reg); }
   bool isGR128() const { return isReg(GR128Reg); }
@@ -260,25 +262,36 @@ public:
 // an invalid register.  We don't use register class directly because that
 // specifies the allocation order.
 static const unsigned GR32Regs[] = {
-  RISCV::X0, RISCV::X1, RISCV::X2, RISCV::X3, RISCV::X4,
-  RISCV::X5, RISCV::X6, RISCV::X7, RISCV::X8, RISCV::X9,
-  RISCV::X10,RISCV::X11,RISCV::X12,RISCV::X13,RISCV::X14,
-  RISCV::X15,RISCV::X16,RISCV::X17,RISCV::X18,RISCV::X19,
-  RISCV::X20,RISCV::X21,RISCV::X22,RISCV::X23,RISCV::X24,
-  RISCV::X25,RISCV::X26,RISCV::X27,RISCV::X28,RISCV::X29,
-  RISCV::X30,RISCV::X31
+  RISCV::zero, RISCV::ra, RISCV::fp,
+  RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
+  RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
+  RISCV::s10 , RISCV::s11 , 
+  RISCV::sp  , RISCV::tp  , RISCV::v0  , RISCV::v1,
+  RISCV::a0  , RISCV::a1  , RISCV::a2  , RISCV::a3  , RISCV::a4,
+  RISCV::a5  , RISCV::a6  , RISCV::a7  , RISCV::a8  , RISCV::a9,
+  RISCV::a10 , RISCV::a11 , RISCV::a12 , RISCV::a13 
 };
 
 static const unsigned PCReg[] = { RISCV::PC };
 
 static const unsigned FP32Regs[] = {
-  RISCV::F0, RISCV::F1, RISCV::F2, RISCV::F3, RISCV::F4,
-  RISCV::F5, RISCV::F6, RISCV::F7, RISCV::F8, RISCV::F9,
-  RISCV::F10,RISCV::F11,RISCV::F12,RISCV::F13,RISCV::F14,
-  RISCV::F15,RISCV::F16,RISCV::F17,RISCV::F18,RISCV::F19,
-  RISCV::F20,RISCV::F21,RISCV::F22,RISCV::F23,RISCV::F24,
-  RISCV::F25,RISCV::F26,RISCV::F27,RISCV::F28,RISCV::F29,
-  RISCV::F30,RISCV::F31
+  RISCV::fs0  , RISCV::fs1  , RISCV::fs2  , RISCV::fs3  , RISCV::fs4,
+  RISCV::fs5  , RISCV::fs6  , RISCV::fs7  , RISCV::fs8  , RISCV::fs9,
+  RISCV::fs10 , RISCV::fs11 , RISCV::fs12 , RISCV::fs13 , RISCV::fs14,
+  RISCV::fs15 ,
+  RISCV::fv0  , RISCV::fv1  ,
+  RISCV::fa0  , RISCV::fa1  , RISCV::fa2  , RISCV::fa3  , RISCV::fa4,
+  RISCV::fa5  , RISCV::fa6  , RISCV::fa7  , RISCV::fa8  , RISCV::fa9,
+  RISCV::fa10 , RISCV::fa11 , RISCV::fa12 , RISCV::fa13 
+};
+
+static const unsigned PCRRegs[] = {
+  RISCV::status, RISCV::epc, RISCV::evec, RISCV::ptbr, RISCV::asid,
+  RISCV::count, RISCV::compare, RISCV::k0, RISCV::k1, RISCV::tohost, RISCV::fromhost,
+  //read only
+  RISCV::badvaddr, RISCV::cause, RISCV::hartid, RISCV::impl, 
+  //write only
+  RISCV::fatc,  RISCV::send_ipi, RISCV::clear_ipi
 };
 
 class RISCVAsmParser : public MCTargetAsmParser {
@@ -357,6 +370,11 @@ public:
   OperandMatchResultTy
   parseFP32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
     return parseRegister(Operands, 'f', FP32Regs, RISCVOperand::FP32Reg);
+  }
+
+  OperandMatchResultTy
+  parsePCRReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
   }
 
   OperandMatchResultTy

@@ -19,17 +19,18 @@ using namespace llvm;
 
 RISCVRegisterInfo::RISCVRegisterInfo(RISCVTargetMachine &tm,
                                          const RISCVInstrInfo &tii)
-  : RISCVGenRegisterInfo(RISCV::X14), TM(tm), TII(tii) {}
+  : RISCVGenRegisterInfo(RISCV::tp), TM(tm), TII(tii) {}
 
 const uint16_t*
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   static const uint16_t CalleeSavedRegs[] = {
-    RISCV::X2,  RISCV::X3,  RISCV::X4,  RISCV::X5,  RISCV::X6,
-    RISCV::X7,  RISCV::X8,  RISCV::X9,  RISCV::X10, RISCV::X11,
-    RISCV::X12, RISCV::X13, RISCV::X14, RISCV::X15,
-    RISCV::F2,  RISCV::F3,  RISCV::F4,  RISCV::F5,  RISCV::F6,
-    RISCV::F7,  RISCV::F8,  RISCV::F9,  RISCV::F10, RISCV::F11,
-    RISCV::F12, RISCV::F13, RISCV::F14, RISCV::F15,
+    RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
+    RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
+    RISCV::s10 , RISCV::s11 , RISCV::sp  , RISCV::tp  ,
+    RISCV::fs0 , RISCV::fs1 , RISCV::fs2 , RISCV::fs3 , RISCV::fs4,
+    RISCV::fs5 , RISCV::fs6 , RISCV::fs7 , RISCV::fs8 , RISCV::fs9,
+    RISCV::fs10, RISCV::fs11, RISCV::fs12, RISCV::fs13, RISCV::fs14, 
+    RISCV::fs15,
     0
   };
 
@@ -41,13 +42,16 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
 
+  // zero is reserved so llvm doesn't store things there
+  Reserved.set(RISCV::zero);
+
   if (TFI->hasFP(MF)) {
-    // R11D is the frame pointer.  Reserve all aliases.
-    Reserved.set(RISCV::X2);
+    // fp is the frame pointer.  Reserve all aliases.
+    Reserved.set(RISCV::fp);
   }
 
-  // R15D is the stack pointer.  Reserve all aliases.
-  Reserved.set(RISCV::X15);
+  // sp is the stack pointer.  Reserve all aliases.
+  Reserved.set(RISCV::sp);
   return Reserved;
 }
 
@@ -144,5 +148,5 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
 unsigned
 RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
-  return TFI->hasFP(MF) ? RISCV::X2 : RISCV::X15;
+  return TFI->hasFP(MF) ? RISCV::fp : RISCV::sp;
 }

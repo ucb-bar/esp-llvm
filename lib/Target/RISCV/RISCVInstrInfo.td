@@ -49,7 +49,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 }
 //TODO: how to write pc to register
 let isCall = 1 in {
-  let Defs = [X1] in {
+  let Defs = [ra] in {
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "JAL\t$target", 
           [(z_call pcrel32call:$target)]>;
   }
@@ -207,8 +207,9 @@ let isAsmParserOnly = 1 in {
 //===----------------------------------------------------------------------===//
 
 // The definitions here are for the call-clobbered registers.
-let isCall = 1, Defs = [X1, X16, X17, X18, X19, X20, X21, X22, X23, X24, X25, X26, X27, X28, X29, X30, X31,
-                            F16, F17, F18, F19, F20, F21, F22, F23, F24, F25, F26, F27, F28, F29, F30, F31],
+let isCall = 1, 
+  Defs = [ra, v0, v1, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
+     fv0, fv1, fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7, fa8, fa9, fa10, fa11, fa12, fa13],
     R1 = 14, isCodeGenOnly = 1 in {
   def BRAS  : InstRI<0xA75, (outs), (ins pcrel16call:$dst, variable_ops),
                      "bras\t%r14, $dst", []>;

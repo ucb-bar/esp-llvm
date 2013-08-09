@@ -62,9 +62,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
   // Set up special registers.
   // TODO: not all of these exist in RISCV
-  setExceptionPointerRegister(RISCV::X6);
-  setExceptionSelectorRegister(RISCV::X7);
-  setStackPointerRegisterToSaveRestore(RISCV::X15);
+  setExceptionPointerRegister(RISCV::epc);
+  setExceptionSelectorRegister(RISCV::evec);
+  setStackPointerRegisterToSaveRestore(RISCV::sp);
 
   // TODO: It may be better to default to latency-oriented scheduling, however
   // LLVM's current latency-oriented scheduler can't handle physreg definitions
@@ -638,7 +638,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       // Work out the address of the stack slot.  Unpromoted ints and
       // floats are passed as right-justified 8-byte values.
       if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::X15, PtrVT);
+        StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::sp, PtrVT);
       unsigned Offset = RISCVMC::CallFrameSize + VA.getLocMemOffset();
       if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
         Offset += 4;
@@ -969,7 +969,7 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MVT VT = Op.getSimpleValueType();
-  unsigned RA = RISCV::X1;
+  unsigned RA = RISCV::ra;
   MFI->setReturnAddressIsTaken(true);
 
   // Return RA, which contains the return address. Mark it an implicit live-in.
@@ -1342,7 +1342,7 @@ SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
   return DAG.getCopyFromReg(Op.getOperand(0), Op.getDebugLoc(),
-                            RISCV::X15, Op.getValueType());
+                            RISCV::sp, Op.getValueType());
 }
 
 SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
@@ -1350,7 +1350,7 @@ SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
   return DAG.getCopyToReg(Op.getOperand(0), Op.getDebugLoc(),
-                          RISCV::X15, Op.getOperand(1));
+                          RISCV::sp, Op.getOperand(1));
 }
 
 SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
