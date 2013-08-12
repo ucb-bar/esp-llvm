@@ -180,7 +180,7 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
   if (Cond.empty()) {
     // Unconditional branch?
     assert(!FBB && "Unconditional branch with multiple successors!");
-    BuildMI(&MBB, DL, get(RISCV::JG)).addMBB(TBB);
+    BuildMI(&MBB, DL, get(RISCV::J)).addMBB(TBB);
     return 1;
   }
 
@@ -194,7 +194,7 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
 
   if (FBB) {
     // Two-way Conditional branch. Insert the second branch.
-    BuildMI(&MBB, DL, get(RISCV::JG)).addMBB(FBB);
+    //BuildMI(&MBB, DL, get(RISCV::JG)).addMBB(FBB);
     ++Count;
   }
   return Count;
@@ -272,7 +272,8 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
                                 const MachineOperand *&Target) const {
   switch (MI->getOpcode()) {
   case RISCV::J:
-  case RISCV::JG:
+  case RISCV::JAL:
+  case RISCV::JALR:
     Cond = RISCV::CCMASK_ANY;
     Target = &MI->getOperand(0);
     return true;

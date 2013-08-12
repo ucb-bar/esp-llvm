@@ -47,7 +47,6 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
           [(br bb:$target)]>;
 }
-//TODO: how to write pc to register
 let isCall = 1 in {
   let Defs = [ra] in {
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "JAL\t$target", 
@@ -55,6 +54,7 @@ let isCall = 1 in {
   }
 }
 let isCall = 1 in {
+  //TODO: fix jalr and write test
     def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "JALR\t$target", 
           //[(set GR32:$ra, (z_call addr:$target))]>{
           []>{
@@ -80,7 +80,6 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def BEQ : InstB<0b1100011, 0b000, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BEQ\t$src1, $src2, $target", 
-            //[(br_cc seteq, GR32:$src1, GR32:$src2, bb:$target)]>;
             [(brcond (i32 (seteq GR32:$src1,  GR32:$src2)), bb:$target)]>;
   def BNE : InstB<0b1100011, 0b001, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
@@ -147,60 +146,6 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
     R1 = 15, R2 = 14, isCodeGenOnly = 1 in {
   def RET : InstRR<0x07, (outs), (ins), "br\t%r14", [(z_retflag)]>;
 }
-
-// Unconditional branches.  R1 is the condition-code mask (all 1s).
-let isBranch = 1, isTerminator = 1, isBarrier = 1, R1 = 15 in {
-
-  // An assembler extended mnemonic for BRC.  Use a separate instruction for
-  // the asm parser, so that we don't relax Js to external symbols into JGs.
-  let isAsmParserOnly = 1 in
-    def AsmJ : InstRI<0xA74, (outs), (ins brtarget16:$dst), "j\t$dst", []>;
-
-  // An assembler extended mnemonic for BRCL.  (The extension is "G"
-  // rather than "L" because "JL" is "Jump if Less".)
-  def JG : InstRIL<0xC04, (outs), (ins brtarget32:$dst),
-                   "jg\t$dst", [(br bb:$dst)]>;
-}
-
-// Conditional branches.  It's easier for LLVM to handle these branches
-// in their raw BRC/BRCL form, with the 4-bit condition-code mask being
-// the first operand.  It seems friendlier to use mnemonic forms like
-// JE and JLH when writing out the assembly though.
-multiclass CondBranches<Operand imm, string short, string long> {
-  let isBranch = 1, isTerminator = 1 in {
-    def "" : InstRI<0xA74, (outs), (ins imm:$cond, brtarget16:$dst), short, []>;
-    def L  : InstRIL<0xC04, (outs), (ins imm:$cond, brtarget32:$dst), long, []>;
-  }
-}
-let isAsmParserOnly = 1 in
-  defm AsmBRC : CondBranches<uimm8zx4, "brc\t$cond, $dst", "brcl\t$cond, $dst">;
-
-
-// Define AsmParser mnemonics for each condition code.
-multiclass CondExtendedMnemonic<bits<4> Cond, string name> {
-  let R1 = Cond in {
-    def "" : InstRI<0xA74, (outs), (ins brtarget16:$dst),
-                    "j"##name##"\t$dst", []>;
-    def L  : InstRIL<0xC04, (outs), (ins brtarget32:$dst),
-                    "jg"##name##"\t$dst", []>;
-  }
-}
-let isAsmParserOnly = 1 in {
-  defm AsmJO   : CondExtendedMnemonic<1,  "o">;
-  defm AsmJH   : CondExtendedMnemonic<2,  "h">;
-  defm AsmJNLE : CondExtendedMnemonic<3,  "nle">;
-  defm AsmJL   : CondExtendedMnemonic<4,  "l">;
-  defm AsmJNHE : CondExtendedMnemonic<5,  "nhe">;
-  defm AsmJLH  : CondExtendedMnemonic<6,  "lh">;
-  defm AsmJNE  : CondExtendedMnemonic<7,  "ne">;
-  defm AsmJNLH : CondExtendedMnemonic<9,  "nlh">;
-  defm AsmJHE  : CondExtendedMnemonic<10, "he">;
-  defm AsmJNL  : CondExtendedMnemonic<11, "nl">;
-  defm AsmJLE  : CondExtendedMnemonic<12, "le">;
-  defm AsmJNH  : CondExtendedMnemonic<13, "nh">;
-  defm AsmJNO  : CondExtendedMnemonic<14, "no">;
-}
-
 
 //===----------------------------------------------------------------------===//
 // Call instructions
