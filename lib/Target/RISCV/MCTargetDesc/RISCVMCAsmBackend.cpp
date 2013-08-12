@@ -39,7 +39,7 @@ static uint64_t extractBitsForFixup(MCFixupKind Kind, uint64_t Value) {
 static unsigned getRelaxedOpcode(unsigned Opcode) {
   switch (Opcode) {
   //case RISCV::BRC:  return RISCV::BRCL;
-  case RISCV::J:    return RISCV::JG;
+  //case RISCV::J:    return RISCV::JG;
   case RISCV::BRAS: return RISCV::BRASL;
   }
   return 0;
