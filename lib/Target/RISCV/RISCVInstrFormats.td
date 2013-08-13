@@ -175,7 +175,7 @@ class InstStore<string mnemonic, bits<7> op, bits<3> funct3,
 class InstI<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator operator, RegisterOperand cls1, 
             Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins imm:$src2, cls1:$src1), 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1, imm:$src2), 
                 mnemonic#"\t$dst, $src1, $src2", 
                 [(set cls1:$dst, (operator cls1:$src1, imm:$src2))]> {
   field bits<32> Inst;
