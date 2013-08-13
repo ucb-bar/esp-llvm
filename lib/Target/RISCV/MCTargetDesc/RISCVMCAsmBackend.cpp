@@ -40,7 +40,7 @@ static unsigned getRelaxedOpcode(unsigned Opcode) {
   switch (Opcode) {
   //case RISCV::BRC:  return RISCV::BRCL;
   //case RISCV::J:    return RISCV::JG;
-  case RISCV::BRAS: return RISCV::BRASL;
+  //case RISCV::BRAS: return RISCV::BRASL;
   }
   return 0;
 }

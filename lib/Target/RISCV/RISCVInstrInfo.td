@@ -25,6 +25,8 @@ def AND : InstR<"AND" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
 def ADDI: InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sx12>;
 def XORI: InstI<"XORI", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
 def ORI : InstI<"ORI" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
+//simple immediate loading
+def : Pat<(i32 imm32sx12:$imm), (ORI zero, imm32sx12:$imm)>;
 def ANDI: InstI<"ANDI", 0b0010011, 0b111       , and, GR32, imm32sx12>;
 //TODO: enforce constraints here or up on level?
 def SLLI: InstI<"SLLI", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
@@ -150,7 +152,7 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
 //===----------------------------------------------------------------------===//
 // Call instructions
 //===----------------------------------------------------------------------===//
-
+/*
 // The definitions here are for the call-clobbered registers.
 let isCall = 1, 
   Defs = [ra, v0, v1, a0, a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12, a13,
@@ -160,7 +162,7 @@ let isCall = 1,
                      "bras\t%r14, $dst", []>;
   def BRASL : InstRIL<0xC05, (outs), (ins pcrel32call:$dst, variable_ops),
                       "brasl\t%r14, $dst", [(z_call pcrel32call:$dst)]>;
-}
+}*/
 
 // Define the general form of the call instructions for the asm parser.
 // These instructions don't hard-code %r14 as the return address register.
@@ -173,13 +175,13 @@ let isAsmParserOnly = 1 in {
 
 // Register moves.
 let neverHasSideEffects = 1 in {
-  def LR  : UnaryRR <"lr",  0x18,   null_frag, GR32, GR32>;
+  //def LR  : UnaryRR <"lr",  0x18,   null_frag, GR32, GR32>;
 }
 
 // Immediate moves.
 let neverHasSideEffects = 1, isAsCheapAsAMove = 1, isMoveImm = 1 in {
   // 16-bit sign-extended immediates.
-  def LHI  : UnaryRI<"lhi",  0xA78, bitconvert, GR32, imm32sx16>;
+  //def LHI  : UnaryRI<"lhi",  0xA78, bitconvert, GR32, imm32sx16>;
 
 }
 
@@ -204,14 +206,14 @@ let SimpleBDXStore = 1 in {
 
 // 32-bit extensions from registers.
 let neverHasSideEffects = 1 in {
-  def LBR : UnaryRRE<"lbr", 0xB926, sext8,  GR32, GR32>;
-  def LHR : UnaryRRE<"lhr", 0xB927, sext16, GR32, GR32>;
+  //def LBR : UnaryRRE<"lbr", 0xB926, sext8,  GR32, GR32>;
+  //def LHR : UnaryRRE<"lhr", 0xB927, sext16, GR32, GR32>;
 }
 
 
 
 // 32-bit extensions from memory.
-def  LHRL : UnaryRILPC<"lhrl", 0xC45, aligned_sextloadi16, GR32>;
+//def  LHRL : UnaryRILPC<"lhrl", 0xC45, aligned_sextloadi16, GR32>;
 
 
 
@@ -221,14 +223,14 @@ def  LHRL : UnaryRILPC<"lhrl", 0xC45, aligned_sextloadi16, GR32>;
 
 // 32-bit extensions from registers.
 let neverHasSideEffects = 1 in {
-  def LLCR : UnaryRRE<"llcr", 0xB994, zext8,  GR32, GR32>;
-  def LLHR : UnaryRRE<"llhr", 0xB995, zext16, GR32, GR32>;
+  //def LLCR : UnaryRRE<"llcr", 0xB994, zext8,  GR32, GR32>;
+  //def LLHR : UnaryRRE<"llhr", 0xB995, zext16, GR32, GR32>;
 }
 
 
 
 // 32-bit extensions from memory.
-def LLHRL : UnaryRILPC<"llhrl", 0xC42, aligned_zextloadi16, GR32>;
+//def LLHRL : UnaryRILPC<"llhrl", 0xC42, aligned_zextloadi16, GR32>;
 
 
 //===----------------------------------------------------------------------===//
@@ -238,7 +240,7 @@ def LLHRL : UnaryRILPC<"llhrl", 0xC42, aligned_zextloadi16, GR32>;
 
 // Truncations of 32-bit registers to memory.
 let isCodeGenOnly = 1 in {
-  def  STHRL32 : StoreRILPC<"sthrl", 0xC47, aligned_truncstorei16, GR32>;
+  //def  STHRL32 : StoreRILPC<"sthrl", 0xC47, aligned_truncstorei16, GR32>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -247,7 +249,7 @@ let isCodeGenOnly = 1 in {
 
 // Byte-swapping register moves.
 let neverHasSideEffects = 1 in {
-  def LRVR  : UnaryRRE<"lrvr",  0xB91F, bswap, GR32, GR32>;
+  //def LRVR  : UnaryRRE<"lrvr",  0xB91F, bswap, GR32, GR32>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -258,8 +260,8 @@ let neverHasSideEffects = 1 in {
 // We don't have or_as_insert equivalents of these operations because
 // OI is available instead.
 let isCodeGenOnly = 1 in {
-  def IILL32 : BinaryRI<"iill", 0xA53, insertll, GR32, imm32ll16>;
-  def IILH32 : BinaryRI<"iilh", 0xA52, insertlh, GR32, imm32lh16>;
+  //def IILL32 : BinaryRI<"iill", 0xA53, insertll, GR32, imm32ll16>;
+  //def IILH32 : BinaryRI<"iilh", 0xA52, insertlh, GR32, imm32lh16>;
 }
 
 // ...likewise for 32-bit immediates.  For GR32s this is a general
@@ -267,7 +269,7 @@ let isCodeGenOnly = 1 in {
 // for 32-bit moves because IILF leaves the upper 32 bits of the
 // GR64 unchanged.)
 let isCodeGenOnly = 1 in {
-  def IILF32 : UnaryRIL<"iilf", 0xC09, bitconvert, GR32, uimm32>;
+  //def IILF32 : UnaryRIL<"iilf", 0xC09, bitconvert, GR32, uimm32>;
 }
 
 //===----------------------------------------------------------------------===//

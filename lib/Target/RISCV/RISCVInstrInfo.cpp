@@ -209,14 +209,15 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   // Everything else needs only one instruction.
   unsigned Opcode;
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
-    Opcode = RISCV::LR;
+    Opcode = RISCV::ORI;
   else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::LER;
   else
     llvm_unreachable("Impossible reg-to-reg copy");
 
   BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
-    .addReg(SrcReg, getKillRegState(KillSrc));
+    .addReg(SrcReg, getKillRegState(KillSrc))
+    .addImm(0);
 }
 
 void

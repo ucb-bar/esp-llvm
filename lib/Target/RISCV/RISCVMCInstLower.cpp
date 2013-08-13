@@ -24,7 +24,7 @@ static unsigned getShortenedInstr(unsigned Opcode) {
   switch (Opcode) {
   //case RISCV::BRCL:  return RISCV::BRC;
   //case RISCV::JG:    return RISCV::J;
-  case RISCV::BRASL: return RISCV::BRAS;
+  //case RISCV::BRASL: return RISCV::BRAS;
   }
   return Opcode;
 }
