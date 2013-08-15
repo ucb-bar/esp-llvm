@@ -44,12 +44,12 @@ static int isSimpleMove(const MachineInstr *MI, int &FrameIndex, int Flag) {
 
 unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr *MI,
                                                int &FrameIndex) const {
-  return isSimpleMove(MI, FrameIndex, RISCVII::SimpleBDXLoad);
+  return isSimpleMove(MI, FrameIndex, RISCVII::SimpleLoad);
 }
 
 unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
                                               int &FrameIndex) const {
-  return isSimpleMove(MI, FrameIndex, RISCVII::SimpleBDXStore);
+  return isSimpleMove(MI, FrameIndex, RISCVII::SimpleStore);
 }
 
 bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
@@ -335,25 +335,12 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
 unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
                                               int64_t Offset) const {
   const MCInstrDesc &MCID = get(Opcode);
-  int64_t Offset2 = (MCID.TSFlags & RISCVII::Is128Bit ? Offset + 8 : Offset);
+  //int64_t Offset2 = (MCID.TSFlags & RISCVII::Is128Bit ? Offset + 8 : Offset);
+  int64_t Offset2 = Offset;
   if (isUInt<12>(Offset) && isUInt<12>(Offset2)) {
-    // Get the instruction to use for unsigned 12-bit displacements.
-    int Disp12Opcode = RISCV::getDisp12Opcode(Opcode);
-    if (Disp12Opcode >= 0)
-      return Disp12Opcode;
-
-    // All address-related instructions can use unsigned 12-bit
-    // displacements.
     return Opcode;
   }
   if (isInt<20>(Offset) && isInt<20>(Offset2)) {
-    // Get the instruction to use for signed 20-bit displacements.
-    int Disp20Opcode = RISCV::getDisp20Opcode(Opcode);
-    if (Disp20Opcode >= 0)
-      return Disp20Opcode;
-
-    // Check whether Opcode allows signed 20-bit displacements.
-    if (MCID.TSFlags & RISCVII::Has20BitOffset)
       return Opcode;
   }
   return 0;

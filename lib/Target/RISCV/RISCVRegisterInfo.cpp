@@ -103,6 +103,7 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
       MF.getRegInfo().createVirtualRegister(&RISCV::ADDR32BitRegClass);
     int64_t HighOffset = OldOffset - Offset;
 
+    /*
     if (MI->getDesc().TSFlags & RISCVII::HasIndex
         && MI->getOperand(FIOperandNum + 2).getReg() == 0) {
       // Load the offset into the scratch register and use it as an index.
@@ -116,7 +117,7 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
       // Use the scratch register as the base.  It then dies here.
       MI->getOperand(FIOperandNum).ChangeToRegister(ScratchReg,
                                                     false, false, true);
-    }
+    }*/
   }
   MI->setDesc(TII.get(OpcodeForOffset));
   MI->getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);

@@ -28,11 +28,8 @@ class RISCVTargetMachine;
 namespace RISCVII {
   enum {
     // See comments in RISCVInstrFormats.td.
-    SimpleBDXLoad  = (1 << 0),
-    SimpleBDXStore = (1 << 1),
-    Has20BitOffset = (1 << 2),
-    HasIndex       = (1 << 3),
-    Is128Bit       = (1 << 4)
+    SimpleLoad  = (1 << 0),
+    SimpleStore = (1 << 1),
   };
   // RISCV MachineOperand target flags.
   enum {
