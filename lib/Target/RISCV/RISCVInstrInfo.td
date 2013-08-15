@@ -140,7 +140,7 @@ def ADJCALLSTACKUP   : Pseudo<(outs), (ins i64imm:$amt1, i64imm:$amt2),
 
 //hardcoded JALR to be return
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
-    isCodeGenOnly = 1 in {
+    isCodeGenOnly = 1, Defs = [v0, v1] in {
   def RET : InstRISCV<4, (outs), (ins), "RET", 
           []>{
             field bits<32> Inst;

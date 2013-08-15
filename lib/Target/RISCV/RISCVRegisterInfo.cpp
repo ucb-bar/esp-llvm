@@ -44,6 +44,7 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   // zero is reserved so llvm doesn't store things there
   Reserved.set(RISCV::zero);
+  Reserved.set(RISCV::ra);
 
   if (TFI->hasFP(MF)) {
     // fp is the frame pointer.  Reserve all aliases.

@@ -43,7 +43,7 @@ include "RISCVOperands.td"
 include "RISCVPatterns.td"
 include "RISCVInstrFormats.td"
 include "RISCVInstrInfo.td"
-include "RISCVInstrFP.td"
+//include "RISCVInstrFP.td"
 
 def RISCVInstrInfo : InstrInfo {}
 

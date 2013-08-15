@@ -210,8 +210,8 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   unsigned Opcode;
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::ORI;
-  else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg))
-    Opcode = RISCV::LER;
+  //else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg))
+    //Opcode = RISCV::LER;
   else
     llvm_unreachable("Impossible reg-to-reg copy");
 
