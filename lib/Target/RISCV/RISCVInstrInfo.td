@@ -138,39 +138,19 @@ def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i64imm:$amt),
 def ADJCALLSTACKUP   : Pseudo<(outs), (ins i64imm:$amt1, i64imm:$amt2),
                               [(callseq_end timm:$amt1, timm:$amt2)]>;
 
-//===----------------------------------------------------------------------===//
-// Control flow instructions
-//===----------------------------------------------------------------------===//
-
-// A return instruction.  R1 is the condition-code mask (all 1s)
-// and R2 is the target address, which is always stored in %r14.
+//hardcoded JALR to be return
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
-    R1 = 15, R2 = 14, isCodeGenOnly = 1 in {
-  def RET : InstRR<0x07, (outs), (ins), "ret", [(z_retflag)]>;
-}
-
-//===----------------------------------------------------------------------===//
-// Multiplication
-//===----------------------------------------------------------------------===//
-
-// Multiplication of a register.
-let isCommutable = 1 in {
-  def MSR  : BinaryRRE<"msr",  0xB252, mul, GR32, GR32>;
-}
-
-// Multiplication of a signed 16-bit immediate.
-def MHI  : BinaryRI<"mhi",  0xA7C, mul, GR32, imm32sx16>;
-
-// Multiplication of a signed 32-bit immediate.
-def MSFI  : BinaryRIL<"msfi",  0xC21, mul, GR32, simm32>;
-
-//===----------------------------------------------------------------------===//
-// Miscellaneous Instructions.
-//===----------------------------------------------------------------------===//
-
-// Read a 32-bit access register into a GR32.  As with all GR32 operations,
-// the upper 32 bits of the enclosing GR64 remain unchanged, which is useful
-// when a 64-bit address is stored in a pair of access registers.
-def EAR : InstRRE<0xB24F, (outs GR32:$dst), (ins access_reg:$src),
-                  "ear\t$dst, $src",
-                  [(set GR32:$dst, (z_extract_access access_reg:$src))]>;
+    isCodeGenOnly = 1 in {
+  def RET : InstRISCV<4, (outs), (ins), "RET", 
+          []>{
+            field bits<32> Inst;
+            
+            let Inst{31-27} = 0;// destination zero
+            let Inst{26-22} = 1;// target ra
+            let Inst{21-17} = 0;// imm 0
+            let Inst{16-10} = 0;// imm 0
+            let Inst{9 - 7} = 0b000;
+            let Inst{6 - 0} = 0b1101011;
+          }
+   }
+  def : Pat<(z_retflag), (RET)>;
