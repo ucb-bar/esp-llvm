@@ -28,52 +28,16 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
   // ...Y equivalent.
   string PairType = "none";
 
-  // True if this instruction is a simple D(X,B) load of a register
+  // True if this instruction is a simple load of a register
   // (with no sign or zero extension).
-  bit SimpleBDXLoad = 0;
+  bit SimpleLoad = 0;
 
-  // True if this instruction is a simple D(X,B) store of a register
+  // True if this instruction is a simple store of a register
   // (with no truncation).
-  bit SimpleBDXStore = 0;
+  bit SimpleStore = 0;
 
-  // True if this instruction has a 20-bit displacement field.
-  bit Has20BitOffset = 0;
-
-  // True if addresses in this instruction have an index register.
-  bit HasIndex = 0;
-
-  // True if this is a 128-bit pseudo instruction that combines two 64-bit
-  // operations.
-  bit Is128Bit = 0;
-
-  let TSFlags{0} = SimpleBDXLoad;
-  let TSFlags{1} = SimpleBDXStore;
-  let TSFlags{2} = Has20BitOffset;
-  let TSFlags{3} = HasIndex;
-  let TSFlags{4} = Is128Bit;
-}
-
-//===----------------------------------------------------------------------===//
-// Mappings between instructions
-//===----------------------------------------------------------------------===//
-
-// Return the version of an instruction that has an unsigned 12-bit
-// displacement.
-def getDisp12Opcode : InstrMapping {
-  let FilterClass = "InstRISCV";
-  let RowFields = ["Function"];
-  let ColFields = ["PairType"];
-  let KeyCol = ["20"];
-  let ValueCols = [["12"]];
-}
-
-// Return the version of an instruction that has a signed 20-bit displacement.
-def getDisp20Opcode : InstrMapping {
-  let FilterClass = "InstRISCV";
-  let RowFields = ["Function"];
-  let ColFields = ["PairType"];
-  let KeyCol = ["12"];
-  let ValueCols = [["20"]];
+  let TSFlags{0} = SimpleLoad;
+  let TSFlags{1} = SimpleStore;
 }
 
 /***************
