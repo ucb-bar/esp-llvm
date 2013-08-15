@@ -25,8 +25,6 @@ def AND : InstR<"AND" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
 def ADDI: InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sx12>;
 def XORI: InstI<"XORI", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
 def ORI : InstI<"ORI" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
-//simple immediate loading
-def : Pat<(i32 imm32sx12:$imm), (ORI zero, imm32sx12:$imm)>;
 def ANDI: InstI<"ANDI", 0b0010011, 0b111       , and, GR32, imm32sx12>;
 //TODO: enforce constraints here or up on level?
 def SLLI: InstI<"SLLI", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
@@ -128,6 +126,18 @@ def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
                "AUIPC\t$dst, $target",
                [(set GR32:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
 
+//simple immediate loading
+def : Pat<(i32 imm32sx12:$imm), (ORI zero, imm32sx12:$imm)>; 
+// Transformation Function - get the lower 12 bits.
+def LO12 : SDNodeXForm<imm, [{
+    return getImm(N, N->getZExtValue() & 0xFFF);
+}]>;
+
+// Transformation Function - get the higher 20 bits.
+def HI20 : SDNodeXForm<imm, [{
+    return getImm(N, (N->getZExtValue() >> 12) & 0xFFFFF);
+}]>;
+def : Pat<(i32 imm32:$imm), (ORI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
 
 //===----------------------------------------------------------------------===//
 // Stack allocation

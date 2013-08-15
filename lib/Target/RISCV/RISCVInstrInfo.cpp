@@ -29,7 +29,7 @@ RISCVInstrInfo::RISCVInstrInfo(RISCVTargetMachine &tm)
 // it loads or stores and set FrameIndex to the index of the frame object.
 // Return 0 otherwise.
 //
-// Flag is SimpleBDXLoad for loads and SimpleBDXStore for stores.
+// Flag is SimpleLoad for loads and SimpleStore for stores.
 static int isSimpleMove(const MachineInstr *MI, int &FrameIndex, int Flag) {
   const MCInstrDesc &MCID = MI->getDesc();
   if ((MCID.TSFlags & Flag) &&
@@ -133,7 +133,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
     if (OldCond == ThisCond)
       continue;
 
-    // FIXME: Try combining conditions like X86 does.  Should be easy on Z!
+    // FIXME: Try combining conditions like X86 does.
   }
 
   return false;
@@ -168,17 +168,13 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                MachineBasicBlock *FBB,
                                const SmallVectorImpl<MachineOperand> &Cond,
                                DebugLoc DL) const {
-  // In this function we output 32-bit branches, which should always
-  // have enough range.  They can be shortened and relaxed by later code
-  // in the pipeline, if desired.
-
   // Shouldn't be a fall through.
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");
   assert((Cond.size() == 1 || Cond.size() == 0) &&
          "RISCV branch conditions have one component!");
 
   if (Cond.empty()) {
-    // Unconditional branch?
+    // Unconditional branch
     assert(!FBB && "Unconditional branch with multiple successors!");
     BuildMI(&MBB, DL, get(RISCV::J)).addMBB(TBB);
     return 1;
@@ -187,15 +183,34 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
   // Conditional branch.
   unsigned Count = 0;
   unsigned CC = Cond[0].getImm();
-  /*TODO: no more BRCL
-  BuildMI(&MBB, DL, get(RISCV::BRCL)).addImm(CC).addMBB(TBB);
-  */
+  switch(CC) {
+    case RISCV::CCMASK_CMP_EQ:
+      BuildMI(&MBB, DL, get(RISCV::BEQ)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    case RISCV::CCMASK_CMP_NE:
+      BuildMI(&MBB, DL, get(RISCV::BNE)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    case RISCV::CCMASK_CMP_LT:
+      BuildMI(&MBB, DL, get(RISCV::BLT)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    case (RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO):
+      BuildMI(&MBB, DL, get(RISCV::BLTU)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    case RISCV::CCMASK_CMP_GE:
+      BuildMI(&MBB, DL, get(RISCV::BGE)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
+      BuildMI(&MBB, DL, get(RISCV::BGEU)).addImm(CC).addMBB(TBB);//TODO: Should there be an addImm
+      break;
+    default:
+      llvm_unreachable("Invalid branch condition code!");
+  }
   ++Count;
 
+  //TODO: does RISCV have any two way branches (assume not)
   if (FBB) {
-    // Two-way Conditional branch. Insert the second branch.
-    //BuildMI(&MBB, DL, get(RISCV::JG)).addMBB(FBB);
     ++Count;
+    llvm_unreachable("Can not insert two-way branch!");
   }
   return Count;
 }
@@ -206,12 +221,9 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 			      unsigned DestReg, unsigned SrcReg,
 			      bool KillSrc) const {
 
-  // Everything else needs only one instruction.
   unsigned Opcode;
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::ORI;
-  //else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg))
-    //Opcode = RISCV::LER;
   else
     llvm_unreachable("Impossible reg-to-reg copy");
 
@@ -287,13 +299,19 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BLT:
-  case RISCV::BLTU:
     Cond = RISCV::CCMASK_CMP_LT;
     Target = &MI->getOperand(2);
     return true;
+  case RISCV::BLTU:
+    Cond = RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO;
+    Target = &MI->getOperand(2);
+    return true;
   case RISCV::BGE:
-  case RISCV::BGEU:
     Cond = RISCV::CCMASK_CMP_GE;
+    Target = &MI->getOperand(2);
+    return true;
+  case RISCV::BGEU:
+    Cond = RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
 
@@ -306,30 +324,11 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
 void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
                                            unsigned &LoadOpcode,
                                            unsigned &StoreOpcode) const {
-    /*TODO: no load stores for now
   if (RC == &RISCV::GR32BitRegClass || RC == &RISCV::ADDR32BitRegClass) {
-    LoadOpcode = RISCV::L;
-    StoreOpcode = RISCV::ST32;
-  } else if (RC == &RISCV::GR64BitRegClass ||
-             RC == &RISCV::ADDR64BitRegClass) {
-    LoadOpcode = RISCV::LG;
-    StoreOpcode = RISCV::STG;
-  } else if (RC == &RISCV::GR128BitRegClass ||
-             RC == &RISCV::ADDR128BitRegClass) {
-    LoadOpcode = RISCV::L128;
-    StoreOpcode = RISCV::ST128;
-  } else if (RC == &RISCV::FP32BitRegClass) {
-    LoadOpcode = RISCV::LE;
-    StoreOpcode = RISCV::STE;
-  } else if (RC == &RISCV::FP64BitRegClass) {
-    LoadOpcode = RISCV::LD;
-    StoreOpcode = RISCV::STD;
-  } else if (RC == &RISCV::FP128BitRegClass) {
-    LoadOpcode = RISCV::LX;
-    StoreOpcode = RISCV::STX;
+    LoadOpcode = RISCV::LW;
+    StoreOpcode = RISCV::SW;
   } else
     llvm_unreachable("Unsupported regclass to load or store");
-    */
 }
 
 unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
@@ -349,20 +348,18 @@ unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
 void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator MBBI,
                                      unsigned Reg, uint64_t Value) const {
-  /*TODO no valid instrs here
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   unsigned Opcode;
-  if (isInt<16>(Value))
-    Opcode = RISCV::LGHI;
-  else if (RISCV::isImmLL(Value))
-    Opcode = RISCV::LLILL;
-  else if (RISCV::isImmLH(Value)) {
-    Opcode = RISCV::LLILH;
-    Value >>= 16;
+  if (isInt<12>(Value)){
+    Opcode = RISCV::ORI;
+    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(Value);
   } else {
     assert(isInt<32>(Value) && "Huge values not handled yet");
-    Opcode = RISCV::LGFI;
+    uint64_t upper20 = 0x00000000000FFFFF & (Value >> 12);
+    uint64_t lower12 = 0x0000000000000FFF & (Value);
+    Opcode = RISCV::LUI;
+    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addImm(upper20);
+    Opcode = RISCV::ORI;
+    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(lower12);
   }
-  BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addImm(Value);
-  */
 }
