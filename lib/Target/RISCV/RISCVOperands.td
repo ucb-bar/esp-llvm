@@ -190,6 +190,11 @@ def imm32sx20 : Immediate<i32, [{
 def imm32zx20 : Immediate<i32, [{
   return isUInt<20>(N->getZExtValue());
 }], NOOP_SDNodeXForm, "U20Imm">;
+
+def simm32 : Immediate<i32, [{}], SIMM32, "S32Imm">;
+def uimm32 : Immediate<i32, [{}], UIMM32, "U32Imm">;
+
+def imm32 : ImmLeaf<i32, [{}]>;
 //END RISCV
 
 
@@ -237,10 +242,6 @@ def imm32sx16trunc : Immediate<i32, [{}], SIMM16, "S16Imm">;
 // Full 32-bit immediates.  we need both signed and unsigned versions
 // because the assembler is picky.  E.g. AFI requires signed operands
 // while NILF requires unsigned ones.
-def simm32 : Immediate<i32, [{}], SIMM32, "S32Imm">;
-def uimm32 : Immediate<i32, [{}], UIMM32, "U32Imm">;
-
-def imm32 : ImmLeaf<i32, [{}]>;
 
 //===----------------------------------------------------------------------===//
 // 64-bit immediates
