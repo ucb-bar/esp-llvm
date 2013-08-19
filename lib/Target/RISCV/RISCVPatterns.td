@@ -29,37 +29,3 @@ multiclass ZXB<SDPatternOperator operator, RegisterOperand cls,
   def : Pat<(operator cls:$src1, (zext GR32:$src2)),
             (insn cls:$src1, GR32:$src2)>;
 }
-
-// Record that INSN performs a binary read-modify-write operation,
-// with LOAD, OPERATOR and STORE being the read, modify and write
-// respectively.  MODE is the addressing mode and IMM is the type
-// of the second operand.
-class RMWI<SDPatternOperator load, SDPatternOperator operator,
-           SDPatternOperator store, AddressingMode mode,
-           PatFrag imm, Instruction insn>
-  : Pat<(store (operator (load mode:$addr), imm:$src), mode:$addr),
-        (insn mode:$addr, (UIMM8 imm:$src))>;
-
-// Record that INSN performs binary operation OPERATION on a byte
-// memory location.  IMM is the type of the second operand.
-multiclass RMWIByte<SDPatternOperator operator, AddressingMode mode,
-                    Instruction insn> {
-  def : RMWI<zextloadi8, operator, truncstorei8, mode, imm32, insn>;
-  def : RMWI<zextloadi8, operator, truncstorei8, mode, imm64, insn>;
-  def : RMWI<sextloadi8, operator, truncstorei8, mode, imm32, insn>;
-  def : RMWI<sextloadi8, operator, truncstorei8, mode, imm64, insn>;
-  def : RMWI<extloadi8, operator, truncstorei8, mode, imm32, insn>;
-  def : RMWI<extloadi8, operator, truncstorei8, mode, imm64, insn>;
-}
-
-// Record that INSN performs insertion TYPE into a register of class CLS.
-// The inserted operand is loaded using LOAD from an address of mode MODE.
-multiclass InsertMem<string type, Instruction insn, RegisterOperand cls,
-                     SDPatternOperator load, AddressingMode mode> {
-  def : Pat<(!cast<SDPatternOperator>("or_as_"##type)
-              cls:$src1, (load mode:$src2)),
-            (insn cls:$src1, mode:$src2)>;
-  def : Pat<(!cast<SDPatternOperator>("or_as_rev"##type)
-              (load mode:$src2), cls:$src1),
-            (insn cls:$src1, mode:$src2)>;
-}

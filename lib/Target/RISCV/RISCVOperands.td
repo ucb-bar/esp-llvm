@@ -44,37 +44,6 @@ class AddressAsmOperand<string format, string bitsize, string dispsize>
   let RenderMethod = "add"##format##"Operands";
 }
 
-// Constructs both a DAG pattern and instruction operand for an addressing mode.
-// The mode is selected by custom code in selectTYPE...SUFFIX().  The address
-// registers have BITSIZE bits and displacements have DISPSIZE bits.  NUMOPS is
-// the number of operands that make up an address and OPERANDS lists the types
-// of those operands using (ops ...).  FORMAT is the type of addressing mode,
-// which needs to match the names used in AddressAsmOperand.
-class AddressingMode<string type, string bitsize, string dispsize,
-                     string suffix, int numops, string format, dag operands>
-  : ComplexPattern<!cast<ValueType>("i"##bitsize), numops,
-                   "select"##type##dispsize##suffix,
-                   [add, sub, or, frameindex, z_adjdynalloc]>,
-    Operand<!cast<ValueType>("i"##bitsize)> {
-  let PrintMethod = "print"##format##"Operand";
-  let MIOperandInfo = operands;
-  let ParserMatchClass =
-    !cast<AddressAsmOperand>(format##bitsize##"Disp"##dispsize);
-}
-
-// An addressing mode with a base and displacement but no index.
-class BDMode<string type, string bitsize, string dispsize, string suffix>
-  : AddressingMode<type, bitsize, dispsize, suffix, 2, "BDAddr",
-                   (ops !cast<RegisterOperand>("ADDR"##bitsize),
-                        !cast<Immediate>("disp"##dispsize##"imm"##bitsize))>;
-
-// An addressing mode with a base, displacement and index.
-class BDXMode<string type, string bitsize, string dispsize, string suffix>
-  : AddressingMode<type, bitsize, dispsize, suffix, 3, "BDXAddr",
-                   (ops !cast<RegisterOperand>("ADDR"##bitsize),
-                        !cast<Immediate>("disp"##dispsize##"imm"##bitsize),
-                        !cast<RegisterOperand>("ADDR"##bitsize))>;
-
 //===----------------------------------------------------------------------===//
 // Extracting immediate operands from nodes
 // These all create MVT::i64 nodes to ensure the value is not sign-extended
@@ -361,12 +330,6 @@ def pcrel16call : PCRelAddress<i64, "pcrel16call"> {
   let PrintMethod = "printCallOperand";
   let EncoderMethod = "getPLT16DBLEncoding";
 }
-/*
-def pcrel32call : PCRelAddress<i64, "pcrel32call"> {
-  let PrintMethod = "printCallOperand";
-  let EncoderMethod = "getPLT32DBLEncoding";
-}
-*/
 
 //===----------------------------------------------------------------------===//
 // Addressing modes
@@ -379,35 +342,6 @@ def disp12imm64 : Operand<i64>;
 // 20-bit displacement operands.
 def disp20imm32 : Operand<i32>;
 def disp20imm64 : Operand<i64>;
-
-def BDAddr32Disp12  : AddressAsmOperand<"BDAddr",  "32", "12">;
-def BDAddr32Disp20  : AddressAsmOperand<"BDAddr",  "32", "20">;
-def BDAddr64Disp12  : AddressAsmOperand<"BDAddr",  "64", "12">;
-def BDAddr64Disp20  : AddressAsmOperand<"BDAddr",  "64", "20">;
-def BDXAddr64Disp12 : AddressAsmOperand<"BDXAddr", "64", "12">;
-def BDXAddr64Disp20 : AddressAsmOperand<"BDXAddr", "64", "20">;
-
-// DAG patterns and operands for addressing modes.  Each mode has
-// the form <type><range><group> where:
-//
-// <type> is one of:
-//   shift    : base + displacement (32-bit)
-//   bdaddr   : base + displacement
-//   bdxaddr  : base + displacement + index
-//   laaddr   : like bdxaddr, but used for Load Address operations
-//   dynalloc : base + displacement + index + ADJDYNALLOC
-//
-// <range> is one of:
-//   12       : the displacement is an unsigned 12-bit value
-//   20       : the displacement is a signed 20-bit value
-//
-// <group> is one of:
-//   pair     : used when there is an equivalent instruction with the opposite
-//              range value (12 or 20)
-//   only     : used when there is no equivalent instruction with the opposite
-//              range value
-def shift12only      : BDMode <"BDAddr",   "32", "12", "Only">;
-def shift20only      : BDMode <"BDAddr",   "32", "20", "Only">;
 
 //===----------------------------------------------------------------------===//
 // Miscellaneous

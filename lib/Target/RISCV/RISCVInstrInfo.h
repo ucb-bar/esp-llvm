@@ -29,7 +29,7 @@ namespace RISCVII {
   enum {
     // See comments in RISCVInstrFormats.td.
     SimpleLoad  = (1 << 0),
-    SimpleStore = (1 << 1),
+    SimpleStore = (1 << 1)
   };
   // RISCV MachineOperand target flags.
   enum {
