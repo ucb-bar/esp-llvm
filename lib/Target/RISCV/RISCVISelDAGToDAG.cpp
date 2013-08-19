@@ -23,49 +23,25 @@ namespace {
 struct RISCVAddressingMode {
   // The shape of the address.
   enum AddrForm {
-    // base+displacement
-    FormBD,
-
-    // base+displacement+index for load and store operands
-    FormBDXNormal,
-
-    // base+displacement+index for load address operands
-    FormBDXLA,
-
-    // base+displacement+index+ADJDYNALLOC
-    FormBDXDynAlloc
+    // base+offset
+    FormBO
   };
   AddrForm Form;
 
-  // The type of displacement.  The enum names here correspond directly
-  // to the definitions in RISCVOperand.td.  We could split them into
-  // flags -- single/pair, 128-bit, etc. -- but it hardly seems worth it.
-  enum DispRange {
-    Disp12Only,
-    Disp12Pair,
-    Disp20Only,
-    Disp20Only128,
-    Disp20Pair
+  // The type of displacement. 
+  enum OffRange {
+    Off12Only
   };
-  DispRange DR;
+  OffRange OffR;
 
   // The parts of the address.  The address is equivalent to:
   //
-  //     Base + Disp + Index + (IncludesDynAlloc ? ADJDYNALLOC : 0)
+  //     Base + Offset + Index + (IncludesDynAlloc ? ADJDYNALLOC : 0)
   SDValue Base;
-  int64_t Disp;
-  SDValue Index;
-  bool IncludesDynAlloc;
+  int64_t Offset;
 
-  RISCVAddressingMode(AddrForm form, DispRange dr)
-    : Form(form), DR(dr), Base(), Disp(0), Index(),
-      IncludesDynAlloc(false) {}
-
-  // True if the address can have an index register.
-  bool hasIndexField() { return Form != FormBD; }
-
-  // True if the address can (and must) include ADJDYNALLOC.
-  bool isDynAlloc() { return Form == FormBDXDynAlloc; }
+  RISCVAddressingMode(AddrForm form, OffRange offr)
+    : Form(form), OffR(offr), Base(), Offset(0) {}
 
   void dump() {
     errs() << "RISCVAddressingMode " << this << '\n';
@@ -76,18 +52,7 @@ struct RISCVAddressingMode {
     else
       errs() << "null\n";
 
-    if (hasIndexField()) {
-      errs() << " Index ";
-      if (Index.getNode() != 0)
-        Index.getNode()->dump();
-      else
-        errs() << "null\n";
-    }
-
-    errs() << " Disp " << Disp;
-    if (IncludesDynAlloc)
-      errs() << " + ADJDYNALLOC";
-    errs() << '\n';
+    errs() << " Offset " << Offset;
   }
 };
 
@@ -155,19 +120,6 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   }
   //End RISCV
 
-  // Try to match Addr as a FormBD address with displacement type DR.
-  // Return true on success, storing the base and displacement in
-  // Base and Disp respectively.
-  bool selectBDAddr(RISCVAddressingMode::DispRange DR, SDValue Addr,
-                    SDValue &Base, SDValue &Disp);
-
-  // Try to match Addr as a FormBDX* address of form Form with
-  // displacement type DR.  Return true on success, storing the base,
-  // displacement and index in Base, Disp and Index respectively.
-  bool selectBDXAddr(RISCVAddressingMode::AddrForm Form,
-                     RISCVAddressingMode::DispRange DR, SDValue Addr,
-                     SDValue &Base, SDValue &Disp, SDValue &Index);
-
   // PC-relative address matching routines used by RISCVOperands.td.
   bool selectPCRelAddress(SDValue Addr, SDValue &Target) {
     if (Addr.getOpcode() == RISCVISD::PCREL_WRAPPER) {
@@ -175,70 +127,6 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
       return true;
     }
     return false;
-  }
-
-  // BD matching routines used by RISCVOperands.td.
-  bool selectBDAddr12Only(SDValue Addr, SDValue &Base, SDValue &Disp) {
-    return selectBDAddr(RISCVAddressingMode::Disp12Only, Addr, Base, Disp);
-  }
-  bool selectBDAddr12Pair(SDValue Addr, SDValue &Base, SDValue &Disp) {
-    return selectBDAddr(RISCVAddressingMode::Disp12Pair, Addr, Base, Disp);
-  }
-  bool selectBDAddr20Only(SDValue Addr, SDValue &Base, SDValue &Disp) {
-    return selectBDAddr(RISCVAddressingMode::Disp20Only, Addr, Base, Disp);
-  }
-  bool selectBDAddr20Pair(SDValue Addr, SDValue &Base, SDValue &Disp) {
-    return selectBDAddr(RISCVAddressingMode::Disp20Pair, Addr, Base, Disp);
-  }
-
-  // BDX matching routines used by RISCVOperands.td.
-  bool selectBDXAddr12Only(SDValue Addr, SDValue &Base, SDValue &Disp,
-                           SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXNormal,
-                         RISCVAddressingMode::Disp12Only,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectBDXAddr12Pair(SDValue Addr, SDValue &Base, SDValue &Disp,
-                           SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXNormal,
-                         RISCVAddressingMode::Disp12Pair,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectDynAlloc12Only(SDValue Addr, SDValue &Base, SDValue &Disp,
-                            SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXDynAlloc,
-                         RISCVAddressingMode::Disp12Only,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectBDXAddr20Only(SDValue Addr, SDValue &Base, SDValue &Disp,
-                           SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXNormal,
-                         RISCVAddressingMode::Disp20Only,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectBDXAddr20Only128(SDValue Addr, SDValue &Base, SDValue &Disp,
-                              SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXNormal,
-                         RISCVAddressingMode::Disp20Only128,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectBDXAddr20Pair(SDValue Addr, SDValue &Base, SDValue &Disp,
-                           SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXNormal,
-                         RISCVAddressingMode::Disp20Pair,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectLAAddr12Pair(SDValue Addr, SDValue &Base, SDValue &Disp,
-                          SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXLA,
-                         RISCVAddressingMode::Disp12Pair,
-                         Addr, Base, Disp, Index);
-  }
-  bool selectLAAddr20Pair(SDValue Addr, SDValue &Base, SDValue &Disp,
-                          SDValue &Index) {
-    return selectBDXAddr(RISCVAddressingMode::FormBDXLA,
-                         RISCVAddressingMode::Disp20Pair,
-                         Addr, Base, Disp, Index);
   }
 
   // If Op0 is null, then Node is a constant that can be loaded using:
@@ -282,66 +170,24 @@ FunctionPass *llvm::createRISCVISelDag(RISCVTargetMachine &TM,
 // Return true if Val should be selected as a displacement for an address
 // with range DR.  Here we're interested in the range of both the instruction
 // described by DR and of any pairing instruction.
-static bool selectDisp(RISCVAddressingMode::DispRange DR, int64_t Val) {
-  switch (DR) {
-  case RISCVAddressingMode::Disp12Only:
+static bool selectOffset(RISCVAddressingMode::OffRange OffR, int64_t Val) {
+  switch (OffR) {
+  case RISCVAddressingMode::Off12Only:
     return isUInt<12>(Val);
-
-  case RISCVAddressingMode::Disp12Pair:
-  case RISCVAddressingMode::Disp20Only:
-  case RISCVAddressingMode::Disp20Pair:
-    return isInt<20>(Val);
-
-  case RISCVAddressingMode::Disp20Only128:
-    return isInt<20>(Val) && isInt<20>(Val + 8);
   }
-  llvm_unreachable("Unhandled displacement range");
-}
-
-// Change the base or index in AM to Value, where IsBase selects
-// between the base and index.
-static void changeComponent(RISCVAddressingMode &AM, bool IsBase,
-                            SDValue Value) {
-  if (IsBase)
-    AM.Base = Value;
-  else
-    AM.Index = Value;
-}
-
-// The base or index of AM is equivalent to Value + ADJDYNALLOC,
-// where IsBase selects between the base and index.  Try to fold the
-// ADJDYNALLOC into AM.
-static bool expandAdjDynAlloc(RISCVAddressingMode &AM, bool IsBase,
-                              SDValue Value) {
-  if (AM.isDynAlloc() && !AM.IncludesDynAlloc) {
-    changeComponent(AM, IsBase, Value);
-    AM.IncludesDynAlloc = true;
-    return true;
-  }
-  return false;
-}
-
-// The base of AM is equivalent to Base + Index.  Try to use Index as
-// the index register.
-static bool expandIndex(RISCVAddressingMode &AM, SDValue Base,
-                        SDValue Index) {
-  if (AM.hasIndexField() && !AM.Index.getNode()) {
-    AM.Base = Base;
-    AM.Index = Index;
-    return true;
-  }
-  return false;
+  llvm_unreachable("Unhandled offset range");
 }
 
 // The base or index of AM is equivalent to Op0 + Op1, where IsBase selects
 // between the base and index.  Try to fold Op1 into AM's displacement.
-static bool expandDisp(RISCVAddressingMode &AM, bool IsBase,
+static bool expandOffset(RISCVAddressingMode &AM, bool IsBase,
                        SDValue Op0, ConstantSDNode *Op1) {
   // First try adjusting the displacement.
-  int64_t TestDisp = AM.Disp + Op1->getSExtValue();
-  if (selectDisp(AM.DR, TestDisp)) {
-    changeComponent(AM, IsBase, Op0);
-    AM.Disp = TestDisp;
+  int64_t TestOffset = AM.Offset + Op1->getSExtValue();
+  if (selectOffset(AM.OffR, TestOffset)) {
+    //changeComponent(AM, IsBase, Op0);
+    AM.Base = Op0;
+    AM.Offset = TestOffset;
     return true;
   }
 
@@ -352,7 +198,8 @@ static bool expandDisp(RISCVAddressingMode &AM, bool IsBase,
 
 bool RISCVDAGToDAGISel::expandAddress(RISCVAddressingMode &AM,
                                         bool IsBase) {
-  SDValue N = IsBase ? AM.Base : AM.Index;
+  //SDValue N = IsBase ? AM.Base : AM.Index;
+  SDValue N = AM.Base;
   unsigned Opcode = N.getOpcode();
   if (Opcode == ISD::TRUNCATE) {
     N = N.getOperand(0);
@@ -365,39 +212,22 @@ bool RISCVDAGToDAGISel::expandAddress(RISCVAddressingMode &AM,
     unsigned Op0Code = Op0->getOpcode();
     unsigned Op1Code = Op1->getOpcode();
 
-    if (Op0Code == RISCVISD::ADJDYNALLOC)
-      return expandAdjDynAlloc(AM, IsBase, Op1);
-    if (Op1Code == RISCVISD::ADJDYNALLOC)
-      return expandAdjDynAlloc(AM, IsBase, Op0);
-
     if (Op0Code == ISD::Constant)
-      return expandDisp(AM, IsBase, Op1, cast<ConstantSDNode>(Op0));
+      return expandOffset(AM, IsBase, Op1, cast<ConstantSDNode>(Op0));
     if (Op1Code == ISD::Constant)
-      return expandDisp(AM, IsBase, Op0, cast<ConstantSDNode>(Op1));
+      return expandOffset(AM, IsBase, Op0, cast<ConstantSDNode>(Op1));
 
-    if (IsBase && expandIndex(AM, Op0, Op1))
-      return true;
   }
   return false;
 }
 
 // Return true if an instruction with displacement range DR should be
 // used for displacement value Val.  selectDisp(DR, Val) must already hold.
-static bool isValidDisp(RISCVAddressingMode::DispRange DR, int64_t Val) {
-  assert(selectDisp(DR, Val) && "Invalid displacement");
-  switch (DR) {
-  case RISCVAddressingMode::Disp12Only:
-  case RISCVAddressingMode::Disp20Only:
-  case RISCVAddressingMode::Disp20Only128:
+static bool isValidOffset(RISCVAddressingMode::OffRange OffR, int64_t Val) {
+  assert(selectOffset(OffR, Val) && "Invalid displacement");
+  switch (OffR) {
+  case RISCVAddressingMode::Off12Only:
     return true;
-
-  case RISCVAddressingMode::Disp12Pair:
-    // Use the other instruction if the displacement is too large.
-    return isUInt<12>(Val);
-
-  case RISCVAddressingMode::Disp20Pair:
-    // Use the other instruction if the displacement is small enough.
-    return !isUInt<12>(Val);
   }
   llvm_unreachable("Unhandled displacement range");
 }
@@ -463,25 +293,11 @@ bool RISCVDAGToDAGISel::selectAddress(SDValue Addr,
 
   // First try treating the address as a constant.
   if (Addr.getOpcode() == ISD::Constant &&
-      expandDisp(AM, true, SDValue(), cast<ConstantSDNode>(Addr)))
+      expandOffset(AM, true, SDValue(), cast<ConstantSDNode>(Addr)))
     ;
-  else
-    // Otherwise try expanding each component.
-    while (expandAddress(AM, true) ||
-           (AM.Index.getNode() && expandAddress(AM, false)))
-      continue;
-
-  // Reject cases where it isn't profitable to use LA(Y).
-  if (AM.Form == RISCVAddressingMode::FormBDXLA &&
-      !shouldUseLA(AM.Base.getNode(), AM.Disp, AM.Index.getNode()))
-    return false;
 
   // Reject cases where the other instruction in a pair should be used.
-  if (!isValidDisp(AM.DR, AM.Disp))
-    return false;
-
-  // Make sure that ADJDYNALLOC is included where necessary.
-  if (AM.isDynAlloc() && !AM.IncludesDynAlloc)
+  if (!isValidOffset(AM.OffR, AM.Offset))
     return false;
 
   DEBUG(AM.dump());
@@ -503,7 +319,7 @@ static void insertDAGNode(SelectionDAG *DAG, SDNode *Pos, SDValue N) {
 
 void RISCVDAGToDAGISel::getAddressOperands(const RISCVAddressingMode &AM,
                                              EVT VT, SDValue &Base,
-                                             SDValue &Disp) {
+                                             SDValue &Offset) {
   Base = AM.Base;
   if (!Base.getNode())
     // Register 0 means "no base".  This is mostly useful for shifts.
@@ -523,42 +339,9 @@ void RISCVDAGToDAGISel::getAddressOperands(const RISCVAddressingMode &AM,
   }
 
   // Lower the displacement to a TargetConstant.
-  Disp = CurDAG->getTargetConstant(AM.Disp, VT);
+  Offset = CurDAG->getTargetConstant(AM.Offset, VT);
 }
 
-void RISCVDAGToDAGISel::getAddressOperands(const RISCVAddressingMode &AM,
-                                             EVT VT, SDValue &Base,
-                                             SDValue &Disp, SDValue &Index) {
-  getAddressOperands(AM, VT, Base, Disp);
-
-  Index = AM.Index;
-  if (!Index.getNode())
-    // Register 0 means "no index".
-    Index = CurDAG->getRegister(0, VT);
-}
-
-bool RISCVDAGToDAGISel::selectBDAddr(RISCVAddressingMode::DispRange DR,
-                                       SDValue Addr, SDValue &Base,
-                                       SDValue &Disp) {
-  RISCVAddressingMode AM(RISCVAddressingMode::FormBD, DR);
-  if (!selectAddress(Addr, AM))
-    return false;
-
-  getAddressOperands(AM, Addr.getValueType(), Base, Disp);
-  return true;
-}
-
-bool RISCVDAGToDAGISel::selectBDXAddr(RISCVAddressingMode::AddrForm Form,
-                                        RISCVAddressingMode::DispRange DR,
-                                        SDValue Addr, SDValue &Base,
-                                        SDValue &Disp, SDValue &Index) {
-  RISCVAddressingMode AM(Form, DR);
-  if (!selectAddress(Addr, AM))
-    return false;
-
-  getAddressOperands(AM, Addr.getValueType(), Base, Disp, Index);
-  return true;
-}
 
 SDNode *RISCVDAGToDAGISel::splitLargeImmediate(unsigned Opcode, SDNode *Node,
                                                  SDValue Op0, uint64_t UpperVal,
@@ -586,45 +369,8 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
   }
 
   unsigned Opcode = Node->getOpcode();
-  switch (Opcode) {
-  case ISD::OR:
-  case ISD::XOR:
-    // If this is a 64-bit operation in which both 32-bit halves are nonzero,
-    // split the operation into two.
-    if (Node->getValueType(0) == MVT::i64)
-      if (ConstantSDNode *Op1 = dyn_cast<ConstantSDNode>(Node->getOperand(1))) {
-        uint64_t Val = Op1->getZExtValue();
-        if (!RISCV::isImmLF(Val) && !RISCV::isImmHF(Val))
-          Node = splitLargeImmediate(Opcode, Node, Node->getOperand(0),
-                                     Val - uint32_t(Val), uint32_t(Val));
-      }
-    break;
-
-  case ISD::Constant:
-    // If this is a 64-bit constant that is out of the range of LLILF,
-    // LLIHF and LGFI, split it into two 32-bit pieces.
-    if (Node->getValueType(0) == MVT::i64) {
-      uint64_t Val = cast<ConstantSDNode>(Node)->getZExtValue();
-      if (!RISCV::isImmLF(Val) && !RISCV::isImmHF(Val) && !isInt<32>(Val))
-        Node = splitLargeImmediate(ISD::OR, Node, SDValue(),
-                                   Val - uint32_t(Val), uint32_t(Val));
-    }
-    break;
-
-  case ISD::ATOMIC_LOAD_SUB:
-    // Try to convert subtractions of constants to additions.
-    if (ConstantSDNode *Op2 = dyn_cast<ConstantSDNode>(Node->getOperand(2))) {
-      uint64_t Value = -Op2->getZExtValue();
-      EVT VT = Node->getValueType(0);
-      if (VT == MVT::i32 || isInt<32>(Value)) {
-        SDValue Ops[] = { Node->getOperand(0), Node->getOperand(1),
-                          CurDAG->getConstant(int32_t(Value), VT) };
-        Node = CurDAG->MorphNodeTo(Node, ISD::ATOMIC_LOAD_ADD,
-                                   Node->getVTList(), Ops, array_lengthof(Ops));
-      }
-    }
-    break;
-  }
+  //TODO: Any special selections here?
+  //would be based on a switch of opcodes to ISD:: nodes
 
   // Select the default instruction
   SDNode *ResNode = SelectCode(Node);
@@ -647,10 +393,7 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
   // Accept addresses with short displacements, which are compatible
   // with Q, R, S and T.  But keep the index operand for future expansion.
   SDValue Base, Disp, Index;
-  if (!selectBDXAddr(RISCVAddressingMode::FormBD,
-                     RISCVAddressingMode::Disp12Only,
-                     Op, Base, Disp, Index))
-    return true;
+
   OutOps.push_back(Base);
   OutOps.push_back(Disp);
   OutOps.push_back(Index);
