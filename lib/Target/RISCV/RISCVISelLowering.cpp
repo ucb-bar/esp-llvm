@@ -72,10 +72,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // scheduler, because it can.
   setSchedulingPreference(Sched::RegPressure);
 
+  //For i1 types all bits are zero except bit 0
   setBooleanContents(ZeroOrOneBooleanContent);
-  setBooleanVectorContents(ZeroOrOneBooleanContent); // FIXME: Is this correct?
+  setBooleanVectorContents(ZeroOrOneBooleanContent); //vectors of i1s are the same
 
   // Instructions are strings of 2-byte aligned 2-byte values.
+  // align by log2(2) bytes?
   setMinFunctionAlignment(2);
 
   // Handle operations that are handled in a similar way for all types.
