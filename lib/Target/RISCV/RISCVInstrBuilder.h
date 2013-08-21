@@ -40,7 +40,7 @@ addFrameReference(const MachineInstrBuilder &MIB, int FI) {
                               PseudoSourceValue::getFixedStack(FI), Offset),
                             Flags, MFFrame->getObjectSize(FI),
                             MFFrame->getObjectAlignment(FI));
-  return MIB.addFrameIndex(FI).addImm(Offset).addReg(0).addMemOperand(MMO);
+  return MIB.addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
 }
 
 } // End llvm namespace
