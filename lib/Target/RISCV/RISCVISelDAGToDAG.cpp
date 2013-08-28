@@ -294,7 +294,7 @@ bool RISCVDAGToDAGISel::selectAddress(SDValue Addr,
   // First try treating the address as a constant.
   if (Addr.getOpcode() == ISD::Constant &&
       expandOffset(AM, true, SDValue(), cast<ConstantSDNode>(Addr)))
-    ;
+  { }
 
   // Reject cases where the other instruction in a pair should be used.
   if (!isValidOffset(AM.OffR, AM.Offset))

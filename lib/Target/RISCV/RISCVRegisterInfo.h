@@ -40,6 +40,7 @@ public:
   }
   virtual const uint16_t *getCalleeSavedRegs(const MachineFunction *MF = 0)
     const LLVM_OVERRIDE;
+  const uint32_t *getCallPreservedMask(CallingConv::ID) const;
   virtual BitVector getReservedRegs(const MachineFunction &MF)
     const LLVM_OVERRIDE;
   virtual void eliminateFrameIndex(MachineBasicBlock::iterator MI,

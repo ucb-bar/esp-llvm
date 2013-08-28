@@ -14,13 +14,34 @@
 include "llvm/Target/Target.td"
 
 //===----------------------------------------------------------------------===//
+// RISCV subtarget features
+//===----------------------------------------------------------------------===//
+
+def FeatureM : SubtargetFeature<"m", "HasM", "true",
+                                "Supports Integer Multiplication and Division.">;
+def FeatureA : SubtargetFeature<"a", "HasA", "true",
+                                "Supports Atomic Instructions.">;
+def FeatureF : SubtargetFeature<"f", "HasF", "true",
+                                "Supports Single-Precision Floating-Point.">;
+def FeatureD : SubtargetFeature<"d", "HasD", "true",
+                                "Supports Double-Precision Floating-Point.">;
+
+def FeatureRV32 : SubtargetFeature<"rv32", "RISCVArchVersion", "RV32", 
+                                   "RV32 ISA Support">;
+def FeatureRV64 : SubtargetFeature<"rv64", "RISCVArchVersion", "RV64", 
+                                   "RV64 ISA Support">;
+
+//===----------------------------------------------------------------------===//
 // RISCV supported processors
 //===----------------------------------------------------------------------===//
 
 class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
-def : Proc<"Rocket", []>;
+def : Proc<"RV32", [FeatureRV32]>;
+def : Proc<"RV32G", [FeatureRV32,FeatureM,FeatureA,FeatureF,FeatureD]>;
+def : Proc<"RV64", [FeatureRV64]>;
+def : Proc<"RV64G", [FeatureRV64,FeatureM,FeatureA,FeatureF,FeatureD]>;
 
 //===----------------------------------------------------------------------===//
 // Register file description

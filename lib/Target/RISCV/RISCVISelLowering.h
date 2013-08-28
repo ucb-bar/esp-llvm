@@ -16,8 +16,11 @@
 #define LLVM_TARGET_RISCV_ISELLOWERING_H
 
 #include "RISCV.h"
+#include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Target/TargetLowering.h"
+#include <string>
 
 namespace llvm {
 namespace RISCVISD {
@@ -161,9 +164,107 @@ public:
                 const SmallVectorImpl<SDValue> &OutVals,
                 DebugLoc DL, SelectionDAG &DAG) const LLVM_OVERRIDE;
 
+    struct LTStr {
+      bool operator()(const char *S1, const char *S2) const {
+        return strcmp(S1, S2) < 0;
+      }
+    };
+
+    /// ByValArgInfo - Byval argument information.
+    struct ByValArgInfo {
+      unsigned FirstIdx; // Index of the first register used.
+      unsigned NumRegs;  // Number of registers used for this argument.
+      unsigned Address;  // Offset of the stack area used to pass this argument.
+
+      ByValArgInfo() : FirstIdx(0), NumRegs(0), Address(0) {}
+    };
+
+    /// RISCVCC - This class provides methods used to analyze formal and call
+    /// arguments and inquire about calling convention information.
+    class RISCVCC {
+    public:
+      RISCVCC(CallingConv::ID CallConv, bool IsRV32, CCState &Info);
+
+      void analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Outs,
+                               bool IsVarArg, bool IsSoftFloat,
+                               const SDNode *CallNode,
+                               std::vector<ArgListEntry> &FuncArgs);
+      void analyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
+                                  bool IsSoftFloat,
+                                  Function::const_arg_iterator FuncArg);
+
+      void analyzeCallResult(const SmallVectorImpl<ISD::InputArg> &Ins,
+                             bool IsSoftFloat, const SDNode *CallNode,
+                             const Type *RetTy) const;
+
+      void analyzeReturn(const SmallVectorImpl<ISD::OutputArg> &Outs,
+                         bool IsSoftFloat, const Type *RetTy) const;
+
+      const CCState &getCCInfo() const { return CCInfo; }
+
+      /// hasByValArg - Returns true if function has byval arguments.
+      bool hasByValArg() const { return !ByValArgs.empty(); }
+
+      /// regSize - Size (in number of bytes) of integer registers.
+      unsigned regSize() const { return IsRV32 ? 4 : 8; }
+
+      /// numIntArgRegs - Number of integer registers available for calls.
+      unsigned numIntArgRegs() const;
+
+      /// reservedArgArea - The size of the area the caller reserves for
+      /// register arguments. This is 16-byte if ABI is O32.
+      unsigned reservedArgArea() const;
+
+      /// Return pointer to array of integer argument registers.
+      const uint16_t *intArgRegs() const;
+
+      typedef SmallVector<ByValArgInfo, 2>::const_iterator byval_iterator;
+      byval_iterator byval_begin() const { return ByValArgs.begin(); }
+      byval_iterator byval_end() const { return ByValArgs.end(); }
+
+    private:
+      void handleByValArg(unsigned ValNo, MVT ValVT, MVT LocVT,
+                          CCValAssign::LocInfo LocInfo,
+                          ISD::ArgFlagsTy ArgFlags);
+
+      /// useRegsForByval - Returns true if the calling convention allows the
+      /// use of registers to pass byval arguments.
+      bool useRegsForByval() const { return CallConv != CallingConv::Fast; }
+
+      /// Return the function that analyzes fixed argument list functions.
+      llvm::CCAssignFn *fixedArgFn() const;
+
+      /// Return the function that analyzes variable argument list functions.
+      llvm::CCAssignFn *varArgFn() const;
+
+      const uint16_t *shadowRegs() const;
+
+      void allocateRegs(ByValArgInfo &ByVal, unsigned ByValSize,
+                        unsigned Align);
+
+      /// Return the type of the register which is used to pass an argument or
+      /// return a value. This function returns f64 if the argument is an i64
+      /// value which has been generated as a result of softening an f128 value.
+      /// Otherwise, it just returns VT.
+      MVT getRegVT(MVT VT, const Type *OrigTy, const SDNode *CallNode,
+                   bool IsSoftFloat) const;
+
+      template<typename Ty>
+      void analyzeReturn(const SmallVectorImpl<Ty> &RetVals, bool IsSoftFloat,
+                         const SDNode *CallNode, const Type *RetTy) const;
+
+      CCState &CCInfo;
+      CallingConv::ID CallConv;
+      bool IsRV32;
+      SmallVector<ByValArgInfo, 2> ByValArgs;
+    };
+
 private:
   const RISCVSubtarget &Subtarget;
   const RISCVTargetMachine &TM;
+public:
+  bool IsRV32;
+private:
 
   // Implement LowerOperation for individual opcodes.
   //SDValue lowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
@@ -208,6 +309,21 @@ private:
                                           unsigned BitSize) const;
   MachineBasicBlock *emitAtomicCmpSwapW(MachineInstr *MI,
                                         MachineBasicBlock *BB) const;
+
+  // copyByValArg - Copy argument registers which were used to pass a byval
+  // argument to the stack. Create a stack frame object for the byval
+  // argument.
+  void copyByValRegs(SDValue Chain, DebugLoc DL,
+                     std::vector<SDValue> &OutChains, SelectionDAG &DAG,
+                     const ISD::ArgFlagsTy &Flags,
+                     SmallVectorImpl<SDValue> &InVals,
+                     const Argument *FuncArg,
+                     const RISCVCC &CC, const ByValArgInfo &ByVal) const;
+  // writeVarArgRegs - Write variable function arguments passed in registers
+  // to the stack. Also create a stack frame object for the first variable
+  // argument.
+  void writeVarArgRegs(std::vector<SDValue> &OutChains, const RISCVCC &CC,
+                       SDValue Chain, DebugLoc DL, SelectionDAG &DAG) const;
 };
 } // end namespace llvm
 

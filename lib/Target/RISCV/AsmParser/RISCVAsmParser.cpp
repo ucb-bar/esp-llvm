@@ -35,11 +35,15 @@ public:
     PCRReg,
     GR32Reg,
     GR64Reg,
+    PairGR64Reg,
+    PairGR128Reg,
     GR128Reg,
     ADDR32Reg,
     ADDR64Reg,
     FP32Reg,
     FP64Reg,
+    PairFP64Reg,
+    PairFP128Reg,
     FP128Reg
   };
 
@@ -212,38 +216,23 @@ public:
     assert(N == 1 && "Invalid number of operands");
     addExpr(Inst, getImm());
   }
-  void addBDAddrOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 2 && "Invalid number of operands");
-    assert(Kind == KindMem && Mem.Index == 0 && "Invalid operand type");
-    Inst.addOperand(MCOperand::CreateReg(Mem.Base));
-    addExpr(Inst, Mem.Disp);
-  }
-  void addBDXAddrOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 3 && "Invalid number of operands");
-    assert(Kind == KindMem && "Invalid operand type");
-    Inst.addOperand(MCOperand::CreateReg(Mem.Base));
-    addExpr(Inst, Mem.Disp);
-    Inst.addOperand(MCOperand::CreateReg(Mem.Index));
-  }
 
   // Used by the TableGen code to check for particular operand types.
   bool isPCReg() const { return isReg(PCReg); }
   bool isPCRReg() const { return isReg(PCRReg); }
   bool isGR32() const { return isReg(GR32Reg); }
   bool isGR64() const { return isReg(GR64Reg); }
+  bool isPairGR64() const { return isReg(PairGR64Reg); }
+  bool isPairGR128() const { return isReg(PairGR128Reg); }
   bool isGR128() const { return isReg(GR128Reg); }
   bool isADDR32() const { return isReg(ADDR32Reg); }
   bool isADDR64() const { return isReg(ADDR64Reg); }
   bool isADDR128() const { return false; }
   bool isFP32() const { return isReg(FP32Reg); }
   bool isFP64() const { return isReg(FP64Reg); }
+  bool isPairFP64() const { return isReg(PairFP64Reg); }
+  bool isPairFP128() const { return isReg(PairFP128Reg); }
   bool isFP128() const { return isReg(FP128Reg); }
-  bool isBDAddr32Disp12() const { return isMemDisp12(ADDR32Reg, false); }
-  bool isBDAddr32Disp20() const { return isMemDisp20(ADDR32Reg, false); }
-  bool isBDAddr64Disp12() const { return isMemDisp12(ADDR64Reg, false); }
-  bool isBDAddr64Disp20() const { return isMemDisp20(ADDR64Reg, false); }
-  bool isBDXAddr64Disp12() const { return isMemDisp12(ADDR64Reg, true); }
-  bool isBDXAddr64Disp20() const { return isMemDisp20(ADDR64Reg, true); }
   bool isU4Imm() const { return isImm(0, 15); }
   bool isU6Imm() const { return isImm(0, 63); }
   bool isU8Imm() const { return isImm(0, 255); }
@@ -262,14 +251,33 @@ public:
 // an invalid register.  We don't use register class directly because that
 // specifies the allocation order.
 static const unsigned GR32Regs[] = {
-  RISCV::zero, RISCV::ra, RISCV::fp,
+  RISCV::zero, RISCV::ra  , RISCV::fp  ,
   RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
   RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
   RISCV::s10 , RISCV::s11 , 
   RISCV::sp  , RISCV::tp  , RISCV::v0  , RISCV::v1,
   RISCV::a0  , RISCV::a1  , RISCV::a2  , RISCV::a3  , RISCV::a4,
-  RISCV::a5  , RISCV::a6  , RISCV::a7  , RISCV::a8  , RISCV::a9,
-  RISCV::a10 , RISCV::a11 , RISCV::a12 , RISCV::a13 
+  RISCV::a5  , RISCV::a6  , RISCV::a7  ,
+  RISCV::t0  , RISCV::t1  , RISCV::t2  , RISCV::t3  , RISCV::t4 , RISCV::t5 
+};
+
+static const unsigned GR64Regs[] = {
+  RISCV::zero_64, RISCV::ra_64  , RISCV::fp_64  ,
+  RISCV::s0_64  , RISCV::s1_64  , RISCV::s2_64  , RISCV::s3_64  , RISCV::s4_64 ,
+  RISCV::s5_64  , RISCV::s6_64  , RISCV::s7_64  , RISCV::s8_64  , RISCV::s9_64 ,
+  RISCV::s10_64 , RISCV::s11_64 , 
+  RISCV::sp_64  , RISCV::tp_64  , RISCV::v0_64  , RISCV::v1_64  ,
+  RISCV::a0_64  , RISCV::a1_64  , RISCV::a2_64  , RISCV::a3_64  , RISCV::a4_64 ,
+  RISCV::a5_64  , RISCV::a6_64  , RISCV::a7_64  ,
+  RISCV::t0_64  , RISCV::t1_64  , RISCV::t2_64  , RISCV::t3_64  , RISCV::t4_64 , RISCV::t5_64 
+};
+
+static const unsigned PairGR64Regs[] = {
+  RISCV::a0_p64, RISCV::a1_p64, RISCV::a2_p64, RISCV::a3_p64
+};
+
+static const unsigned PairGR128Regs[] = {
+  RISCV::a0_p128, RISCV::a1_p128, RISCV::a2_p128, RISCV::a3_p128
 };
 
 static const unsigned PCReg[] = { RISCV::PC };
@@ -281,13 +289,32 @@ static const unsigned FP32Regs[] = {
   RISCV::fs15 ,
   RISCV::fv0  , RISCV::fv1  ,
   RISCV::fa0  , RISCV::fa1  , RISCV::fa2  , RISCV::fa3  , RISCV::fa4,
-  RISCV::fa5  , RISCV::fa6  , RISCV::fa7  , RISCV::fa8  , RISCV::fa9,
-  RISCV::fa10 , RISCV::fa11 , RISCV::fa12 , RISCV::fa13 
+  RISCV::fa5  , RISCV::fa6  , RISCV::fa7  ,
+  RISCV::ft0  , RISCV::ft1  , RISCV::ft2  , RISCV::ft3  , RISCV::ft4  , RISCV::ft5 
+};
+
+static const unsigned FP64Regs[] = {
+  RISCV::fs0_64  , RISCV::fs1_64  , RISCV::fs2_64  , RISCV::fs3_64  , RISCV::fs4_64,
+  RISCV::fs5_64  , RISCV::fs6_64  , RISCV::fs7_64  , RISCV::fs8_64  , RISCV::fs9_64,
+  RISCV::fs10_64 , RISCV::fs11_64 , RISCV::fs12_64 , RISCV::fs13_64 , RISCV::fs14_64 ,
+  RISCV::fs15_64 ,
+  RISCV::fv0_64  , RISCV::fv1_64  ,
+  RISCV::fa0_64  , RISCV::fa1_64  , RISCV::fa2_64  , RISCV::fa3_64  , RISCV::fa4_64  ,
+  RISCV::fa5_64  , RISCV::fa6_64  , RISCV::fa7_64  ,
+  RISCV::ft0_64  , RISCV::ft1_64  , RISCV::ft2_64  , RISCV::ft3_64  , RISCV::ft4_64  , RISCV::ft5_64 
+};
+
+static const unsigned PairFP64Regs[] = {
+  RISCV::fa0_p64, RISCV::fa1_p64, RISCV::fa2_p64, RISCV::fa3_p64
+};
+
+static const unsigned PairFP128Regs[] = {
+  RISCV::fa0_p128, RISCV::fa1_p128, RISCV::fa2_p128, RISCV::fa3_p128
 };
 
 static const unsigned PCRRegs[] = {
   RISCV::status, RISCV::epc, RISCV::evec, RISCV::ptbr, RISCV::asid,
-  RISCV::count, RISCV::compare, RISCV::k0, RISCV::k1, RISCV::tohost, RISCV::fromhost,
+  RISCV::count, RISCV::compare, RISCV::sup0, RISCV::sup1, RISCV::tohost, RISCV::fromhost,
   //read only
   RISCV::badvaddr, RISCV::cause, RISCV::hartid, RISCV::impl, 
   //write only
@@ -357,6 +384,21 @@ public:
   }
 
   OperandMatchResultTy
+  parseGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'r', GR64Regs, RISCVOperand::GR64Reg);
+  }
+
+  OperandMatchResultTy
+  parsePairGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'r', PairGR64Regs, RISCVOperand::PairGR64Reg);
+  }
+
+  OperandMatchResultTy
+  parsePairGR128(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'r', PairGR128Regs, RISCVOperand::PairGR128Reg);
+  }
+
+  OperandMatchResultTy
   parsePCReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
     return parseRegister(Operands, 'p', PCReg, RISCVOperand::PCReg);
   }
@@ -373,24 +415,25 @@ public:
   }
 
   OperandMatchResultTy
+  parseFP64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'f', FP64Regs, RISCVOperand::FP64Reg);
+  }
+
+  OperandMatchResultTy
+  parsePairFP64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'f', PairFP64Regs, RISCVOperand::PairFP64Reg);
+  }
+
+  OperandMatchResultTy
+  parsePairFP128(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    return parseRegister(Operands, 'f', PairFP128Regs, RISCVOperand::PairFP128Reg);
+  }
+
+  OperandMatchResultTy
   parsePCRReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
     return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
   }
 
-  OperandMatchResultTy
-  parseBDAddr32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseAddress(Operands, GR32Regs, RISCVOperand::ADDR32Reg, false);
-  }
-  //changed from 64 to 32 TODO stop hack
-  OperandMatchResultTy
-  parseBDAddr64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseAddress(Operands, GR32Regs, RISCVOperand::ADDR32Reg, false);
-  }
-  //changed from 64 to 32 TODO stop hack
-  OperandMatchResultTy
-  parseBDXAddr64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseAddress(Operands, GR32Regs, RISCVOperand::ADDR32Reg, true);
-  }
   OperandMatchResultTy
   parseAccessReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands);
 };

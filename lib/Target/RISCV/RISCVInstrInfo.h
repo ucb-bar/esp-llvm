@@ -43,6 +43,7 @@ namespace RISCVII {
 
 class RISCVInstrInfo : public RISCVGenInstrInfo {
   const RISCVRegisterInfo RI;
+  const RISCVTargetMachine &TM;
 
   void splitMove(MachineBasicBlock::iterator MI, unsigned NewOpcode) const;
   void splitAdjDynAlloc(MachineBasicBlock::iterator MI) const;
@@ -55,6 +56,9 @@ public:
                                        int &FrameIndex) const LLVM_OVERRIDE;
   virtual unsigned isStoreToStackSlot(const MachineInstr *MI,
                                       int &FrameIndex) const LLVM_OVERRIDE;
+  void adjustStackPtr(unsigned SP, int64_t Amount,
+                                     MachineBasicBlock &MBB,
+                                     MachineBasicBlock::iterator I) const;
   virtual bool AnalyzeBranch(MachineBasicBlock &MBB,
                              MachineBasicBlock *&TBB,
                              MachineBasicBlock *&FBB,

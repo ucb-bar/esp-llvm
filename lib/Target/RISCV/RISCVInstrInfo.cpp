@@ -13,6 +13,7 @@
 
 #include "RISCVInstrInfo.h"
 #include "RISCVInstrBuilder.h"
+#include "RISCVTargetMachine.h"
 
 #define GET_INSTRINFO_CTOR
 #define GET_INSTRMAP_INFO
@@ -22,7 +23,7 @@ using namespace llvm;
 
 RISCVInstrInfo::RISCVInstrInfo(RISCVTargetMachine &tm)
   : RISCVGenInstrInfo(RISCV::ADJCALLSTACKDOWN, RISCV::ADJCALLSTACKUP),
-    RI(tm, *this) {
+    RI(tm, *this), TM(tm) {
 }
 
 // If MI is a simple load or store for a frame object, return the register
@@ -50,6 +51,24 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr *MI,
 unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
                                               int &FrameIndex) const {
   return isSimpleMove(MI, FrameIndex, RISCVII::SimpleStore);
+}
+
+/// Adjust SP by Amount bytes.
+void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
+                                     MachineBasicBlock &MBB,
+                                     MachineBasicBlock::iterator I) const {
+  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
+  DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
+  unsigned ADD =  RISCV::ADD;
+  unsigned ADDI = RISCV::ADDI;
+
+  if (isInt<16>(Amount))// addi sp, sp, amount
+    BuildMI(MBB, I, DL, get(ADDI), SP).addReg(SP).addImm(Amount);
+  else { // Expand immediate that doesn't fit in 16-bit.
+    unsigned Reg;
+    loadImmediate(MBB, I, Reg, Amount);
+    BuildMI(MBB, I, DL, get(ADD), SP).addReg(SP).addReg(Reg, RegState::Kill);
+  }
 }
 
 bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,

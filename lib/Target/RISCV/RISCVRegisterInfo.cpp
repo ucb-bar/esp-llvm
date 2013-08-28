@@ -23,18 +23,41 @@ RISCVRegisterInfo::RISCVRegisterInfo(RISCVTargetMachine &tm,
 
 const uint16_t*
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  static const uint16_t CalleeSavedRegs[] = {
-    RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
-    RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
-    RISCV::s10 , RISCV::s11 , RISCV::sp  , RISCV::tp  ,
-    RISCV::fs0 , RISCV::fs1 , RISCV::fs2 , RISCV::fs3 , RISCV::fs4,
-    RISCV::fs5 , RISCV::fs6 , RISCV::fs7 , RISCV::fs8 , RISCV::fs9,
-    RISCV::fs10, RISCV::fs11, RISCV::fs12, RISCV::fs13, RISCV::fs14, 
-    RISCV::fs15,
-    0
-  };
+  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
+  if(Subtarget.isRV64())
+    if(Subtarget.hasD())
+      return CSR_RV64D_SaveList;
+    else if(Subtarget.hasF())
+      return CSR_RV64F_SaveList;
+    else
+      return CSR_RV64_SaveList;
+  else
+    if(Subtarget.hasD())
+      return CSR_RV32D_SaveList;
+    else if(Subtarget.hasF())
+      return CSR_RV32F_SaveList;
+    else
+      return CSR_RV32_SaveList;
+}
 
-  return CalleeSavedRegs;
+const uint32_t*
+RISCVRegisterInfo::getCallPreservedMask(CallingConv::ID) const {
+  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
+  if(Subtarget.isRV64())
+    if(Subtarget.hasD())
+      return CSR_RV64D_RegMask;
+    else if(Subtarget.hasF())
+      return CSR_RV64F_RegMask;
+    else
+      return CSR_RV64_RegMask;
+  else
+    if(Subtarget.hasD())
+      return CSR_RV32D_RegMask;
+    else if(Subtarget.hasF())
+      return CSR_RV32F_RegMask;
+    else
+      return CSR_RV32_RegMask;
+
 }
 
 BitVector
@@ -44,15 +67,19 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 
   // zero is reserved so llvm doesn't store things there
   Reserved.set(RISCV::zero);
+  Reserved.set(RISCV::zero_64);
   Reserved.set(RISCV::ra);
+  Reserved.set(RISCV::ra_64);
 
   if (TFI->hasFP(MF)) {
     // fp is the frame pointer.  Reserve all aliases.
     Reserved.set(RISCV::fp);
+    Reserved.set(RISCV::fp_64);
   }
 
   // sp is the stack pointer.  Reserve all aliases.
   Reserved.set(RISCV::sp);
+  Reserved.set(RISCV::sp_64);
   return Reserved;
 }
 

@@ -10,11 +10,18 @@
 #ifndef RISCVMACHINEFUNCTIONINFO_H
 #define RISCVMACHINEFUNCTIONINFO_H
 
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
 
 class RISCVMachineFunctionInfo : public MachineFunctionInfo {
+  MachineFunction& MF;
+  /// SRetReturnReg - Some subtargets require that sret lowering includes
+  /// returning the value of the returned struct in a register. This field
+  /// holds the virtual register into which the sret argument is passed.
+  unsigned SRetReturnReg;
   unsigned SavedGPRFrameSize;
   unsigned LowSavedGPR;
   unsigned HighSavedGPR;
@@ -24,11 +31,22 @@ class RISCVMachineFunctionInfo : public MachineFunctionInfo {
   unsigned RegSaveFrameIndex;
   bool ManipulatesSP;
 
+  bool HasByvalArg;
+
+  unsigned IncomingArgSize;
+  
+  bool CallsEhReturn;
+  // Frame objects for spilling eh data registers.
+  int EhDataRegFI[2];
+
 public:
   explicit RISCVMachineFunctionInfo(MachineFunction &MF)
-    : SavedGPRFrameSize(0), LowSavedGPR(0), HighSavedGPR(0), VarArgsFirstGPR(0),
+    : MF(MF), SRetReturnReg(0), SavedGPRFrameSize(0), LowSavedGPR(0), HighSavedGPR(0), VarArgsFirstGPR(0),
       VarArgsFirstFPR(0), VarArgsFrameIndex(0), RegSaveFrameIndex(0),
-      ManipulatesSP(false) {}
+      ManipulatesSP(false), CallsEhReturn(false) {}
+
+  unsigned getSRetReturnReg() const { return SRetReturnReg; }
+  void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
   // Get and set the number of bytes allocated by generic code to store
   // call-saved GPRs.
@@ -67,6 +85,23 @@ public:
   // e.g. through STACKSAVE or STACKRESTORE.
   bool getManipulatesSP() const { return ManipulatesSP; }
   void setManipulatesSP(bool MSP) { ManipulatesSP = MSP; }
+
+  bool hasByvalArg() const { return HasByvalArg; }
+  void setFormalArgInfo(unsigned Size, bool HasByval) {
+    IncomingArgSize = Size;
+    HasByvalArg = HasByval;
+  }
+
+  unsigned getIncomingArgSize() const { return IncomingArgSize; };
+  void setIncomingArgSize(unsigned Size) { IncomingArgSize = Size; };
+
+  // Get and set whether the function calls EH_RETURN
+  bool getCallsEhReturn() const { return CallsEhReturn; }
+  void setCallsEhReturn(bool ceret) { CallsEhReturn = ceret; }
+
+  void createEhDataRegsFI();
+  int getEhDataRegFI(unsigned Reg) const { return EhDataRegFI[Reg]; };
+  bool isEhDataRegFI(int FI) const;
 };
 
 } // end llvm namespace

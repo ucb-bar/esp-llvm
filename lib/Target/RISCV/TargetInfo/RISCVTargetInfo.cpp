@@ -15,6 +15,6 @@ using namespace llvm;
 Target llvm::TheRISCVTarget;
 
 extern "C" void LLVMInitializeRISCVTargetInfo() {
-  RegisterTarget<Triple::riscv, /*HasJIT=*/true>
+  RegisterTarget<Triple::riscv, /*HasJIT=*/false>
     X(TheRISCVTarget, "riscv", "RISCV");
 }

@@ -120,7 +120,7 @@ let mayStore = 1 in {
 //Upper Immediate
 def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sx20:$imm),
                "LUI\t$dst, $imm",
-               [(set GR32:$dst, (shl imm32sx20:$imm, 12))]>;
+               [(set GR32:$dst, (shl imm32sx20:$imm, (i32 12)))]>;
 
 def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
                "AUIPC\t$dst, $target",
