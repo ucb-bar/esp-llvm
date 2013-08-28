@@ -14,461 +14,579 @@
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/IR/Function.h"
 
 using namespace llvm;
 
 RISCVFrameLowering::RISCVFrameLowering(const RISCVTargetMachine &tm,
                                            const RISCVSubtarget &sti)
-  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 8,
-                        -RISCVMC::CallFrameSize),
+  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 16, 0),
     TM(tm),
-    STI(sti) {
-  // The ABI-defined register save slots, relative to the incoming stack
-  // pointer.
-  // TODO: check that this is correct, specifically which regs should be in this table
-  static const unsigned SpillOffsetTable[][2] = {
-    { RISCV::fp,  0x10 },
-    { RISCV::s1,  0x18 },
-    { RISCV::s2,  0x20 },
-    { RISCV::s3,  0x28 },
-    { RISCV::s4,  0x30 },
-    { RISCV::s5,  0x38 },
-    { RISCV::s6,  0x40 },
-    { RISCV::s7,  0x48 },
-    { RISCV::s8,  0x50 },
-    { RISCV::s9,  0x58 },
-    { RISCV::s10, 0x60 },
-    { RISCV::s11, 0x68 },
-    { RISCV::sp,  0x70 },
-    { RISCV::tp,  0x78 }
+    STI(sti) {}
+/*   RISCV stack frames look like:
+
+    +-------------------------------+
+    |  incoming stack arguments     |
+    +-------------------------------+
+  A |  caller-allocated save area   |
+    |  for register arguments       |
+    +-------------------------------+ <-- incoming stack pointer
+  B |  callee-allocated save area   |
+    |  for arguments that are       |
+    |  split between registers and  |
+    |  the stack                    |
+    +-------------------------------+ <-- arg_pointer_rtx
+  C |  callee-allocated save area   |
+    |  for register varargs         |
+    +-------------------------------+ <-- hard_frame_pointer_rtx;
+    |                               |     stack_pointer_rtx + gp_sp_offset
+    |  GPR save area                |       + UNITS_PER_WORD
+    +-------------------------------+ <-- stack_pointer_rtx + fp_sp_offset
+    |                               |       + UNITS_PER_HWVALUE
+    |  FPR save area                |
+    +-------------------------------+ <-- frame_pointer_rtx (virtual)
+    |  local variables              |
+      P +-------------------------------+
+    |  outgoing stack arguments     |
+    +-------------------------------+
+    |  caller-allocated save area   |
+    |  for register arguments       |
+    +-------------------------------+ <-- stack_pointer_rtx
+
+   At least two of A, B and C will be empty.
+
+   Dynamic stack allocations such as alloca insert data at point P.
+   They decrease stack_pointer_rtx but leave frame_pointer_rtx and
+   hard_frame_pointer_rtx unchanged.  */
+
+
+// hasFP - Return true if the specified function should have a dedicated frame
+// pointer register.  This is true if the function has variable sized allocas or
+// if frame pointer elimination is disabled.
+bool RISCVFrameLowering::hasFP(const MachineFunction &MF) const {
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  return MF.getTarget().Options.DisableFramePointerElim(MF) ||
+      MFI->hasVarSizedObjects() || MFI->isFrameAddressTaken();
+}
+
+uint64_t RISCVFrameLowering::estimateStackSize(const MachineFunction &MF) const {
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  const TargetRegisterInfo &TRI = *MF.getTarget().getRegisterInfo();
+
+  int64_t Offset = 0;
+
+  // Iterate over fixed sized objects.
+  for (int I = MFI->getObjectIndexBegin(); I != 0; ++I)
+    Offset = std::max(Offset, -MFI->getObjectOffset(I));
+
+  // Conservatively assume all callee-saved registers will be saved.
+  for (const uint16_t *R = TRI.getCalleeSavedRegs(&MF); *R; ++R) {
+    unsigned Size = TRI.getMinimalPhysRegClass(*R)->getSize();
+    Offset = RoundUpToAlignment(Offset + Size, Size);
+  }
+
+  unsigned MaxAlign = MFI->getMaxAlignment();
+
+  // Check that MaxAlign is not zero if there is a stack object that is not a
+  // callee-saved spill.
+  assert(!MFI->getObjectIndexEnd() || MaxAlign);
+
+  // Iterate over other objects.
+  for (unsigned I = 0, E = MFI->getObjectIndexEnd(); I != E; ++I)
+    Offset = RoundUpToAlignment(Offset + MFI->getObjectSize(I), MaxAlign);
+
+  // Call frame.
+  if (MFI->adjustsStack() && hasReservedCallFrame(MF))
+    Offset = RoundUpToAlignment(Offset + MFI->getMaxCallFrameSize(),
+                                std::max(MaxAlign, getStackAlignment()));
+
+  return RoundUpToAlignment(Offset, getStackAlignment());
+}
+
+//using namespace llvm;
+
+/*
+namespace {
+typedef MachineBasicBlock::iterator Iter;
+
+/// Helper class to expand pseudos.
+class ExpandPseudo {
+public:
+  ExpandPseudo(MachineFunction &MF);
+  bool expand();
+
+private:
+  bool expandInstr(MachineBasicBlock &MBB, Iter I);
+  void expandLoadCCond(MachineBasicBlock &MBB, Iter I);
+  void expandStoreCCond(MachineBasicBlock &MBB, Iter I);
+  void expandLoadACC(MachineBasicBlock &MBB, Iter I, unsigned RegSize);
+  void expandStoreACC(MachineBasicBlock &MBB, Iter I, unsigned RegSize);
+  bool expandCopy(MachineBasicBlock &MBB, Iter I);
+  bool expandCopyACC(MachineBasicBlock &MBB, Iter I, unsigned Dst,
+                     unsigned Src, unsigned RegSize);
+
+  MachineFunction &MF;
+  const RISCVInstrInfo &TII;
+  const RISCVRegisterInfo &RegInfo;
+  MachineRegisterInfo &MRI;
+};
+}
+
+ExpandPseudo::ExpandPseudo(MachineFunction &MF_)
+  : MF(MF_),
+    TII(*static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo())),
+    RegInfo(TII.getRegisterInfo()), MRI(MF.getRegInfo()) {}
+
+bool ExpandPseudo::expand() {
+  bool Expanded = false;
+
+  for (MachineFunction::iterator BB = MF.begin(), BBEnd = MF.end();
+       BB != BBEnd; ++BB)
+    for (Iter I = BB->begin(), End = BB->end(); I != End;)
+      Expanded |= expandInstr(*BB, I++);
+
+  return Expanded;
+}
+
+bool ExpandPseudo::expandInstr(MachineBasicBlock &MBB, Iter I) {
+  switch(I->getOpcode()) {
+  case RISCV::LOAD_CCOND_DSP:
+  case RISCV::LOAD_CCOND_DSP_P8:
+    expandLoadCCond(MBB, I);
+    break;
+  case RISCV::STORE_CCOND_DSP:
+  case RISCV::STORE_CCOND_DSP_P8:
+    expandStoreCCond(MBB, I);
+    break;
+  case RISCV::LOAD_AC64:
+  case RISCV::LOAD_AC64_P8:
+  case RISCV::LOAD_AC_DSP:
+  case RISCV::LOAD_AC_DSP_P8:
+    expandLoadACC(MBB, I, 4);
+    break;
+  case RISCV::LOAD_AC128:
+  case RISCV::LOAD_AC128_P8:
+    expandLoadACC(MBB, I, 8);
+    break;
+  case RISCV::STORE_AC64:
+  case RISCV::STORE_AC64_P8:
+  case RISCV::STORE_AC_DSP:
+  case RISCV::STORE_AC_DSP_P8:
+    expandStoreACC(MBB, I, 4);
+    break;
+  case RISCV::STORE_AC128:
+  case RISCV::STORE_AC128_P8:
+    expandStoreACC(MBB, I, 8);
+    break;
+  case TargetOpcode::COPY:
+    if (!expandCopy(MBB, I))
+      return false;
+    break;
+  default:
+    return false;
+  }
+
+  MBB.erase(I);
+  return true;
+}
+
+void ExpandPseudo::expandLoadCCond(MachineBasicBlock &MBB, Iter I) {
+  //  load $vr, FI
+  //  copy ccond, $vr
+
+  assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const TargetRegisterClass *RC = RegInfo.intRegClass(4);
+  unsigned VR = MRI.createVirtualRegister(RC);
+  unsigned Dst = I->getOperand(0).getReg(), FI = I->getOperand(1).getIndex();
+
+  TII.loadRegFromStack(MBB, I, VR, FI, RC, &RegInfo, 0);
+  BuildMI(MBB, I, I->getDebugLoc(), TII.get(TargetOpcode::COPY), Dst)
+    .addReg(VR, RegState::Kill);
+}
+
+void ExpandPseudo::expandStoreCCond(MachineBasicBlock &MBB, Iter I) {
+  //  copy $vr, ccond
+  //  store $vr, FI
+
+  assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const TargetRegisterClass *RC = RegInfo.intRegClass(4);
+  unsigned VR = MRI.createVirtualRegister(RC);
+  unsigned Src = I->getOperand(0).getReg(), FI = I->getOperand(1).getIndex();
+
+  BuildMI(MBB, I, I->getDebugLoc(), TII.get(TargetOpcode::COPY), VR)
+    .addReg(Src, getKillRegState(I->getOperand(0).isKill()));
+  TII.storeRegToStack(MBB, I, VR, true, FI, RC, &RegInfo, 0);
+}
+
+void ExpandPseudo::expandLoadACC(MachineBasicBlock &MBB, Iter I,
+                                 unsigned RegSize) {
+  //  load $vr0, FI
+  //  copy lo, $vr0
+  //  load $vr1, FI + 4
+  //  copy hi, $vr1
+
+  assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const TargetRegisterClass *RC = RegInfo.intRegClass(RegSize);
+  unsigned VR0 = MRI.createVirtualRegister(RC);
+  unsigned VR1 = MRI.createVirtualRegister(RC);
+  unsigned Dst = I->getOperand(0).getReg(), FI = I->getOperand(1).getIndex();
+  unsigned Lo = RegInfo.getSubReg(Dst, RISCV::sub_lo);
+  unsigned Hi = RegInfo.getSubReg(Dst, RISCV::sub_hi);
+  DebugLoc DL = I->getDebugLoc();
+  const MCInstrDesc &Desc = TII.get(TargetOpcode::COPY);
+
+  TII.loadRegFromStack(MBB, I, VR0, FI, RC, &RegInfo, 0);
+  BuildMI(MBB, I, DL, Desc, Lo).addReg(VR0, RegState::Kill);
+  TII.loadRegFromStack(MBB, I, VR1, FI, RC, &RegInfo, RegSize);
+  BuildMI(MBB, I, DL, Desc, Hi).addReg(VR1, RegState::Kill);
+}
+
+void ExpandPseudo::expandStoreACC(MachineBasicBlock &MBB, Iter I,
+                                  unsigned RegSize) {
+  //  copy $vr0, lo
+  //  store $vr0, FI
+  //  copy $vr1, hi
+  //  store $vr1, FI + 4
+
+  assert(I->getOperand(0).isReg() && I->getOperand(1).isFI());
+
+  const TargetRegisterClass *RC = RegInfo.intRegClass(RegSize);
+  unsigned VR0 = MRI.createVirtualRegister(RC);
+  unsigned VR1 = MRI.createVirtualRegister(RC);
+  unsigned Src = I->getOperand(0).getReg(), FI = I->getOperand(1).getIndex();
+  unsigned SrcKill = getKillRegState(I->getOperand(0).isKill());
+  unsigned Lo = RegInfo.getSubReg(Src, RISCV::sub_lo);
+  unsigned Hi = RegInfo.getSubReg(Src, RISCV::sub_hi);
+  DebugLoc DL = I->getDebugLoc();
+
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), VR0).addReg(Lo, SrcKill);
+  TII.storeRegToStack(MBB, I, VR0, true, FI, RC, &RegInfo, 0);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), VR1).addReg(Hi, SrcKill);
+  TII.storeRegToStack(MBB, I, VR1, true, FI, RC, &RegInfo, RegSize);
+}
+
+bool ExpandPseudo::expandCopy(MachineBasicBlock &MBB, Iter I) {
+  unsigned Dst = I->getOperand(0).getReg(), Src = I->getOperand(1).getReg();
+
+  if (RISCV::ACRegsDSPRegClass.contains(Dst, Src))
+    return expandCopyACC(MBB, I, Dst, Src, 4);
+
+  if (RISCV::ACRegs128RegClass.contains(Dst, Src))
+    return expandCopyACC(MBB, I, Dst, Src, 8);
+
+  return false;
+}
+
+bool ExpandPseudo::expandCopyACC(MachineBasicBlock &MBB, Iter I, unsigned Dst,
+                                 unsigned Src, unsigned RegSize) {
+  //  copy $vr0, src_lo
+  //  copy dst_lo, $vr0
+  //  copy $vr1, src_hi
+  //  copy dst_hi, $vr1
+
+  const TargetRegisterClass *RC = RegInfo.intRegClass(RegSize);
+  unsigned VR0 = MRI.createVirtualRegister(RC);
+  unsigned VR1 = MRI.createVirtualRegister(RC);
+  unsigned SrcKill = getKillRegState(I->getOperand(1).isKill());
+  unsigned DstLo = RegInfo.getSubReg(Dst, RISCV::sub_lo);
+  unsigned DstHi = RegInfo.getSubReg(Dst, RISCV::sub_hi);
+  unsigned SrcLo = RegInfo.getSubReg(Src, RISCV::sub_lo);
+  unsigned SrcHi = RegInfo.getSubReg(Src, RISCV::sub_hi);
+  DebugLoc DL = I->getDebugLoc();
+
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), VR0).addReg(SrcLo, SrcKill);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), DstLo)
+    .addReg(VR0, RegState::Kill);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), VR1).addReg(SrcHi, SrcKill);
+  BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), DstHi)
+    .addReg(VR1, RegState::Kill);
+  return true;
+}
+*/
+
+unsigned RISCVFrameLowering::ehDataReg(unsigned I) const {
+  static const unsigned EhDataReg[] = {
+    RISCV::sup0, RISCV::sup1
   };
 
-  // Create a mapping from register number to save slot offset.
-  RegSpillOffsets.grow(RISCV::NUM_TARGET_REGS);
-  for (unsigned I = 0, E = array_lengthof(SpillOffsetTable); I != E; ++I)
-    RegSpillOffsets[SpillOffsetTable[I][0]] = SpillOffsetTable[I][1];
+  return EhDataReg[I];
+}
+
+void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
+  MachineBasicBlock &MBB   = MF.front();
+  MachineFrameInfo *MFI    = MF.getFrameInfo();
+  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const RISCVRegisterInfo *RegInfo =
+    static_cast<const RISCVRegisterInfo*>(MF.getTarget().getRegisterInfo());
+  const RISCVInstrInfo &TII =
+    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+  MachineBasicBlock::iterator MBBI = MBB.begin();
+  DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
+  //TODO:switch based on subtarget
+  unsigned SP = RISCV::sp;
+  unsigned FP = RISCV::fp;
+  unsigned ZERO = RISCV::zero;
+  unsigned ADDu = RISCV::ADD;
+
+  // First, compute final stack size.
+  uint64_t StackSize = MFI->getStackSize();
+
+  // No need to allocate space on the stack.
+  if (StackSize == 0 && !MFI->adjustsStack()) return;
+
+  MachineModuleInfo &MMI = MF.getMMI();
+  std::vector<MachineMove> &Moves = MMI.getFrameMoves();
+  MachineLocation DstML, SrcML;
+
+  // Adjust stack.
+  TII.adjustStackPtr(SP, -StackSize, MBB, MBBI);
+
+  // emit ".cfi_def_cfa_offset StackSize"
+  MCSymbol *AdjustSPLabel = MMI.getContext().CreateTempSymbol();
+  BuildMI(MBB, MBBI, dl,
+          TII.get(TargetOpcode::PROLOG_LABEL)).addSym(AdjustSPLabel);
+  DstML = MachineLocation(MachineLocation::VirtualFP);
+  SrcML = MachineLocation(MachineLocation::VirtualFP, -StackSize);
+  Moves.push_back(MachineMove(AdjustSPLabel, DstML, SrcML));
+
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+
+  if (CSI.size()) {
+    // Find the instruction past the last instruction that saves a callee-saved
+    // register to the stack.
+    for (unsigned i = 0; i < CSI.size(); ++i)
+      ++MBBI;
+
+    // Iterate over list of callee-saved registers and emit .cfi_offset
+    // directives.
+    MCSymbol *CSLabel = MMI.getContext().CreateTempSymbol();
+    BuildMI(MBB, MBBI, dl,
+            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(CSLabel);
+
+    for (std::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
+           E = CSI.end(); I != E; ++I) {
+      int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
+      unsigned Reg = I->getReg();
+
+      /* No double precision yet
+      // If Reg is a double precision register, emit two cfa_offsets,
+      // one for each of the paired single precision registers.
+      if (RISCV::AFGR64RegClass.contains(Reg)) {
+        MachineLocation DstML0(MachineLocation::VirtualFP, Offset);
+        MachineLocation DstML1(MachineLocation::VirtualFP, Offset + 4);
+        MachineLocation SrcML0(RegInfo->getSubReg(Reg, RISCV::sub_fpeven));
+        MachineLocation SrcML1(RegInfo->getSubReg(Reg, RISCV::sub_fpodd));
+
+        if (!STI.isLittle())
+          std::swap(SrcML0, SrcML1);
+
+        Moves.push_back(MachineMove(CSLabel, DstML0, SrcML0));
+        Moves.push_back(MachineMove(CSLabel, DstML1, SrcML1));
+      } else {
+      */
+        // Reg is either in CPURegs or FGR32.
+        DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
+        SrcML = MachineLocation(Reg);
+        Moves.push_back(MachineMove(CSLabel, DstML, SrcML));
+    //  }
+    }
+  }
+
+  if (RISCVFI->getCallsEhReturn()) {
+    const TargetRegisterClass *RC = &RISCV::GR32BitRegClass;
+
+    // Insert instructions that spill eh data registers.
+    for (int I = 0; I < 4; ++I) {
+      if (!MBB.isLiveIn(ehDataReg(I)))
+        MBB.addLiveIn(ehDataReg(I));
+      TII.storeRegToStackSlot(MBB, MBBI, ehDataReg(I), false,
+                              RISCVFI->getEhDataRegFI(I), RC, RegInfo);
+    }
+
+    // Emit .cfi_offset directives for eh data registers.
+    MCSymbol *CSLabel2 = MMI.getContext().CreateTempSymbol();
+    BuildMI(MBB, MBBI, dl,
+            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(CSLabel2);
+    for (int I = 0; I < 4; ++I) {
+      int64_t Offset = MFI->getObjectOffset(RISCVFI->getEhDataRegFI(I));
+      DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
+      SrcML = MachineLocation(ehDataReg(I));
+      Moves.push_back(MachineMove(CSLabel2, DstML, SrcML));
+    }
+  }
+
+  // if framepointer enabled, set it to point to the stack pointer.
+  if (hasFP(MF)) {
+    // Insert instruction "move $fp, $sp" at this location.
+    BuildMI(MBB, MBBI, dl, TII.get(ADDu), FP).addReg(SP).addReg(ZERO);
+
+    // emit ".cfi_def_cfa_register $fp"
+    MCSymbol *SetFPLabel = MMI.getContext().CreateTempSymbol();
+    BuildMI(MBB, MBBI, dl,
+            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(SetFPLabel);
+    DstML = MachineLocation(FP);
+    SrcML = MachineLocation(MachineLocation::VirtualFP);
+    Moves.push_back(MachineMove(SetFPLabel, DstML, SrcML));
+  }
+}
+
+void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
+                                       MachineBasicBlock &MBB) const {
+  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
+  MachineFrameInfo *MFI            = MF.getFrameInfo();
+  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const RISCVRegisterInfo *RegInfo =
+    static_cast<const RISCVRegisterInfo*>(MF.getTarget().getRegisterInfo());
+  const RISCVInstrInfo &TII =
+    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+  DebugLoc dl = MBBI->getDebugLoc();
+  unsigned SP   = RISCV::sp;
+  unsigned FP   = RISCV::fp;
+  unsigned ZERO = RISCV::zero;
+  unsigned ADDu = RISCV::ADD;
+
+  // if framepointer enabled, restore the stack pointer.
+  if (hasFP(MF)) {
+    // Find the first instruction that restores a callee-saved register.
+    MachineBasicBlock::iterator I = MBBI;
+
+    for (unsigned i = 0; i < MFI->getCalleeSavedInfo().size(); ++i)
+      --I;
+
+    // Insert instruction "move $sp, $fp" at this location.
+    BuildMI(MBB, I, dl, TII.get(ADDu), SP).addReg(FP).addReg(ZERO);
+  }
+
+  if (RISCVFI->getCallsEhReturn()) {
+    const TargetRegisterClass *RC = &RISCV::GR32BitRegClass;
+
+    // Find first instruction that restores a callee-saved register.
+    MachineBasicBlock::iterator I = MBBI;
+    for (unsigned i = 0; i < MFI->getCalleeSavedInfo().size(); ++i)
+      --I;
+
+    // Insert instructions that restore eh data registers.
+    for (int J = 0; J < 4; ++J) {
+      TII.loadRegFromStackSlot(MBB, I, ehDataReg(J), RISCVFI->getEhDataRegFI(J),
+                               RC, RegInfo);
+    }
+  }
+
+  // Get the number of bytes from FrameInfo
+  uint64_t StackSize = MFI->getStackSize();
+
+  if (!StackSize)
+    return;
+
+  // Adjust stack.
+  TII.adjustStackPtr(SP, StackSize, MBB, MBBI);
+}
+
+bool RISCVFrameLowering::
+spillCalleeSavedRegisters(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MI,
+                          const std::vector<CalleeSavedInfo> &CSI,
+                          const TargetRegisterInfo *TRI) const {
+  MachineFunction *MF = MBB.getParent();
+  MachineBasicBlock *EntryBlock = MF->begin();
+  const TargetInstrInfo &TII = *MF->getTarget().getInstrInfo();
+
+  for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
+    // Add the callee-saved register as live-in. Do not add if the register is
+    // RA and return address is taken, because it has already been added in
+    // method RISCVTargetLowering::LowerRETURNADDR.
+    // It's killed at the spill, unless the register is RA and return address
+    // is taken.
+    unsigned Reg = CSI[i].getReg();
+    bool IsRAAndRetAddrIsTaken = Reg == RISCV::ra
+        && MF->getFrameInfo()->isReturnAddressTaken();
+    if (!IsRAAndRetAddrIsTaken)
+      EntryBlock->addLiveIn(Reg);
+
+    // Insert the spill to the stack frame.
+    bool IsKill = !IsRAAndRetAddrIsTaken;
+    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+    TII.storeRegToStackSlot(*EntryBlock, MI, Reg, IsKill,
+                            CSI[i].getFrameIdx(), RC, TRI);
+  }
+
+  return true;
+}
+
+bool
+RISCVFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+
+  // Reserve call frame if the size of the maximum call frame fits into 16-bit
+  // immediate field and there are no variable sized objects on the stack.
+  // Make sure the second register scavenger spill slot can be accessed with one
+  // instruction.
+  return isInt<16>(MFI->getMaxCallFrameSize() + getStackAlignment()) &&
+    !MFI->hasVarSizedObjects();
+}
+
+// Eliminate ADJCALLSTACKDOWN, ADJCALLSTACKUP pseudo instructions
+void RISCVFrameLowering::
+eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator I) const {
+  const RISCVInstrInfo &TII =
+    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+
+  if (!hasReservedCallFrame(MF)) {
+    int64_t Amount = I->getOperand(0).getImm();
+
+    if (I->getOpcode() == RISCV::ADJCALLSTACKDOWN)
+      Amount = -Amount;
+
+    unsigned SP = RISCV::sp;
+    TII.adjustStackPtr(SP, Amount, MBB, I);
+  }
+
+  MBB.erase(I);
 }
 
 void RISCVFrameLowering::
 processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                      RegScavenger *RS) const {
-  MachineFrameInfo *MFFrame = MF.getFrameInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  //TODO:generates unused variable warning
-  const TargetRegisterInfo *TRI = MF.getTarget().getRegisterInfo();
-  bool HasFP = hasFP(MF);
-  RISCVMachineFunctionInfo *MFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  bool IsVarArg = MF.getFunction()->isVarArg();
+  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  unsigned FP = RISCV::fp;
 
-  // va_start stores incoming FPR varargs in the normal way, but delegates
-  // the saving of incoming GPR varargs to spillCalleeSavedRegisters().
-  // Record these pending uses, which typically include the call-saved
-  // argument register R6D.
-  if (IsVarArg)
-    for (unsigned I = MFI->getVarArgsFirstGPR(); I < RISCV::NumArgGPRs; ++I)
-      MRI.setPhysRegUsed(RISCV::ArgGPRs[I]);
+  // Mark $fp as used if function has dedicated frame pointer.
+  if (hasFP(MF))
+    MRI.setPhysRegUsed(FP);
 
-  // If the function requires a frame pointer, record that the hard
-  // frame pointer will be clobbered.
-  if (HasFP)
-    MRI.setPhysRegUsed(RISCV::fp);
+  // Create spill slots for eh data registers if function calls eh_return.
+  if (RISCVFI->getCallsEhReturn())
+    RISCVFI->createEhDataRegsFI();
 
-  // If the function calls other functions, record that the return
-  // address register will be clobbered.
-  if (MFFrame->hasCalls())
-    MRI.setPhysRegUsed(RISCV::ra);
-
-}
-
-
-bool RISCVFrameLowering::
-spillCalleeSavedRegisters(MachineBasicBlock &MBB,
-                          MachineBasicBlock::iterator MBBI,
-                          const std::vector<CalleeSavedInfo> &CSI,
-                          const TargetRegisterInfo *TRI) const {
-  if (CSI.empty())
-    return false;
-
-  MachineFunction &MF = *MBB.getParent();
-  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  RISCVMachineFunctionInfo *ZFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  bool IsVarArg = MF.getFunction()->isVarArg();
-  DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-
-  // Scan the call-saved GPRs and find the bounds of the register spill area.
-  unsigned SavedGPRFrameSize = 0;
-  unsigned LowGPR = 0;
-  unsigned HighGPR = RISCV::a13;
-  unsigned StartOffset = -1U;
-  for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
-    unsigned Reg = CSI[I].getReg();
+  /*
+  // Expand pseudo instructions which load, store or copy accumulators.
+  // Add an emergency spill slot if a pseudo was expanded.
+  if (ExpandPseudo(MF).expand()) {
+    // The spill slot should be half the size of the accumulator. If target is
+    // riscv64, it should be 64-bit, otherwise it should be 32-bt.
+    const TargetRegisterClass *RC = STI.hasRISCV64() ?
+      &RISCV::CPU64RegsRegClass : &RISCV::CPURegsRegClass;
+    int FI = MF.getFrameInfo()->CreateStackObject(RC->getSize(),
+                                                  RC->getAlignment(), false);
+    RS->addScavengingFrameIndex(FI);
   }
+  */
 
-  // Save information about the range and location of the call-saved
-  // registers, for use by the epilogue inserter.
-  ZFI->setSavedGPRFrameSize(SavedGPRFrameSize);
-  ZFI->setLowSavedGPR(LowGPR);
-  ZFI->setHighSavedGPR(HighGPR);
+  // Set scavenging frame index if necessary.
+  uint64_t MaxSPOffset = MF.getInfo<RISCVMachineFunctionInfo>()->getIncomingArgSize() +
+    estimateStackSize(MF);
 
-  // Include the GPR varargs, if any.  R6D is call-saved, so would
-  // be included by the loop above, but we also need to handle the
-  // call-clobbered argument registers.
-  if (IsVarArg) {
-    unsigned FirstGPR = ZFI->getVarArgsFirstGPR();
-    if (FirstGPR < RISCV::NumArgGPRs) {
-      unsigned Reg = RISCV::ArgGPRs[FirstGPR];
-      unsigned Offset = RegSpillOffsets[Reg];
-      if (StartOffset > Offset) {
-        LowGPR = Reg; StartOffset = Offset;
-      }
-    }
-  }
+  if (isInt<16>(MaxSPOffset))
+    return;
 
-  // Save GPRs
-  if (LowGPR) {
-    assert(LowGPR != HighGPR && "Should be saving %r15 and something else");
-
-    /*TODO: no stmg or saving regs yet
-    // Build an STMG instruction.
-    MachineInstrBuilder MIB = BuildMI(MBB, MBBI, DL, TII->get(RISCV::STMG));
-
-    // Add the explicit register operands.
-    addSavedGPR(MBB, MIB, TM, LowGPR, false);
-    addSavedGPR(MBB, MIB, TM, HighGPR, false);
-
-    // Add the address.
-    MIB.addReg(RISCV::R15D).addImm(StartOffset);
-
-    // Make sure all call-saved GPRs are included as operands and are
-    // marked as live on entry.
-    for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
-      unsigned Reg = CSI[I].getReg();
-      if (RISCV::GR64BitRegClass.contains(Reg))
-        addSavedGPR(MBB, MIB, TM, Reg, true);
-    }
-
-    // ...likewise GPR varargs.
-    if (IsVarArg)
-      for (unsigned I = ZFI->getVarArgsFirstGPR(); I < RISCV::NumArgGPRs; ++I)
-        addSavedGPR(MBB, MIB, TM, RISCV::ArgGPRs[I], true);
-    */
-  }
-
-  // Save FPRs in the normal TargetInstrInfo way.
-  for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
-    unsigned Reg = CSI[I].getReg();
-    if (RISCV::FP32BitRegClass.contains(Reg)) {
-      MBB.addLiveIn(Reg);
-      TII->storeRegToStackSlot(MBB, MBBI, Reg, true, CSI[I].getFrameIdx(),
-                               &RISCV::FP32BitRegClass, TRI);
-    }
-  }
-
-  return true;
-}
-
-bool RISCVFrameLowering::
-restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
-                            MachineBasicBlock::iterator MBBI,
-                            const std::vector<CalleeSavedInfo> &CSI,
-                            const TargetRegisterInfo *TRI) const {
-  if (CSI.empty())
-    return false;
-
-  MachineFunction &MF = *MBB.getParent();
-  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
-  RISCVMachineFunctionInfo *ZFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  bool HasFP = hasFP(MF);
-  DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-
-  // Restore FPRs in the normal TargetInstrInfo way.
-  for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
-    unsigned Reg = CSI[I].getReg();
-    if (RISCV::FP32BitRegClass.contains(Reg))
-      TII->loadRegFromStackSlot(MBB, MBBI, Reg, CSI[I].getFrameIdx(),
-                                &RISCV::FP32BitRegClass, TRI);
-  }
-
-  // Restore call-saved GPRs (but not call-clobbered varargs, which at
-  // this point might hold return values).
-  unsigned LowGPR = ZFI->getLowSavedGPR();
-  unsigned HighGPR = ZFI->getHighSavedGPR();
-  unsigned StartOffset = RegSpillOffsets[LowGPR];
-  if (LowGPR) {
-    // If we saved any of %r2-%r5 as varargs, we should also be saving
-    // and restoring %r6.  If we're saving %r6 or above, we should be
-    // restoring it too.
-    assert(LowGPR != HighGPR && "Should be loading %r15 and something else");
-
-    /*TODO: no LMG or loading from spill yet TODO
-    // Build an LMG instruction.
-    MachineInstrBuilder MIB = BuildMI(MBB, MBBI, DL, TII->get(RISCV::LMG));
-
-    // Add the explicit register operands.
-    MIB.addReg(LowGPR, RegState::Define);
-    MIB.addReg(HighGPR, RegState::Define);
-
-    // Add the address.
-    MIB.addReg(HasFP ? RISCV::R11D : RISCV::R15D);
-    MIB.addImm(StartOffset);
-
-    // Do a second scan adding regs as being defined by instruction
-    for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
-      unsigned Reg = CSI[I].getReg();
-      if (Reg != LowGPR && Reg != HighGPR)
-        MIB.addReg(Reg, RegState::ImplicitDefine);
-    }
-    */
-  }
-
-  return true;
-}
-
-// Emit instructions before MBBI (in MBB) to add NumBytes to Reg.
-static void emitIncrement(MachineBasicBlock &MBB,
-                          MachineBasicBlock::iterator &MBBI,
-                          const DebugLoc &DL,
-                          unsigned Reg, int64_t NumBytes,
-                          const TargetInstrInfo *TII) {
-}
-
-void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
-  MachineBasicBlock &MBB = MF.front();
-  MachineFrameInfo *MFFrame = MF.getFrameInfo();
-  const RISCVInstrInfo *ZII =
-    static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
-  RISCVMachineFunctionInfo *ZFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  MachineBasicBlock::iterator MBBI = MBB.begin();
-  MachineModuleInfo &MMI = MF.getMMI();
-  std::vector<MachineMove> &Moves = MMI.getFrameMoves();
-  const std::vector<CalleeSavedInfo> &CSI = MFFrame->getCalleeSavedInfo();
-  bool HasFP = hasFP(MF);
-  DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-
-  // The current offset of the stack pointer from the CFA.
-  int64_t SPOffsetFromCFA = -RISCVMC::CFAOffsetFromInitialSP;
-
-  if (ZFI->getLowSavedGPR()) {
-    /*TODO no GPR saves yet
-    // Skip over the GPR saves.
-    if (MBBI != MBB.end() && MBBI->getOpcode() == RISCV::STMG)
-      ++MBBI;
-    else
-      llvm_unreachable("Couldn't skip over GPR saves");
-
-    // Add CFI for the GPR saves.
-    MCSymbol *GPRSaveLabel = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, DL,
-            ZII->get(TargetOpcode::PROLOG_LABEL)).addSym(GPRSaveLabel);
-    for (std::vector<CalleeSavedInfo>::const_iterator
-           I = CSI.begin(), E = CSI.end(); I != E; ++I) {
-      unsigned Reg = I->getReg();
-      if (RISCV::GR64BitRegClass.contains(Reg)) {
-        int64_t Offset = SPOffsetFromCFA + RegSpillOffsets[Reg];
-        MachineLocation StackSlot(MachineLocation::VirtualFP, Offset);
-        MachineLocation RegValue(Reg);
-        Moves.push_back(MachineMove(GPRSaveLabel, StackSlot, RegValue));
-      }
-    }
-    */
-  }
-
-  uint64_t StackSize = getAllocatedStackSize(MF);
-  if (StackSize) {
-    // Allocate StackSize bytes.
-    int64_t Delta = -int64_t(StackSize);
-    emitIncrement(MBB, MBBI, DL, RISCV::sp, Delta, ZII);
-
-    // Add CFI for the allocation.
-    MCSymbol *AdjustSPLabel = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::PROLOG_LABEL))
-      .addSym(AdjustSPLabel);
-    MachineLocation FPDest(MachineLocation::VirtualFP);
-    MachineLocation FPSrc(MachineLocation::VirtualFP, SPOffsetFromCFA + Delta);
-    Moves.push_back(MachineMove(AdjustSPLabel, FPDest, FPSrc));
-    SPOffsetFromCFA += Delta;
-  }
-
-  if (HasFP) {
-
-    // Add CFI for the new frame location.
-    MCSymbol *SetFPLabel = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::PROLOG_LABEL))
-      .addSym(SetFPLabel);
-    MachineLocation HardFP(RISCV::fp);
-    MachineLocation VirtualFP(MachineLocation::VirtualFP);
-    Moves.push_back(MachineMove(SetFPLabel, HardFP, VirtualFP));
-
-    // Mark the FramePtr as live at the beginning of every block except
-    // the entry block.  (We'll have marked R11 as live on entry when
-    // saving the GPRs.)
-    for (MachineFunction::iterator
-           I = llvm::next(MF.begin()), E = MF.end(); I != E; ++I)
-      I->addLiveIn(RISCV::fp);
-  }
-
-  // Skip over the FPR saves.
-  MCSymbol *FPRSaveLabel = 0;
-  for (std::vector<CalleeSavedInfo>::const_iterator
-         I = CSI.begin(), E = CSI.end(); I != E; ++I) {
-    unsigned Reg = I->getReg();
-    if (RISCV::FP32BitRegClass.contains(Reg)) {
-
-      // Add CFI for the this save.
-      if (!FPRSaveLabel)
-        FPRSaveLabel = MMI.getContext().CreateTempSymbol();
-      unsigned Reg = I->getReg();
-      int64_t Offset = getFrameIndexOffset(MF, I->getFrameIdx());
-      MachineLocation Slot(MachineLocation::VirtualFP,
-                           SPOffsetFromCFA + Offset);
-      MachineLocation RegValue(Reg);
-      Moves.push_back(MachineMove(FPRSaveLabel, Slot, RegValue));
-    }
-  }
-  // Complete the CFI for the FPR saves, modelling them as taking effect
-  // after the last save.
-  if (FPRSaveLabel)
-    BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::PROLOG_LABEL))
-      .addSym(FPRSaveLabel);
-}
-
-void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
-                                        MachineBasicBlock &MBB) const {
-  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
-  const RISCVInstrInfo *ZII =
-    static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
-  RISCVMachineFunctionInfo *ZFI = MF.getInfo<RISCVMachineFunctionInfo>();
-
-  // Skip the return instruction.
-  assert(MBBI->getOpcode() == RISCV::RET &&
-         "Can only insert epilogue into returning blocks");
-
-  uint64_t StackSize = getAllocatedStackSize(MF);
-  if (ZFI->getLowSavedGPR()) {
-    --MBBI;
-    unsigned Opcode = MBBI->getOpcode();
-    /*TODO: no LMG or restore from spills yet
-    if (Opcode != RISCV::LMG)
-      llvm_unreachable("Expected to see callee-save register restore code");
-    */
-
-    unsigned AddrOpNo = 2;
-    DebugLoc DL = MBBI->getDebugLoc();
-    uint64_t Offset = StackSize + MBBI->getOperand(AddrOpNo + 1).getImm();
-    unsigned NewOpcode = ZII->getOpcodeForOffset(Opcode, Offset);
-
-    // If the offset is too large, use the largest stack-aligned offset
-    // and add the rest to the base register (the stack or frame pointer).
-    if (!NewOpcode) {
-      uint64_t NumBytes = Offset - 0x7fff8;
-      emitIncrement(MBB, MBBI, DL, MBBI->getOperand(AddrOpNo).getReg(),
-                    NumBytes, ZII);
-      Offset -= NumBytes;
-      NewOpcode = ZII->getOpcodeForOffset(Opcode, Offset);
-      assert(NewOpcode && "No restore instruction available");
-    }
-
-    MBBI->setDesc(ZII->get(NewOpcode));
-    MBBI->getOperand(AddrOpNo + 1).ChangeToImmediate(Offset);
-  } else if (StackSize) {
-    DebugLoc DL = MBBI->getDebugLoc();
-    emitIncrement(MBB, MBBI, DL, RISCV::sp, StackSize, ZII);
-  }
-}
-
-bool RISCVFrameLowering::hasFP(const MachineFunction &MF) const {
-  return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
-          MF.getFrameInfo()->hasVarSizedObjects() ||
-          MF.getInfo<RISCVMachineFunctionInfo>()->getManipulatesSP());
-}
-
-int RISCVFrameLowering::getFrameIndexOffset(const MachineFunction &MF,
-                                              int FI) const {
-  const MachineFrameInfo *MFFrame = MF.getFrameInfo();
-
-  // Start with the offset of FI from the top of the caller-allocated frame
-  // (i.e. the top of the 160 bytes allocated by the caller).  This initial
-  // offset is therefore negative.
-  int64_t Offset = (MFFrame->getObjectOffset(FI) +
-                    MFFrame->getOffsetAdjustment());
-  if (FI >= 0)
-    // Non-fixed objects are allocated below the incoming stack pointer.
-    // Account for the space at the top of the frame that we choose not
-    // to allocate.
-    Offset += getUnallocatedTopBytes(MF);
-
-  // Make the offset relative to the incoming stack pointer.
-  Offset -= getOffsetOfLocalArea();
-
-  // Make the offset relative to the bottom of the frame.
-  Offset += getAllocatedStackSize(MF);
-
-  return Offset;
-}
-
-uint64_t RISCVFrameLowering::
-getUnallocatedTopBytes(const MachineFunction &MF) const {
-  return MF.getInfo<RISCVMachineFunctionInfo>()->getSavedGPRFrameSize();
-}
-
-uint64_t RISCVFrameLowering::
-getAllocatedStackSize(const MachineFunction &MF) const {
-  const MachineFrameInfo *MFFrame = MF.getFrameInfo();
-
-  // Start with the size of the local variables and spill slots.
-  uint64_t StackSize = MFFrame->getStackSize();
-
-  // Remove any bytes that we choose not to allocate.
-  StackSize -= getUnallocatedTopBytes(MF);
-
-  // Include space for an emergency spill slot, if one might be needed.
-  StackSize += getEmergencySpillSlotSize(MF);
-
-  // We need to allocate the ABI-defined 160-byte base area whenever
-  // we allocate stack space for our own use and whenever we call another
-  // function.
-  if (StackSize || MFFrame->hasVarSizedObjects() || MFFrame->hasCalls())
-    StackSize += RISCVMC::CallFrameSize;
-
-  return StackSize;
-}
-
-unsigned RISCVFrameLowering::
-getEmergencySpillSlotSize(const MachineFunction &MF) const {
-  const MachineFrameInfo *MFFrame = MF.getFrameInfo();
-  uint64_t MaxReach = MFFrame->getStackSize() + RISCVMC::CallFrameSize * 2;
-  return isUInt<12>(MaxReach) ? 0 : 8;
-}
-
-unsigned RISCVFrameLowering::
-getEmergencySpillSlotOffset(const MachineFunction &MF) const {
-  assert(getEmergencySpillSlotSize(MF) && "No emergency spill slot");
-  return RISCVMC::CallFrameSize;
-}
-
-bool
-RISCVFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
-  // The ABI requires us to allocate 160 bytes of stack space for the callee,
-  // with any outgoing stack arguments being placed above that.  It seems
-  // better to make that area a permanent feature of the frame even if
-  // we're using a frame pointer.
-  return true;
-}
-
-void RISCVFrameLowering::
-eliminateCallFramePseudoInstr(MachineFunction &MF,
-                              MachineBasicBlock &MBB,
-                              MachineBasicBlock::iterator MI) const {
-  switch (MI->getOpcode()) {
-  case RISCV::ADJCALLSTACKDOWN:
-  case RISCV::ADJCALLSTACKUP:
-    assert(hasReservedCallFrame(MF) &&
-           "ADJSTACKDOWN and ADJSTACKUP should be no-ops");
-    MBB.erase(MI);
-    break;
-
-  default:
-    llvm_unreachable("Unexpected call frame instruction");
-  }
+  const TargetRegisterClass *RC = &RISCV::GR32BitRegClass;
+  int FI = MF.getFrameInfo()->CreateStackObject(RC->getSize(),
+                                                RC->getAlignment(), false);
+  RS->addScavengingFrameIndex(FI);
 }

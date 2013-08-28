@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVSubtarget.h"
+#include "RISCV.h"
 #include "llvm/IR/GlobalValue.h"
 
 #define GET_SUBTARGETINFO_TARGET_DESC
@@ -19,10 +20,11 @@ using namespace llvm;
 RISCVSubtarget::RISCVSubtarget(const std::string &TT,
                                    const std::string &CPU,
                                    const std::string &FS)
-  : RISCVGenSubtargetInfo(TT, CPU, FS), TargetTriple(TT) {
+  : RISCVGenSubtargetInfo(TT, CPU, FS), TargetTriple(TT),
+    RISCVArchVersion(RV32), HasM(false), HasA(false), HasF(false), HasD(false){
   std::string CPUName = CPU;
   if (CPUName.empty())
-    CPUName = "z10";
+    CPUName = "RV32";
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, FS);
