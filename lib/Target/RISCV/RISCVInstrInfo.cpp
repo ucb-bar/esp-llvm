@@ -333,6 +333,24 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
     Cond = RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
+//synth
+  case RISCV::BGT:
+    Cond = RISCV::CCMASK_CMP_GT;
+    Target = &MI->getOperand(2);
+    return true;
+  case RISCV::BGTU:
+    Cond = RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO;
+    Target = &MI->getOperand(2);
+    return true;
+  case RISCV::BLE:
+    Cond = RISCV::CCMASK_CMP_LE;
+    Target = &MI->getOperand(2);
+    return true;
+  case RISCV::BLEU:
+    Cond = RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO;
+    Target = &MI->getOperand(2);
+    return true;
+ 
 
   default:
     assert(!MI->getDesc().isBranch() && "Unknown branch opcode");
