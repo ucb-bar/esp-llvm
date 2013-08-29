@@ -121,7 +121,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
   //make BRCOND legal, its actually only legal for a subset of conds
   //TODO:fix for subset
-  //setOperationAction(ISD::BRCOND, MVT::Other, Legal);
+  setOperationAction(ISD::BRCOND, MVT::Other, Legal);
 
   // Handle integer types.
   for (unsigned I = MVT::FIRST_INTEGER_VALUETYPE;
@@ -129,13 +129,20 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
        ++I) {
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
+      if(Subtarget.hasM()) {
+        setOperationAction(ISD::SDIV, VT, Legal);
+        setOperationAction(ISD::UDIV, VT, Legal);
+        setOperationAction(ISD::SREM, VT, Legal);
+        setOperationAction(ISD::UREM, VT, Expand);
+      }else{
       // Expand individual DIV and REMs into DIVREMs.
-      setOperationAction(ISD::SDIV, VT, Expand);
-      setOperationAction(ISD::UDIV, VT, Expand);
-      setOperationAction(ISD::SREM, VT, Expand);
-      setOperationAction(ISD::UREM, VT, Expand);
-      setOperationAction(ISD::SDIVREM, VT, Custom);
-      setOperationAction(ISD::UDIVREM, VT, Custom);
+        setOperationAction(ISD::SDIV, VT, Expand);
+        setOperationAction(ISD::UDIV, VT, Expand);
+        setOperationAction(ISD::SREM, VT, Expand);
+        setOperationAction(ISD::UREM, VT, Expand);
+        setOperationAction(ISD::SDIVREM, VT, Expand);
+        setOperationAction(ISD::UDIVREM, VT, Expand);
+      }
 
       // Expand ATOMIC_LOAD and ATOMIC_STORE using ATOMIC_CMP_SWAP.
       // FIXME: probably much too conservative.

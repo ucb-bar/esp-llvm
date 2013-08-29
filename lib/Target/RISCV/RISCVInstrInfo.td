@@ -7,6 +7,23 @@
 //
 //===----------------------------------------------------------------------===//
 
+/*
+ * Predicates for Subtargets
+ */
+
+ def IsRV32 :    Predicate<"Subtarget.isRV32()">,
+                 AssemblerPredicate<"FeatureRV32">; 
+ def IsRV64 :    Predicate<"Subtarget.isRV64()">,
+                 AssemblerPredicate<"FeatureRV64">; 
+ def HasM   :    Predicate<"Subtarget.hasM()">,
+                 AssemblerPredicate<"FeatureM">; 
+ def HasF   :    Predicate<"Subtarget.hasF()">,
+                 AssemblerPredicate<"FeatureF">; 
+ def HasD   :    Predicate<"Subtarget.hasD()">,
+                 AssemblerPredicate<"FeatureD">; 
+ def HasA   :    Predicate<"Subtarget.hasA()">,
+                 AssemblerPredicate<"FeatureA">; 
+
 /*******************
 *RISCV Instructions
 ********************/
@@ -48,7 +65,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
           [(br bb:$target)]>;
 }
 let isCall = 1 in {
-  let Defs = [ra] in {
+  let Defs = [ra, v0, v1] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "JAL\t$target", 
           [(z_call pcrel32call:$target)]>;
   }
@@ -101,6 +118,24 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
             "BGEU\t$src1, $src2, $target", 
             [(brcond (i32 (setuge GR32:$src1, GR32:$src2)), bb:$target)]>;
+
+//Synthesize remaining condition codes by reverseing operands
+  def BGT : InstB<0b1100011, 0b100, (outs), 
+            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
+            "BLT\t$src2, $src1, $target", 
+            [(brcond (i32 (setgt GR32:$src2, GR32:$src1)), bb:$target)]>;
+  def BGTU: InstB<0b1100011, 0b110, (outs), 
+            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
+            "BLTU\t$src2, $src1, $target", 
+            [(brcond (i32 (setugt GR32:$src2, GR32:$src1)), bb:$target)]>;
+  def BLE : InstB<0b1100011, 0b101, (outs), 
+            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
+            "BGE\t$src2, $src1, $target", 
+            [(brcond (i32 (setle GR32:$src2, GR32:$src1)), bb:$target)]>;
+  def BLEU: InstB<0b1100011, 0b111, (outs), 
+            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
+            "BGEU\t$src2, $src1, $target", 
+            [(brcond (i32 (setule GR32:$src2, GR32:$src1)), bb:$target)]>;
 }
 
 //Load/Store Instructions
