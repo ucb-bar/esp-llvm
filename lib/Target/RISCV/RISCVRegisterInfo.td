@@ -253,7 +253,7 @@ def ft5 : FPR32<31,"f31">, DwarfRegNum<[31]>;
 
 //all fp regs are 32bit
 defm FP32  : RISCVRegClass<"FP32", f32, 32, (add
-  fs0, fs1, fs2, fs3, fs4, fs5, fs6, fs7, fs8, fs9, fs10, fs11, fs12, fs13, fs14,
+  fs0, fs1, fs2, fs3, fs4, fs5, fs6, fs7, fs8, fs9, fs10, fs11, fs12, fs13, fs14, fs15,
   fv0, fv1,
   fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7,
   ft0, ft1, ft2, ft3, ft4, ft5)>;
@@ -320,7 +320,7 @@ def ft5_64 : FPR64<31,"f31">, DwarfRegNum<[31]>;
 
 //all fp regs are 32bit
 defm FP64  : RISCVRegClass<"FP64", f64, 64, (add
-  fs0_64, fs1_64, fs2_64, fs3_64, fs4_64, fs5_64, fs6_64, fs7_64, fs8_64, fs9_64, fs10_64, fs11_64, fs12_64, fs13_64, fs14_64,
+  fs0_64, fs1_64, fs2_64, fs3_64, fs4_64, fs5_64, fs6_64, fs7_64, fs8_64, fs9_64, fs10_64, fs11_64, fs12_64, fs13_64, fs14_64, fs15_64,
   fv0_64, fv1_64,
   fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64,
   ft0_64, ft1_64, ft2_64, ft3_64, ft4_64, ft5_64)>;
