@@ -136,6 +136,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
         setOperationAction(ISD::UREM, VT, Expand);
       }else{
       // Expand individual DIV and REMs into DIVREMs.
+        setOperationAction(ISD::MUL, VT, Expand);
         setOperationAction(ISD::SDIV, VT, Expand);
         setOperationAction(ISD::UDIV, VT, Expand);
         setOperationAction(ISD::SREM, VT, Expand);
@@ -221,7 +222,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
   // We need to handle dynamic allocations specially because of the
   // 160-byte area at the bottom of the stack.
-  setOperationAction(ISD::DYNAMIC_STACKALLOC, PtrVT, Custom);
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, PtrVT, Expand);
 
   // Use custom expanders so that we can force the function to use
   // a frame pointer.
@@ -1541,6 +1542,7 @@ SDValue RISCVTargetLowering::lowerVACOPY(SDValue Op,
                        MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }
 
+/*
 SDValue RISCVTargetLowering::
 lowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const {
   SDValue Chain = Op.getOperand(0);
@@ -1567,6 +1569,7 @@ lowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const {
   SDValue Ops[2] = { Result, Chain };
   return DAG.getMergeValues(Ops, 2, DL);
 }
+*/
 
 SDValue RISCVTargetLowering::lowerUMUL_LOHI(SDValue Op,
                                               SelectionDAG &DAG) const {
@@ -1774,14 +1777,14 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerVASTART(Op, DAG);
   case ISD::VACOPY:
     return lowerVACOPY(Op, DAG);
-  case ISD::DYNAMIC_STACKALLOC:
-    return lowerDYNAMIC_STACKALLOC(Op, DAG);
-  case ISD::UMUL_LOHI:
-    return lowerUMUL_LOHI(Op, DAG);
-  case ISD::SDIVREM:
-    return lowerSDIVREM(Op, DAG);
-  case ISD::UDIVREM:
-    return lowerUDIVREM(Op, DAG);
+  //case ISD::DYNAMIC_STACKALLOC:
+    //return lowerDYNAMIC_STACKALLOC(Op, DAG);
+  //case ISD::UMUL_LOHI:
+    //return lowerUMUL_LOHI(Op, DAG);
+  //case ISD::SDIVREM:
+    //return lowerSDIVREM(Op, DAG);
+  //case ISD::UDIVREM:
+    //return lowerUDIVREM(Op, DAG);
   //case ISD::OR:
     //return lowerOR(Op, DAG);
   case ISD::ATOMIC_SWAP:
@@ -1829,7 +1832,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(SELECT_CCMASK);
     OPCODE(ADJDYNALLOC);
     OPCODE(EXTRACT_ACCESS);
-    OPCODE(UMUL_LOHI64);
+    //OPCODE(UMUL_LOHI64);
     OPCODE(SDIVREM64);
     OPCODE(UDIVREM32);
     OPCODE(UDIVREM64);

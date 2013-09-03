@@ -168,11 +168,17 @@ def LO12 : SDNodeXForm<imm, [{
     return getImm(N, N->getZExtValue() & 0xFFF);
 }]>;
 
-// Transformation Function - get the higher 20 bits.
+// Transformation Function - get the higher 20 bits for large immediate loading
 def HI20 : SDNodeXForm<imm, [{
-    return getImm(N, (N->getZExtValue() >> 12) & 0xFFFFF);
+    uint64_t value = N->getZExtValue() & 0x00000800 ? 
+                     (N->getZExtValue() >> 12)+1:
+                     (N->getZExtValue() >> 12);
+    return getImm(N, value);
 }]>;
-def : Pat<(i32 imm32:$imm), (ORI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
+
+//psuedo load low imm instruction to print operands better
+def LLI : InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
+def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
 
 //===----------------------------------------------------------------------===//
 // Stack allocation
@@ -199,3 +205,14 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
           }
    }
   def : Pat<(z_retflag), (RET)>;
+
+//===----------------------------------------------------------------------===//
+// Subtarget features
+//===----------------------------------------------------------------------===//
+
+include "RISCVInstrInfoRV64.td"
+//include "RISCVInstrInfoM.td"
+//include "RISCVInstrInfoF.td"
+//include "RISCVInstrInfoA.td"
+//include "RISCVInstrInfoD.td"
+

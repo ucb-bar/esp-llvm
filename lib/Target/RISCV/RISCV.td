@@ -38,10 +38,10 @@ def FeatureRV64 : SubtargetFeature<"rv64", "RISCVArchVersion", "RV64",
 class Proc<string Name, list<SubtargetFeature> Features>
  : Processor<Name, NoItineraries, Features>;
 
-def : Proc<"RV32", [FeatureRV32]>;
-def : Proc<"RV32G", [FeatureRV32,FeatureM,FeatureA,FeatureF,FeatureD]>;
-def : Proc<"RV64", [FeatureRV64]>;
-def : Proc<"RV64G", [FeatureRV64,FeatureM,FeatureA,FeatureF,FeatureD]>;
+def : Proc<"RV32I", [FeatureRV32]>;
+def : Proc<"RV32IMAFD", [FeatureRV32,FeatureM,FeatureA,FeatureF,FeatureD]>;
+def : Proc<"RV64I", [FeatureRV64]>;
+def : Proc<"RV64IMAFD", [FeatureRV64,FeatureM,FeatureA,FeatureF,FeatureD]>;
 
 //===----------------------------------------------------------------------===//
 // Register file description
@@ -64,7 +64,6 @@ include "RISCVOperands.td"
 include "RISCVPatterns.td"
 include "RISCVInstrFormats.td"
 include "RISCVInstrInfo.td"
-//include "RISCVInstrFP.td"
 
 def RISCVInstrInfo : InstrInfo {}
 
