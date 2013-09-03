@@ -13,6 +13,8 @@
 
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/SelectionDAGISel.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -118,6 +120,45 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
     Offset = CurDAG->getTargetConstant(0, Addr.getValueType());
     return true;
   }
+
+  bool replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
+                              const MachineInstr& MI) {
+    unsigned DstReg = 0, ZeroReg = 0;
+  
+    // Check if MI is "addiu $dst, $zero, 0" or "daddiu $dst, $zero, 0".
+    if ((MI.getOpcode() == RISCV::ADDI) &&
+        (MI.getOperand(1).getReg() == RISCV::zero) &&
+        (MI.getOperand(2).getImm() == 0)) {
+      DstReg = MI.getOperand(0).getReg();
+      ZeroReg = RISCV::zero;
+    } else if ((MI.getOpcode() == RISCV::ADDI/*W*/) &&
+               (MI.getOperand(1).getReg() == RISCV::zero_64) &&
+               (MI.getOperand(2).getImm() == 0)) {
+      DstReg = MI.getOperand(0).getReg();
+      ZeroReg = RISCV::zero_64;
+    }
+  
+    if (!DstReg)
+      return false;
+  
+    // Replace uses with ZeroReg.
+    for (MachineRegisterInfo::use_iterator U = MRI->use_begin(DstReg),
+         E = MRI->use_end(); U != E;) {
+      MachineOperand &MO = U.getOperand();
+      unsigned OpNo = U.getOperandNo();
+      MachineInstr *MI = MO.getParent();
+      ++U;
+  
+      // Do not replace if it is a phi's operand or is tied to def operand.
+      if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo) || MI->isPseudo())
+        continue;
+  
+      MO.setReg(ZeroReg);
+    }
+  
+    return true;
+  }
+
   //End RISCV
 
   // PC-relative address matching routines used by RISCVOperands.td.
@@ -151,7 +192,9 @@ public:
   }
 
   // Override SelectionDAGISel.
+  virtual bool runOnMachineFunction(MachineFunction &MF);
   virtual SDNode *Select(SDNode *Node) LLVM_OVERRIDE;
+  virtual void processFunctionAfterISel(MachineFunction &MF);
   virtual bool SelectInlineAsmMemoryOperand(const SDValue &Op,
                                             char ConstraintCode,
                                             std::vector<SDValue> &OutOps)
@@ -161,6 +204,14 @@ public:
   #include "RISCVGenDAGISel.inc"
 };
 } // end anonymous namespace
+
+bool RISCVDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
+  bool ret = SelectionDAGISel::runOnMachineFunction(MF);
+
+  processFunctionAfterISel(MF);
+
+  return ret;
+}
 
 FunctionPass *llvm::createRISCVISelDag(RISCVTargetMachine &TM,
                                          CodeGenOpt::Level OptLevel) {
@@ -359,6 +410,7 @@ SDNode *RISCVDAGToDAGISel::splitLargeImmediate(unsigned Opcode, SDNode *Node,
 }
 
 SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
+  DebugLoc DL = Node->getDebugLoc();
   // Dump information about the Node being selected
   DEBUG(errs() << "Selecting: "; Node->dump(CurDAG); errs() << "\n");
 
@@ -369,8 +421,19 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
   }
 
   unsigned Opcode = Node->getOpcode();
-  //TODO: Any special selections here?
-  //would be based on a switch of opcodes to ISD:: nodes
+  switch (Opcode) {
+  case ISD::FrameIndex: {
+    SDValue imm = CurDAG->getTargetConstant(0, MVT::i32);
+    int FI = cast<FrameIndexSDNode>(Node)->getIndex();
+    SDValue TFI = CurDAG->getTargetFrameIndex(FI, TLI.getPointerTy());
+    unsigned Opc = RISCV::ADDI;
+    EVT VT = Subtarget.isRV64() ? MVT::i64 : MVT::i32;
+    
+    if(Node->hasOneUse()) //don't create a new node just morph this one
+      return CurDAG->SelectNodeTo(Node, Opc, VT, TFI, imm);
+    return CurDAG->getMachineNode(Opc, DL, VT, TFI, imm);
+  }
+  }//end special selections
 
   // Select the default instruction
   SDNode *ResNode = SelectCode(Node);
@@ -398,4 +461,15 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
   OutOps.push_back(Disp);
   OutOps.push_back(Index);
   return false;
+}
+
+void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
+
+  MachineRegisterInfo *MRI = &MF.getRegInfo();
+
+  for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
+       ++MFI)
+    for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
+      replaceUsesWithZeroReg(MRI, *I);
+    }
 }

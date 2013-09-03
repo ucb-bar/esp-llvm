@@ -11,6 +11,10 @@
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/DebugInfo.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "RISCVGenRegisterInfo.inc"
@@ -83,71 +87,97 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   return Reserved;
 }
 
+void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
+                                     unsigned OpNo, int FrameIndex,
+                                     uint64_t StackSize,
+                                     int64_t SPOffset) const {
+  MachineInstr &MI = *II;
+  MachineFunction &MF = *MI.getParent()->getParent();
+  MachineFrameInfo *MFI = MF.getFrameInfo();
+  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+
+  const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
+  int MinCSFI = 0;
+  int MaxCSFI = -1;
+
+  if (CSI.size()) {
+    MinCSFI = CSI[0].getFrameIdx();
+    MaxCSFI = CSI[CSI.size() - 1].getFrameIdx();
+  }
+
+  bool EhDataRegFI = RISCVFI->isEhDataRegFI(FrameIndex);
+
+  // The following stack frame objects are always referenced relative to $sp:
+  //  1. Outgoing arguments.
+  //  2. Pointer to dynamically allocated stack space.
+  //  3. Locations for callee-saved registers.
+  //  4. Locations for eh data registers.
+  // Everything else is referenced relative to whatever register
+  // getFrameRegister() returns.
+  unsigned FrameReg;
+
+  if ((FrameIndex >= MinCSFI && FrameIndex <= MaxCSFI) || EhDataRegFI)
+    FrameReg = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::sp_64 : RISCV::sp;
+  else
+    FrameReg = getFrameRegister(MF);
+
+  // Calculate final offset.
+  // - There is no need to change the offset if the frame object is one of the
+  //   following: an outgoing argument, pointer to a dynamically allocated
+  //   stack space or a $gp restore location,
+  // - If the frame object is any of the following, its offset must be adjusted
+  //   by adding the size of the stack:
+  //   incoming argument, callee-saved register location or local variable.
+  bool IsKill = false;
+  int64_t Offset;
+
+  Offset = SPOffset + (int64_t)StackSize;
+  Offset += MI.getOperand(OpNo + 1).getImm();
+
+  DEBUG(errs() << "Offset     : " << Offset << "\n" << "<--------->\n");
+
+  // If MI is not a debug value, make sure Offset fits in the 16-bit immediate
+  // field.
+  if (!MI.isDebugValue() && !isInt<12>(Offset)) {
+    MachineBasicBlock &MBB = *MI.getParent();
+    DebugLoc DL = II->getDebugLoc();
+    unsigned ADD = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::ADDW : RISCV::ADD;
+    unsigned NewImm;
+    unsigned Reg;
+
+    TII.loadImmediate(MBB, II, Reg, Offset);
+    BuildMI(MBB, II, DL, TII.get(ADD), Reg).addReg(FrameReg)
+      .addReg(Reg, RegState::Kill);
+
+    FrameReg = Reg;
+    //TODO:understand what NewImm is used for in Mips code
+    //Offset = SignExtend64<12>(NewImm);
+    IsKill = true;
+  }
+
+  MI.getOperand(OpNo).ChangeToRegister(FrameReg, false, false, IsKill);
+  MI.getOperand(OpNo + 1).ChangeToImmediate(Offset);
+}
+
 void
-RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
+RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                          int SPAdj, unsigned FIOperandNum,
                                          RegScavenger *RS) const {
-  assert(SPAdj == 0 && "Outgoing arguments should be part of the frame");
+  MachineInstr &MI = *II;
+  MachineFunction &MF = *MI.getParent()->getParent();
 
-  MachineBasicBlock &MBB = *MI->getParent();
-  MachineFunction &MF = *MBB.getParent();
-  const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
-  //TODO: warning unused
-  DebugLoc DL = MI->getDebugLoc();
+  DEBUG(errs() << "\nFunction : " << MF.getName() << "\n";
+        errs() << "<--------->\n" << MI);
 
-  // Decompose the frame index into a base and offset.
-  int FrameIndex = MI->getOperand(FIOperandNum).getIndex();
-  unsigned BasePtr = getFrameRegister(MF);
-  int64_t Offset = (TFI->getFrameIndexOffset(MF, FrameIndex) +
-                    MI->getOperand(FIOperandNum + 1).getImm());
+  int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
+  uint64_t stackSize = MF.getFrameInfo()->getStackSize();
+  int64_t spOffset = MF.getFrameInfo()->getObjectOffset(FrameIndex);
 
-  // Special handling of dbg_value instructions.
-  if (MI->isDebugValue()) {
-    MI->getOperand(FIOperandNum).ChangeToRegister(BasePtr, /*isDef*/ false);
-    MI->getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
-    return;
-  }
+  DEBUG(errs() << "FrameIndex : " << FrameIndex << "\n"
+               << "spOffset   : " << spOffset << "\n"
+               << "stackSize  : " << stackSize << "\n");
 
-  // See if the offset is in range, or if an equivalent instruction that
-  // accepts the offset exists.
-  unsigned Opcode = MI->getOpcode();
-  unsigned OpcodeForOffset = TII.getOpcodeForOffset(Opcode, Offset);
-  if (OpcodeForOffset)
-    MI->getOperand(FIOperandNum).ChangeToRegister(BasePtr, false);
-  else {
-    // Create an anchor point that is in range.  Start at 0xffff so that
-    // can use LLILH to load the immediate.
-    int64_t OldOffset = Offset;
-    int64_t Mask = 0xffff;
-    do {
-      Offset = OldOffset & Mask;
-      OpcodeForOffset = TII.getOpcodeForOffset(Opcode, Offset);
-      Mask >>= 1;
-      assert(Mask && "One offset must be OK");
-    } while (!OpcodeForOffset);
-
-    unsigned ScratchReg =
-      MF.getRegInfo().createVirtualRegister(&RISCV::ADDR32BitRegClass);
-    int64_t HighOffset = OldOffset - Offset;
-
-    /*
-    if (MI->getDesc().TSFlags & RISCVII::HasIndex
-        && MI->getOperand(FIOperandNum + 2).getReg() == 0) {
-      // Load the offset into the scratch register and use it as an index.
-      // The scratch register then dies here.
-      TII.loadImmediate(MBB, MI, ScratchReg, HighOffset);
-      MI->getOperand(FIOperandNum).ChangeToRegister(BasePtr, false);
-      MI->getOperand(FIOperandNum + 2).ChangeToRegister(ScratchReg,
-                                                        false, false, true);
-    } else {
-
-      // Use the scratch register as the base.  It then dies here.
-      MI->getOperand(FIOperandNum).ChangeToRegister(ScratchReg,
-                                                    false, false, true);
-    }*/
-  }
-  MI->setDesc(TII.get(OpcodeForOffset));
-  MI->getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
+  eliminateFI(MI, FIOperandNum, FrameIndex, stackSize, spOffset);
 }
 
 unsigned

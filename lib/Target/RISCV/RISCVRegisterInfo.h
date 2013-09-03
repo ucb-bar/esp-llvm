@@ -12,6 +12,7 @@
 
 #include "RISCV.h"
 #include "llvm/Target/TargetRegisterInfo.h"
+#include "RISCVMachineFunctionInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "RISCVGenRegisterInfo.inc"
@@ -48,6 +49,10 @@ public:
                                    RegScavenger *RS) const LLVM_OVERRIDE;
   virtual unsigned getFrameRegister(const MachineFunction &MF) const
     LLVM_OVERRIDE;
+private:
+  virtual void eliminateFI(MachineBasicBlock::iterator II, unsigned OpNo,
+                           int FrameIndex, uint64_t StackSize,
+                           int64_t SPOffset) const;
 };
 
 } // end namespace llvm

@@ -147,6 +147,9 @@ def uimm8    : Immediate<i8, [{}], UIMM8, "U8Imm">;
 def imm32sx12 : Immediate<i32, [{
   return isInt<12>(N->getSExtValue());
 }], NOOP_SDNodeXForm, "S12Imm">;
+def imm32sxu12 : Immediate<i32, [{
+  return isUInt<12>(N->getSExtValue());
+}], NOOP_SDNodeXForm, "U12Imm">;
 //zero-extended 12 bit immediate
 def imm32zx12 : Immediate<i32, [{
   return isUInt<12>(N->getZExtValue());

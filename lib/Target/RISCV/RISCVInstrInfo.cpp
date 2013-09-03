@@ -388,15 +388,17 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   unsigned Opcode;
   if (isInt<12>(Value)){
-    Opcode = RISCV::ORI;
+    Opcode = RISCV::ADDI;
     BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(Value);
   } else {
     assert(isInt<32>(Value) && "Huge values not handled yet");
-    uint64_t upper20 = 0x00000000000FFFFF & (Value >> 12);
+    uint64_t upper20 = (Value & 0x0000000000000800) ? 
+        0x00000000000FFFFF & (Value >> 12)
+      : 0x00000000000FFFFF & ((Value >> 12) +1);
     uint64_t lower12 = 0x0000000000000FFF & (Value);
     Opcode = RISCV::LUI;
     BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addImm(upper20);
-    Opcode = RISCV::ORI;
+    Opcode = RISCV::ADDI;
     BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(lower12);
   }
 }
