@@ -173,6 +173,9 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
             "BGEU\t$src2, $src1, $target", 
             [(brcond (i32 (setule GR32:$src2, GR32:$src1)), bb:$target)]>;
 }
+//constant branches (e.g. br 1 $label or br 0 $label)
+def : Pat<(brcond GR32Bit:$cond, bb:$target),
+          (BNE bb:$target, GR32Bit:$cond, zero)>;  
 
 //Load/Store Instructions
 let mayLoad = 1 in {
