@@ -65,10 +65,15 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   MVT PtrVT = getPointerTy();
 
   // Set up the register classes.
-  addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
-  //addRegisterClass(MVT::i64,  &RISCV::GR64BitRegClass);
-  addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
-  //addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
+  if(Subtarget.isRV64())
+    addRegisterClass(MVT::i64,  &RISCV::GR64BitRegClass);
+  else
+    addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
+  if(Subtarget.hasD())
+    addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
+  else if(Subtarget.hasF())
+    addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
+
   //addRegisterClass(MVT::f128, &RISCV::FP128BitRegClass);
 
   // Compute derived properties from the register classes
@@ -120,7 +125,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::BUILD_PAIR, MVT::i64, Expand);
 
   //make BRCOND legal, its actually only legal for a subset of conds
-  //TODO:fix for subset
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
 
   // Handle integer types.

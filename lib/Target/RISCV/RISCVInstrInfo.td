@@ -59,6 +59,42 @@ def SRAI: InstI<"SRAI", 0b0010011, 0b101       , sra, GR32, imm32sx12> {
 def SLTI : InstI<"SLTI", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
 def SLTIU: InstI<"SLTIU",0b0010011, 0b011, setult,GR32, imm32sx12>;
 
+//Synthesized set operators
+//patterns to be used for 32 and 64bit
+multiclass SeteqPats<RegisterOperand RC, Instruction SLTiuOp, Instruction XOROp,
+                     Instruction SLTuOp, Register ZEROReg> {
+  def : Pat<(seteq RC:$lhs, RC:$rhs),
+            (SLTiuOp (XOROp RC:$lhs, RC:$rhs), 1)>;
+  def : Pat<(setne RC:$lhs, RC:$rhs),
+            (SLTuOp ZEROReg, (XOROp RC:$lhs, RC:$rhs))>;
+}
+
+multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
+  def : Pat<(setle RC:$lhs, RC:$rhs),
+            (XORI (SLTOp RC:$rhs, RC:$lhs), 1)>;
+  def : Pat<(setule RC:$lhs, RC:$rhs),
+            (XORI (SLTuOp RC:$rhs, RC:$lhs), 1)>;
+}
+
+multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
+  def : Pat<(setgt RC:$lhs, RC:$rhs),
+            (SLTOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setugt RC:$lhs, RC:$rhs),
+            (SLTuOp RC:$rhs, RC:$lhs)>;
+}
+
+multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
+  def : Pat<(setge RC:$lhs, RC:$rhs),
+            (XORI (SLTOp RC:$lhs, RC:$rhs), 1)>;
+  def : Pat<(setuge RC:$lhs, RC:$rhs),
+            (XORI (SLTuOp RC:$lhs, RC:$rhs), 1)>;
+}
+
+defm : SeteqPats<GR32, SLTIU, XOR, SLTU, zero>;
+defm : SetlePats<GR32, SLT, SLTU>;
+defm : SetgtPats<GR32, SLT, SLTU>;
+defm : SetgePats<GR32, SLT, SLTU>;
+
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
