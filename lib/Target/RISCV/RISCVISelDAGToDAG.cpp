@@ -127,11 +127,13 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   
     // Check if MI is "addiu $dst, $zero, 0" or "daddiu $dst, $zero, 0".
     if ((MI.getOpcode() == RISCV::ADDI) &&
+        (MI.getOperand(1).isReg()) && //avoid frame-index
         (MI.getOperand(1).getReg() == RISCV::zero) &&
         (MI.getOperand(2).getImm() == 0)) {
       DstReg = MI.getOperand(0).getReg();
       ZeroReg = RISCV::zero;
     } else if ((MI.getOpcode() == RISCV::ADDI/*W*/) &&
+               (MI.getOperand(1).isReg()) && //avoid frame-index
                (MI.getOperand(1).getReg() == RISCV::zero_64) &&
                (MI.getOperand(2).getImm() == 0)) {
       DstReg = MI.getOperand(0).getReg();
