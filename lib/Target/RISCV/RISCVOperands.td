@@ -158,6 +158,9 @@ def imm32zx12 : Immediate<i32, [{
 def imm32sx20 : Immediate<i32, [{
   return isInt<20>(N->getSExtValue());
 }], NOOP_SDNodeXForm, "S20Imm">;
+def imm32sxu20 : Immediate<i32, [{
+  return isUInt<20>(N->getSExtValue());
+}], NOOP_SDNodeXForm, "U20Imm">;
 //zero-extended 20 bit immediate
 def imm32zx20 : Immediate<i32, [{
   return isUInt<20>(N->getZExtValue());

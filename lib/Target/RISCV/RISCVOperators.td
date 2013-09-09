@@ -18,10 +18,10 @@ def SDT_ZCmp                : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>]>;
 def SDT_ZBRCCMask           : SDTypeProfile<0, 2,
                                             [SDTCisVT<0, i8>,
                                              SDTCisVT<1, OtherVT>]>;
-def SDT_ZSelectCCMask       : SDTypeProfile<1, 3,
+def SDT_ZSelectCC           : SDTypeProfile<1, 3,
                                             [SDTCisSameAs<0, 1>,
                                              SDTCisSameAs<1, 2>,
-                                             SDTCisVT<3, i8>]>;
+                                             SDTCisVT<3, i32>]>;
 def SDT_ZWrapPtr            : SDTypeProfile<1, 1,
                                             [SDTCisSameAs<0, 1>,
                                              SDTCisPtrTy<0>]>;
@@ -75,7 +75,7 @@ def z_cmp               : SDNode<"RISCVISD::CMP", SDT_ZCmp, [SDNPOutGlue]>;
 def z_ucmp              : SDNode<"RISCVISD::UCMP", SDT_ZCmp, [SDNPOutGlue]>;
 //def z_br_ccmask         : SDNode<"RISCVISD::BR_CCMASK", SDT_ZBRCCMask,
                                  //[SDNPHasChain, SDNPInGlue]>;
-def z_select_ccmask     : SDNode<"RISCVISD::SELECT_CCMASK", SDT_ZSelectCCMask,
+def z_select_cc         : SDNode<"RISCVISD::SELECT_CC", SDT_ZSelectCC,
     		                 [SDNPInGlue]>;
 def z_adjdynalloc       : SDNode<"RISCVISD::ADJDYNALLOC", SDT_ZAdjDynAlloc>;
 def z_extract_access    : SDNode<"RISCVISD::EXTRACT_ACCESS",

@@ -176,6 +176,20 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 //constant branches (e.g. br 1 $label or br 0 $label)
 def : Pat<(brcond GR32Bit:$cond, bb:$target),
           (BNE bb:$target, GR32Bit:$cond, zero)>;  
+//Conditional moves
+// SELECT_CC_* - Used to implement the SELECT_CC DAG operation.  Expanded after
+// instruction selection into a branch sequence.
+let usesCustomInserter = 1 in {
+  def SELECT_CC : Pseudo<(outs GR32:$dst),
+                              (ins GR32:$cond, GR32:$T, GR32:$F),
+                              [(set GR32:$dst,
+                                 (select GR32:$cond, GR32:$T, GR32:$F))]>;
+}
+def : Pat<(select (i32 (setne GR32:$lhs, 0)), GR32:$T, GR32:$F),
+        (SELECT_CC GR32:$lhs, GR32:$T, GR32:$F)>;
+
+def : Pat<(select (i32 (seteq GR32:$lhs, 0)), GR32:$T, GR32:$F),
+        (SELECT_CC GR32:$lhs, GR32:$F, GR32:$T)>;
 
 //Load/Store Instructions
 let mayLoad = 1 in {
@@ -192,7 +206,7 @@ let mayStore = 1 in {
 }
 
 //Upper Immediate
-def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sx20:$imm),
+def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sxu20:$imm),
                "LUI\t$dst, $imm",
                [(set GR32:$dst, (shl imm32sx20:$imm, (i32 12)))]>;
 

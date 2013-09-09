@@ -109,10 +109,10 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::SETCC, VT, Legal);//folds into brcond
 
       // Expand SELECT(C, A, B) into SELECT_CC(X, 0, A, B, NE).
-      setOperationAction(ISD::SELECT, VT, Expand);
+      //setOperationAction(ISD::SELECT, VT, Expand);
 
       // Lower SELECT_CC and BR_CC into separate comparisons and branches.
-      setOperationAction(ISD::SELECT_CC, VT, Custom);
+      setOperationAction(ISD::SELECT_CC, VT, Expand);
       setOperationAction(ISD::BR_CC,     VT, Expand);
     }
   }
@@ -1340,26 +1340,17 @@ static SDValue emitCmp(SelectionDAG &DAG, SDValue CmpOp0, SDValue CmpOp1,
                      DL, MVT::Glue, CmpOp0, CmpOp1);
 }
 
-SDValue RISCVTargetLowering::lowerSELECT_CC(SDValue Op,
-                                              SelectionDAG &DAG) const {
-  SDValue CmpOp0   = Op.getOperand(0);
-  SDValue CmpOp1   = Op.getOperand(1);
-  SDValue TrueOp   = Op.getOperand(2);
-  SDValue FalseOp  = Op.getOperand(3);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
-  DebugLoc DL      = Op.getDebugLoc();
+SDValue RISCVTargetLowering::
+lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const
+{
+  DebugLoc DL = Op.getDebugLoc();
+  EVT Ty = Op.getOperand(0).getValueType();
+  SDValue Cond = DAG.getNode(ISD::SETCC, DL, getSetCCResultType(Ty),
+                             Op.getOperand(0), Op.getOperand(1),
+                             Op.getOperand(4));
 
-  unsigned CCMask;
-  SDValue Flags = emitCmp(DAG, CmpOp0, CmpOp1, CC, CCMask);
-
-  SmallVector<SDValue, 4> Ops;
-  Ops.push_back(TrueOp);
-  Ops.push_back(FalseOp);
-  Ops.push_back(DAG.getConstant(CCMask, MVT::i32));
-  Ops.push_back(Flags);
-
-  SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
-  return DAG.getNode(RISCVISD::SELECT_CCMASK, DL, VTs, &Ops[0], Ops.size());
+  return DAG.getNode(ISD::SELECT, DL, Op.getValueType(), Cond, Op.getOperand(2),
+                     Op.getOperand(3));
 }
 
 SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const {
@@ -1832,11 +1823,9 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(PCREL_WRAPPER);
     OPCODE(CMP);
     OPCODE(UCMP);
-    //OPCODE(BR_CCMASK);
-    OPCODE(SELECT_CCMASK);
+    OPCODE(SELECT_CC);
     OPCODE(ADJDYNALLOC);
     OPCODE(EXTRACT_ACCESS);
-    //OPCODE(UMUL_LOHI64);
     OPCODE(SDIVREM64);
     OPCODE(UDIVREM32);
     OPCODE(UDIVREM64);
@@ -1881,12 +1870,75 @@ static MachineBasicBlock *splitBlockAfter(MachineInstr *MI,
   return NewMBB;
 }
 
+MachineBasicBlock *RISCVTargetLowering::
+emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
+
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  DebugLoc DL = MI->getDebugLoc();
+
+  // To "insert" a SELECT_CC instruction, we actually have to insert the
+  // diamond control-flow pattern.  The incoming instruction knows the
+  // destination vreg to set, the condition code register to branch on, the
+  // true/false values to select between, and a branch opcode to use.
+  const BasicBlock *LLVM_BB = BB->getBasicBlock();
+  MachineFunction::iterator It = BB;
+  ++It;
+
+  //  thisMBB:
+  //  ...
+  //   TrueVal = ...
+  //   setcc r1, r2, r3
+  //   bNE   r1, r0, copy1MBB
+  //   fallthrough --> copy0MBB
+  MachineBasicBlock *thisMBB  = BB;
+  MachineFunction *F = BB->getParent();
+  MachineBasicBlock *copy0MBB = F->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *sinkMBB  = F->CreateMachineBasicBlock(LLVM_BB);
+  F->insert(It, copy0MBB);
+  F->insert(It, sinkMBB);
+
+  // Transfer the remainder of BB and its successor edges to sinkMBB.
+  sinkMBB->splice(sinkMBB->begin(), BB,
+                  llvm::next(MachineBasicBlock::iterator(MI)),
+                  BB->end());
+  sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  // Next, add the true and fallthrough blocks as its successors.
+  BB->addSuccessor(copy0MBB);
+  BB->addSuccessor(sinkMBB);
+
+  BuildMI(BB, DL, TII->get(RISCV::BNE)).addReg(RISCV::zero).addReg(MI->getOperand(3).getReg())
+    .addMBB(sinkMBB);
+
+  //  copy0MBB:
+  //   %FalseValue = ...
+  //   # fallthrough to sinkMBB
+  BB = copy0MBB;
+
+  // Update machine-CFG edges
+  BB->addSuccessor(sinkMBB);
+
+  //  sinkMBB:
+  //   %Result = phi [ %TrueValue, thisMBB ], [ %FalseValue, copy0MBB ]
+  //  ...
+  BB = sinkMBB;
+
+  BuildMI(*BB, BB->begin(), DL,
+          TII->get(RISCV::PHI), MI->getOperand(0).getReg())
+    .addReg(MI->getOperand(1).getReg()).addMBB(thisMBB)
+    .addReg(MI->getOperand(2).getReg()).addMBB(copy0MBB);
+
+  MI->eraseFromParent();   // The pseudo instruction is gone now.
+  return BB;
+}
+
 
 MachineBasicBlock *RISCVTargetLowering::
 EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   switch (MI->getOpcode()) {
+  case RISCV::SELECT_CC:
+      return emitSelectCC(MI, MBB);
 /*TODO: no custom inserters (selects, atmoics)
-  case RISCV::Select32:
   case RISCV::SelectF32:
   case RISCV::Select64:
   case RISCV::SelectF64:

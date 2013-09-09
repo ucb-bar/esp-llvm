@@ -40,3 +40,10 @@ let mayStore = 1 in {
   def SD : InstStore <"SD"  , 0b0100011, 0b011, store, GR64>, Requires<[IsRV64]>;
 }
 
+//Synthesized set operators
+/*
+defm : SeteqPats<GR64, SLTIU, XOR, SLTU, zero>;
+defm : SetlePats<GR64, SLT, SLTU>;
+defm : SetgtPats<GR64, SLT, SLTU>;
+defm : SetgePats<GR64, SLT, SLTU>;
+*/
