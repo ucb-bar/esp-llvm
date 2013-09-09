@@ -57,7 +57,7 @@ namespace RISCVISD {
     // mask of condition-code values for which operand 0 should be
     // chosen over operand 1; it has the same form as BR_CCMASK.
     // Operand 3 is the flag operand.
-    SELECT_CCMASK,
+    SELECT_CC,
 
     // Evaluates to the gap between the stack pointer and the
     // base of the dynamically-allocatable area.
@@ -293,7 +293,7 @@ private:
   SDValue lowerSTACKRESTORE(SDValue Op, SelectionDAG &DAG) const;
 
   // Implement EmitInstrWithCustomInserter for individual operation types.
-  MachineBasicBlock *emitSelect(MachineInstr *MI,
+  MachineBasicBlock *emitSelectCC(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
   MachineBasicBlock *emitExt128(MachineInstr *MI,
                                 MachineBasicBlock *MBB,
