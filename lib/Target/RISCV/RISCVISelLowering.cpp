@@ -114,12 +114,15 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       // Lower SELECT_CC and BR_CC into separate comparisons and branches.
       setOperationAction(ISD::SELECT_CC, VT, Expand);
       setOperationAction(ISD::BR_CC,     VT, Expand);
+
     }
   }
 
   // Expand jump table branches as address arithmetic followed by an
   // indirect jump.
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  //RISCV also does not have indirect branch so expand them
+  setOperationAction(ISD::BRIND, MVT::Other, Expand);
 
   //Expand build_pair i64 since we don't support i64
   setOperationAction(ISD::BUILD_PAIR, MVT::i64, Expand);
