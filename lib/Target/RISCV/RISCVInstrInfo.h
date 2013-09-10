@@ -117,7 +117,7 @@ public:
   // physical register Reg.
   void loadImmediate(MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator MBBI,
-                     unsigned Reg, uint64_t Value) const;
+                     unsigned *Reg, int64_t Value) const;
 };
 } // end namespace llvm
 

@@ -145,7 +145,7 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     unsigned NewImm;
     unsigned Reg;
 
-    TII.loadImmediate(MBB, II, Reg, Offset);
+    TII.loadImmediate(MBB, II, &Reg, Offset);
     BuildMI(MBB, II, DL, TII.get(ADD), Reg).addReg(FrameReg)
       .addReg(Reg, RegState::Kill);
 
