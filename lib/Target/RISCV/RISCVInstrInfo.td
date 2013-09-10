@@ -199,6 +199,11 @@ let mayLoad = 1 in {
   def LB : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR32>; 
   def LBU: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR32>; 
 }
+//extended loads
+def : Pat<(i32 (extloadi1  addr:$addr)), (LBU addr:$addr)>;
+def : Pat<(i32 (extloadi8  addr:$addr)), (LBU addr:$addr)>;
+def : Pat<(i32 (extloadi16 addr:$addr)), (LHU addr:$addr)>;
+
 let mayStore = 1 in {
   def SW : InstStore<"SW" , 0b0100011, 0b010, store        , GR32>;
   def SH : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR32>; 
