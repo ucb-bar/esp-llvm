@@ -14,6 +14,7 @@
 #include "RISCVInstrInfo.h"
 #include "RISCVInstrBuilder.h"
 #include "RISCVTargetMachine.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 
 #define GET_INSTRINFO_CTOR
 #define GET_INSTRMAP_INFO
@@ -62,11 +63,11 @@ void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
   unsigned ADD =  RISCV::ADD;
   unsigned ADDI = RISCV::ADDI;
 
-  if (isInt<16>(Amount))// addi sp, sp, amount
+  if (isInt<12>(Amount))// addi sp, sp, amount
     BuildMI(MBB, I, DL, get(ADDI), SP).addReg(SP).addImm(Amount);
-  else { // Expand immediate that doesn't fit in 16-bit.
+  else { // Expand immediate that doesn't fit in 12-bit.
     unsigned Reg;
-    loadImmediate(MBB, I, Reg, Amount);
+    loadImmediate(MBB, I, &Reg, Amount);
     BuildMI(MBB, I, DL, get(ADD), SP).addReg(SP).addReg(Reg, RegState::Kill);
   }
 }
@@ -428,12 +429,19 @@ unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
 
 void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator MBBI,
-                                     unsigned Reg, uint64_t Value) const {
+                                     unsigned *Reg, int64_t Value) const {
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   unsigned Opcode;
+  MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
+  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
+  const TargetRegisterClass *RC = STI.isRV64() ?
+    &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+
+  //create virtual reg to store immediate
+  *Reg = RegInfo.createVirtualRegister(RC);
   if (isInt<12>(Value)){
     Opcode = RISCV::ADDI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(Value);
+    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(RISCV::zero).addImm(Value);
   } else {
     assert(isInt<32>(Value) && "Huge values not handled yet");
     uint64_t upper20 = (Value & 0x0000000000000800) ? 
@@ -441,8 +449,8 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
       : 0x00000000000FFFFF & ((Value >> 12) +1);
     uint64_t lower12 = 0x0000000000000FFF & (Value);
     Opcode = RISCV::LUI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addImm(upper20);
-    Opcode = RISCV::ADDI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), Reg).addReg(RISCV::zero).addImm(lower12);
+    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addImm(upper20);
+    Opcode = RISCV::LLI;
+    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(RISCV::zero).addImm(lower12);
   }
 }
