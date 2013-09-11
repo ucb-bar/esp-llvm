@@ -69,11 +69,11 @@ multiclass SeteqPats<RegisterOperand RC, Instruction SLTiuOp, Instruction XOROp,
             (SLTuOp ZEROReg, (XOROp RC:$lhs, RC:$rhs))>;
 }
 
-multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
+multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
   def : Pat<(setle RC:$lhs, RC:$rhs),
-            (XORI (SLTOp RC:$rhs, RC:$lhs), 1)>;
+            (XORIOp (SLTOp RC:$rhs, RC:$lhs), 1)>;
   def : Pat<(setule RC:$lhs, RC:$rhs),
-            (XORI (SLTuOp RC:$rhs, RC:$lhs), 1)>;
+            (XORIOp (SLTuOp RC:$rhs, RC:$lhs), 1)>;
 }
 
 multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
@@ -83,17 +83,17 @@ multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> 
             (SLTuOp RC:$rhs, RC:$lhs)>;
 }
 
-multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
+multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
   def : Pat<(setge RC:$lhs, RC:$rhs),
-            (XORI (SLTOp RC:$lhs, RC:$rhs), 1)>;
+            (XORIOp (SLTOp RC:$lhs, RC:$rhs), 1)>;
   def : Pat<(setuge RC:$lhs, RC:$rhs),
-            (XORI (SLTuOp RC:$lhs, RC:$rhs), 1)>;
+            (XORIOp (SLTuOp RC:$lhs, RC:$rhs), 1)>;
 }
 
 defm : SeteqPats<GR32, SLTIU, XOR, SLTU, zero>;
-defm : SetlePats<GR32, SLT, SLTU>;
+defm : SetlePats<GR32, SLT, SLTU, XORI>;
 defm : SetgtPats<GR32, SLT, SLTU>;
-defm : SetgePats<GR32, SLT, SLTU>;
+defm : SetgePats<GR32, SLT, SLTU, XORI>;
 
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
@@ -108,6 +108,7 @@ let isCall = 1 in {
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
+  //TODO: JALR can be implemented at brind in llvm since brind is unconditional
     def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "JALR\t$target", 
           //[(set GR32:$ra, (z_call addr:$target))]>{
           []>{

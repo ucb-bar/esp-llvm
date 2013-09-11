@@ -59,34 +59,6 @@ void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum,
      OS << ")";
 }
 
-void RISCVInstPrinter::printU4ImmOperand(const MCInst *MI, int OpNum,
-                                           raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<4>(Value) && "Invalid u4imm argument");
-  O << Value;
-}
-
-void RISCVInstPrinter::printU6ImmOperand(const MCInst *MI, int OpNum,
-                                           raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<6>(Value) && "Invalid u6imm argument");
-  O << Value;
-}
-
-void RISCVInstPrinter::printS8ImmOperand(const MCInst *MI, int OpNum,
-                                           raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<8>(Value) && "Invalid s8imm argument");
-  O << Value;
-}
-
-void RISCVInstPrinter::printU8ImmOperand(const MCInst *MI, int OpNum,
-                                           raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<8>(Value) && "Invalid u8imm argument");
-  O << Value;
-}
-
 void RISCVInstPrinter::printS12ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
   int64_t Value = MI->getOperand(OpNum).getImm();
@@ -115,20 +87,6 @@ void RISCVInstPrinter::printU20ImmOperand(const MCInst *MI, int OpNum,
   O << Value;
 }
 
-void RISCVInstPrinter::printS16ImmOperand(const MCInst *MI, int OpNum,
-                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<16>(Value) && "Invalid s16imm argument");
-  O << Value;
-}
-
-void RISCVInstPrinter::printU16ImmOperand(const MCInst *MI, int OpNum,
-                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<16>(Value) && "Invalid u16imm argument");
-  O << Value;
-}
-
 void RISCVInstPrinter::printS32ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
   int64_t Value = MI->getOperand(OpNum).getImm();
@@ -140,6 +98,20 @@ void RISCVInstPrinter::printU32ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
   int64_t Value = MI->getOperand(OpNum).getImm();
   assert(isUInt<32>(Value) && "Invalid u32imm argument");
+  O << Value;
+}
+
+void RISCVInstPrinter::printS64ImmOperand(const MCInst *MI, int OpNum,
+                                            raw_ostream &O) {
+  int64_t Value = MI->getOperand(OpNum).getImm();
+  assert(isInt<64>(Value) && "Invalid s64imm argument");
+  O << Value;
+}
+
+void RISCVInstPrinter::printU64ImmOperand(const MCInst *MI, int OpNum,
+                                            raw_ostream &O) {
+  int64_t Value = MI->getOperand(OpNum).getImm();
+  assert(isUInt<64>(Value) && "Invalid u64imm argument");
   O << Value;
 }
 

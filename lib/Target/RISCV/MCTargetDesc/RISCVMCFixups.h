@@ -20,6 +20,7 @@ namespace RISCV {
     FK_390_PC32DBL,
     FK_390_PLT16DBL,
     FK_390_PLT32DBL,
+    FK_390_PLT64DBL,
 
     // Marker
     LastTargetFixupKind,
