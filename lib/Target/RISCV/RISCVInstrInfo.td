@@ -270,7 +270,7 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
 //===----------------------------------------------------------------------===//
 
 include "RISCVInstrInfoRV64.td"
-//include "RISCVInstrInfoM.td"
+include "RISCVInstrInfoM.td"
 //include "RISCVInstrInfoF.td"
 //include "RISCVInstrInfoA.td"
 //include "RISCVInstrInfoD.td"
