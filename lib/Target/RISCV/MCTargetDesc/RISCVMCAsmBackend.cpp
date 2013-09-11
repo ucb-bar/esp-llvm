@@ -29,6 +29,7 @@ static uint64_t extractBitsForFixup(MCFixupKind Kind, uint64_t Value) {
   case RISCV::FK_390_PC32DBL:
   case RISCV::FK_390_PLT16DBL:
   case RISCV::FK_390_PLT32DBL:
+  case RISCV::FK_390_PLT64DBL:
     return (int64_t)Value / 2;
   }
 
@@ -87,7 +88,8 @@ RISCVMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
     { "FK_390_PC16DBL",  0, 16, MCFixupKindInfo::FKF_IsPCRel },
     { "FK_390_PC32DBL",  0, 32, MCFixupKindInfo::FKF_IsPCRel },
     { "FK_390_PLT16DBL", 0, 16, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_390_PLT32DBL", 0, 32, MCFixupKindInfo::FKF_IsPCRel }
+    { "FK_390_PLT32DBL", 0, 32, MCFixupKindInfo::FKF_IsPCRel },
+    { "FK_390_PLT64DBL", 0, 64, MCFixupKindInfo::FKF_IsPCRel }
   };
 
   if (Kind < FirstTargetFixupKind)

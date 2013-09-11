@@ -48,21 +48,15 @@ private:
   void printOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printBDAddrOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printBDXAddrOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  void printU4ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  void printU6ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  void printS8ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  void printU8ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  //RISCV
   void printS12ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU12ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printS20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printMemOperand(const MCInst *MI, int OpNUm, raw_ostream &O);
-  //END RISCV
-  void printS16ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
-  void printU16ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printS32ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU32ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
+  void printS64ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
+  void printU64ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printCallOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printAccessRegOperand(const MCInst *MI, int OpNum, raw_ostream &O);
 

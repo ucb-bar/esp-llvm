@@ -57,6 +57,7 @@ private:
       return MO.getImm() << 1;
     llvm_unreachable("Jump with no immediate field");
   }
+
   unsigned getBranchTargetEncoding(const MCInst &MI, unsigned int OpNum,
                               SmallVectorImpl<MCFixup> &Fixups) const {
     const MCOperand &MO = MI.getOperand(OpNum);
@@ -65,6 +66,7 @@ private:
       return MO.getImm() << 1;
     llvm_unreachable("Branch with no immediate field");
   }
+
   unsigned getPCImmEncoding(const MCInst &MI, unsigned int OpNum,
                               SmallVectorImpl<MCFixup> &Fixups) const {
     const MCOperand &MO = MI.getOperand(OpNum);
@@ -73,7 +75,15 @@ private:
       return MO.getImm() << 12;
     llvm_unreachable("Branch with no immediate field");
   }
-  //END RISCV
+
+  unsigned getPCImm64Encoding(const MCInst &MI, unsigned int OpNum,
+                              SmallVectorImpl<MCFixup> &Fixups) const {
+    const MCOperand &MO = MI.getOperand(OpNum);
+    //TODO: do we need to sign extend explicitly?
+    if (MO.isImm())
+      return MO.getImm() << 12;
+    llvm_unreachable("Branch with no immediate field");
+  }
 
   // Operand OpNum of MI needs a PC-relative fixup of kind Kind at
   // Offset bytes from the start of MI.  Add the fixup to Fixups
@@ -98,6 +108,10 @@ private:
   unsigned getPLT32DBLEncoding(const MCInst &MI, unsigned int OpNum,
                                SmallVectorImpl<MCFixup> &Fixups) const {
     return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PLT32DBL, 2);
+  }
+  unsigned getPLT64DBLEncoding(const MCInst &MI, unsigned int OpNum,
+                               SmallVectorImpl<MCFixup> &Fixups) const {
+    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PLT64DBL, 2);
   }
 };
 }

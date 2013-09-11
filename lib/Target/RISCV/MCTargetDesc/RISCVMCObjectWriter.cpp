@@ -53,6 +53,7 @@ static unsigned getAbsoluteReloc(unsigned Kind) {
   llvm_unreachable("Unsupported absolute address");
 }
 
+//TODO: fix relocation types
 // Return the relocation type for a PC-relative value of MCFixupKind Kind.
 static unsigned getPCRelReloc(unsigned Kind) {
   switch (Kind) {
@@ -63,6 +64,7 @@ static unsigned getPCRelReloc(unsigned Kind) {
   case RISCV::FK_390_PC32DBL:  return ELF::R_390_PC32DBL;
   case RISCV::FK_390_PLT16DBL: return ELF::R_390_PLT16DBL;
   case RISCV::FK_390_PLT32DBL: return ELF::R_390_PLT32DBL;
+  case RISCV::FK_390_PLT64DBL: return ELF::R_390_PLT64;
   }
   llvm_unreachable("Unsupported PC-relative address");
 }
