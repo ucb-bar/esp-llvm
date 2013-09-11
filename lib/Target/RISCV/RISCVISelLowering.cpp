@@ -137,19 +137,21 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
       if(Subtarget.hasM()) {
-        setOperationAction(ISD::SDIV, VT, Legal);
-        setOperationAction(ISD::UDIV, VT, Legal);
-        setOperationAction(ISD::SREM, VT, Legal);
-        setOperationAction(ISD::UREM, VT, Expand);
+        setOperationAction(ISD::MUL  , VT, Legal);
+        setOperationAction(ISD::MULHS, VT, Legal);
+        setOperationAction(ISD::MULHU, VT, Legal);
+        setOperationAction(ISD::SDIV , VT, Legal);
+        setOperationAction(ISD::UDIV , VT, Legal);
+        setOperationAction(ISD::SREM , VT, Legal);
+        setOperationAction(ISD::UREM , VT, Legal);
       }else{
-      // Expand individual DIV and REMs into DIVREMs.
-        setOperationAction(ISD::MUL, VT, Expand);
-        setOperationAction(ISD::SDIV, VT, Expand);
-        setOperationAction(ISD::UDIV, VT, Expand);
-        setOperationAction(ISD::SREM, VT, Expand);
-        setOperationAction(ISD::UREM, VT, Expand);
-        setOperationAction(ISD::SDIVREM, VT, Expand);
-        setOperationAction(ISD::UDIVREM, VT, Expand);
+        setOperationAction(ISD::MUL  , VT, Expand);
+        setOperationAction(ISD::MULHS, VT, Expand);
+        setOperationAction(ISD::MULHU, VT, Expand);
+        setOperationAction(ISD::SDIV , VT, Expand);
+        setOperationAction(ISD::UDIV , VT, Expand);
+        setOperationAction(ISD::SREM , VT, Expand);
+        setOperationAction(ISD::UREM , VT, Expand);
       }
 
       // Expand ATOMIC_LOAD and ATOMIC_STORE using ATOMIC_CMP_SWAP.
@@ -163,10 +165,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::CTTZ_ZERO_UNDEF, VT, Expand);
       setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
       setOperationAction(ISD::ROTR,            VT, Expand);
-
-      // Use *MUL_LOHI where possible and a wider multiplication otherwise.
-      setOperationAction(ISD::MULHS, VT, Expand);
-      setOperationAction(ISD::MULHU, VT, Expand);
 
       // We have instructions for signed but not unsigned FP conversion.
       setOperationAction(ISD::FP_TO_UINT, VT, Expand);
@@ -204,10 +202,14 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // The architecture has 32-bit SMUL_LOHI and UMUL_LOHI (MR and MLR),
   // but they aren't really worth using.  There is no 64-bit SMUL_LOHI,
   // but there is a 64-bit UMUL_LOHI: MLGR.
+  setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
+  setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
+  setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
+  setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
-  //setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
+  setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
-  //setOperationAction(ISD::UMUL_LOHI, MVT::i64, Custom);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i64, Custom);
 
   // FIXME: Can we support these natively?
   //setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
@@ -763,7 +765,10 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
       const TargetRegisterClass *RC;
 
       if (RegVT == MVT::i32 || RegVT.getSizeInBits() < 32)//All word and subword values stored in GR32
-        RC = &RISCV::GR32BitRegClass;
+        if(Subtarget.isRV64())
+          RC = &RISCV::GR64BitRegClass;
+        else
+          RC = &RISCV::GR32BitRegClass;
       else if (RegVT == MVT::i64){
         if(Subtarget.isRV32()){
           //for RV32 store in pair of two GR32
