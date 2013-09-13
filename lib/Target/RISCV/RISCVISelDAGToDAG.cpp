@@ -132,7 +132,13 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
         (MI.getOperand(2).getImm() == 0)) {
       DstReg = MI.getOperand(0).getReg();
       ZeroReg = RISCV::zero;
-    } else if ((MI.getOpcode() == RISCV::ADDI/*W*/) &&
+    } else if ((MI.getOpcode() == RISCV::ADDI64) &&
+               (MI.getOperand(1).isReg()) && //avoid frame-index
+               (MI.getOperand(1).getReg() == RISCV::zero_64) &&
+               (MI.getOperand(2).getImm() == 0)) {
+      DstReg = MI.getOperand(0).getReg();
+      ZeroReg = RISCV::zero_64;
+    } else if ((MI.getOpcode() == RISCV::ADDIW) &&
                (MI.getOperand(1).isReg()) && //avoid frame-index
                (MI.getOperand(1).getReg() == RISCV::zero_64) &&
                (MI.getOperand(2).getImm() == 0)) {
@@ -428,7 +434,7 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
     SDValue imm = CurDAG->getTargetConstant(0, MVT::i32);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     SDValue TFI = CurDAG->getTargetFrameIndex(FI, TLI.getPointerTy());
-    unsigned Opc = RISCV::ADDI;
+    unsigned Opc = Subtarget.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     EVT VT = Subtarget.isRV64() ? MVT::i64 : MVT::i32;
     
     if(Node->hasOneUse()) //don't create a new node just morph this one

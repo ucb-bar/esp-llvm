@@ -7,6 +7,39 @@
 //
 //===----------------------------------------------------------------------===//
 
+//special 64bit instructions
+def ADDW : InstR<"ADDW" , 0b0111011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
+def SUBW : InstR<"SUBW" , 0b0111011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
+def SLLW : InstR<"SLLW" , 0b0111011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
+def SRLW : InstR<"SRLW" , 0b0111011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
+def SRAW : InstR<"SRAW" , 0b0111011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
+
+//Integer arithmetic register-immediate
+def ADDIW: InstI<"ADDIW", 0b0011011, 0b000       , add, GR32, imm32sx12>, Requires<[IsRV64]>;
+//TODO: enforce constraints here or up on level?
+def SLLIW: InstI<"SLLIW", 0b0011011, 0b001       , shl, GR32, imm32sx12>, Requires<[IsRV64]> {
+  let IMM{11-5} = 0b0000000; 
+  //trap if $imm{5}!=0 TODO:how to do this?
+}
+def SRLIW: InstI<"SRLIW", 0b0011011, 0b101       , srl, GR32, imm32sx12>, Requires<[IsRV64]> {
+  let IMM{11-5} = 0b0000000; 
+  //trap if $src{5}!=0 TODO:how to do this?
+}
+def SRAIW: InstI<"SRAIW", 0b0011011, 0b101       , sra, GR32, imm32sx12>, Requires<[IsRV64]> {
+  let IMM{11-6} = 0b0000010; 
+  //trap if $src{5}!=0 TODO:how to do this?
+}
+
+//Load/Store Instructions
+let mayLoad = 1 in {
+  def LWU : InstLoad <"LWU" , 0b0000011, 0b110, zextloadi32,  GR64, mem64>, Requires<[IsRV64]>; 
+  def LD  : InstLoad <"LD"  , 0b0000011, 0b011, load,  GR64, mem64>, Requires<[IsRV64]>; 
+}
+
+let mayStore = 1 in {
+  def SD : InstStore <"SD"  , 0b0100011, 0b011, store, GR64, mem64>, Requires<[IsRV64]>;
+}
+
 //Standard instructions operating on 64bit values
 //Integer arithmetic register-register
 def ADD64 : InstR<"ADD" , 0b0110011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
@@ -49,7 +82,7 @@ defm : SetgePats<GR64, SLT64, SLTU64, XORI64>, Requires<[IsRV64]>;
 
 //Unconditional Jumps
 let isCall = 1 in {
-  let Defs = [ra, v0, v1] in { //after call return addr and values are defined
+  let Defs = [ra_64, v0_64, v1_64] in { //after call return addr and values are defined
     def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "JAL\t$target", 
           [(z_call pcrel64call:$target)]>, Requires<[IsRV64]>;
   }
@@ -141,21 +174,22 @@ def : Pat<(select (i64 (seteq GR64:$lhs, 0)), GR64:$T, GR64:$F),
 
 //Load/Store Instructions
 let mayLoad = 1 in {
-  def LW64 : InstLoad <"LW" , 0b0000011, 0b010, load, GR64>, Requires<[IsRV64]>; 
-  def LH64 : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR64>, Requires<[IsRV64]>; 
-  def LHU64: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR64>, Requires<[IsRV64]>; 
-  def LB64 : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR64>, Requires<[IsRV64]>; 
-  def LBU64: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR64>, Requires<[IsRV64]>; 
+  def LW64 : InstLoad <"LW" , 0b0000011, 0b010, sextloadi32, GR64, mem64>, Requires<[IsRV64]>; 
+  def LH64 : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR64, mem64>, Requires<[IsRV64]>; 
+  def LHU64: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR64, mem64>, Requires<[IsRV64]>; 
+  def LB64 : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR64, mem64>, Requires<[IsRV64]>; 
+  def LBU64: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR64, mem64>, Requires<[IsRV64]>; 
 }
 //extended loads
 def : Pat<(i64 (extloadi1  addr:$addr)), (LBU64 addr:$addr)>;
 def : Pat<(i64 (extloadi8  addr:$addr)), (LBU64 addr:$addr)>;
 def : Pat<(i64 (extloadi16 addr:$addr)), (LHU64 addr:$addr)>;
+def : Pat<(i64 (extloadi32 addr:$addr)), (LWU   addr:$addr)>;
 
 let mayStore = 1 in {
-  def SW64 : InstStore<"SW" , 0b0100011, 0b010, store        , GR64>, Requires<[IsRV64]>;
-  def SH64 : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR64>, Requires<[IsRV64]>; 
-  def SB64 : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR64>, Requires<[IsRV64]>; 
+  def SW64 : InstStore<"SW" , 0b0100011, 0b010, truncstorei32, GR64, mem64>, Requires<[IsRV64]>;
+  def SH64 : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR64, mem64>, Requires<[IsRV64]>; 
+  def SB64 : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR64, mem64>, Requires<[IsRV64]>; 
 }
 
 //Upper Immediate
@@ -176,38 +210,6 @@ def : Pat<(i64 imm64:$imm), (LLI64 (LUI64 (HI20 imm64:$imm)), (LO12 imm64:$imm))
 
 
 
-//special 64bit instructions
-def ADDW : InstR<"ADDW" , 0b0111011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
-def SUBW : InstR<"SUBW" , 0b0111011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
-def SLLW : InstR<"SLLW" , 0b0111011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRLW : InstR<"SRLW" , 0b0111011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRAW : InstR<"SRAW" , 0b0111011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
-
-//Integer arithmetic register-immediate
-def ADDIW: InstI<"ADDIW", 0b0011011, 0b000       , add, GR32, imm32sx12>, Requires<[IsRV64]>;
-//TODO: enforce constraints here or up on level?
-def SLLIW: InstI<"SLLIW", 0b0011011, 0b001       , shl, GR32, imm32sx12>, Requires<[IsRV64]> {
-  let IMM{11-5} = 0b0000000; 
-  //trap if $imm{5}!=0 TODO:how to do this?
-}
-def SRLIW: InstI<"SRLIW", 0b0011011, 0b101       , srl, GR32, imm32sx12>, Requires<[IsRV64]> {
-  let IMM{11-5} = 0b0000000; 
-  //trap if $src{5}!=0 TODO:how to do this?
-}
-def SRAIW: InstI<"SRAIW", 0b0011011, 0b101       , sra, GR32, imm32sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b0000010; 
-  //trap if $src{5}!=0 TODO:how to do this?
-}
-
-//Load/Store Instructions
-let mayLoad = 1 in {
-  def LWU : InstLoad <"LWU" , 0b0000011, 0b110, load,  GR64>, Requires<[IsRV64]>; 
-  def LD  : InstLoad <"LD"  , 0b0000011, 0b011, load,  GR64>, Requires<[IsRV64]>; 
-}
-
-let mayStore = 1 in {
-  def SD : InstStore <"SD"  , 0b0100011, 0b011, store, GR64>, Requires<[IsRV64]>;
-}
 
 //===----------------------------------------------------------------------===//
 // Subtarget features

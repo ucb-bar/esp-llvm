@@ -60,8 +60,8 @@ void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
                                      MachineBasicBlock::iterator I) const {
   const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
-  unsigned ADD =  RISCV::ADD;
-  unsigned ADDI = RISCV::ADDI;
+  unsigned ADD =  STI.isRV64() ? RISCV::ADD64 : RISCV::ADD;
+  unsigned ADDI = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
 
   if (isInt<12>(Amount))// addi sp, sp, amount
     BuildMI(MBB, I, DL, get(ADDI), SP).addReg(SP).addImm(Amount);
@@ -254,7 +254,9 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   unsigned Opcode;
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::ORI;
-  else
+  else if (RISCV::GR64BitRegClass.contains(DestReg, SrcReg))
+    Opcode = RISCV::ORI64;
+  else 
     llvm_unreachable("Impossible reg-to-reg copy");
 
   BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
@@ -355,43 +357,53 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
     Target = &MI->getOperand(0);
     return true;
   case RISCV::BEQ:
+  case RISCV::BEQ64:
     Cond = RISCV::CCMASK_CMP_EQ;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BNE:
+  case RISCV::BNE64:
     Cond = RISCV::CCMASK_CMP_NE;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BLT:
+  case RISCV::BLT64:
     Cond = RISCV::CCMASK_CMP_LT;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BLTU:
+  case RISCV::BLTU64:
     Cond = RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BGE:
+  case RISCV::BGE64:
     Cond = RISCV::CCMASK_CMP_GE;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BGEU:
+  case RISCV::BGEU64:
     Cond = RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
 //synth
   case RISCV::BGT:
+  case RISCV::BGT64:
     Cond = RISCV::CCMASK_CMP_GT;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BGTU:
+  case RISCV::BGTU64:
     Cond = RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BLE:
+  case RISCV::BLE64:
     Cond = RISCV::CCMASK_CMP_LE;
     Target = &MI->getOperand(2);
     return true;
   case RISCV::BLEU:
+  case RISCV::BLEU64:
     Cond = RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO;
     Target = &MI->getOperand(2);
     return true;
@@ -409,6 +421,9 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
   if (RC == &RISCV::GR32BitRegClass || RC == &RISCV::ADDR32BitRegClass) {
     LoadOpcode = RISCV::LW;
     StoreOpcode = RISCV::SW;
+  } else if (RC == &RISCV::GR64BitRegClass) {
+    LoadOpcode = RISCV::LD;
+    StoreOpcode = RISCV::SD;
   } else
     llvm_unreachable("Unsupported regclass to load or store");
 }
@@ -440,7 +455,7 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
   //create virtual reg to store immediate
   *Reg = RegInfo.createVirtualRegister(RC);
   if (isInt<12>(Value)){
-    Opcode = RISCV::ADDI;
+    Opcode = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(RISCV::zero).addImm(Value);
   } else {
     assert(isInt<32>(Value) && "Huge values not handled yet");

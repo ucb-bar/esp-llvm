@@ -183,5 +183,8 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 unsigned
 RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
-  return TFI->hasFP(MF) ? RISCV::fp : RISCV::sp;
+  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
+  return TFI->hasFP(MF) ? 
+      (Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp) : 
+      (Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp);
 }

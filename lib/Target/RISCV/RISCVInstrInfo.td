@@ -194,11 +194,11 @@ def : Pat<(select (i32 (seteq GR32:$lhs, 0)), GR32:$T, GR32:$F),
 
 //Load/Store Instructions
 let mayLoad = 1 in {
-  def LW : InstLoad <"LW" , 0b0000011, 0b010, load, GR32>; 
-  def LH : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR32>; 
-  def LHU: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR32>; 
-  def LB : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR32>; 
-  def LBU: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR32>; 
+  def LW : InstLoad <"LW" , 0b0000011, 0b010, load, GR32, mem>; 
+  def LH : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR32, mem>; 
+  def LHU: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR32, mem>; 
+  def LB : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR32, mem>; 
+  def LBU: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR32, mem>; 
 }
 //extended loads
 def : Pat<(i32 (extloadi1  addr:$addr)), (LBU addr:$addr)>;
@@ -206,9 +206,9 @@ def : Pat<(i32 (extloadi8  addr:$addr)), (LBU addr:$addr)>;
 def : Pat<(i32 (extloadi16 addr:$addr)), (LHU addr:$addr)>;
 
 let mayStore = 1 in {
-  def SW : InstStore<"SW" , 0b0100011, 0b010, store        , GR32>;
-  def SH : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR32>; 
-  def SB : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR32>; 
+  def SW : InstStore<"SW" , 0b0100011, 0b010, store        , GR32, mem>;
+  def SH : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR32, mem>; 
+  def SB : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR32, mem>; 
 }
 
 //Upper Immediate
