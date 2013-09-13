@@ -37,8 +37,11 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
     //i8,u16,i32,f32 -- same as above omitting preferred as needed
     //a0:8:16 -- aggregate type of 0bit? should be 8 bit by api and 16 by pref
     //n32 -- native integer width is 32bits
-    DL("E-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
-       "f32:32-a0:8:16-n32"),
+    DL(Subtarget.isRV64() ? 
+       "E-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64-"
+       "f32:32-f64:64-f128:128-n32:64" :
+       "E-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
+       "f32:32-f64:64-f128:128-n32"),
     InstrInfo(*this), TLInfo(*this), TSInfo(*this),
     FrameLowering(*this, Subtarget) {
 }

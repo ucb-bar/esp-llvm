@@ -327,10 +327,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   //TODO:switch based on subtarget
-  unsigned SP = RISCV::sp;
-  unsigned FP = RISCV::fp;
-  unsigned ZERO = RISCV::zero;
-  unsigned ADDu = RISCV::ADD;
+  unsigned SP = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
+  unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
+  unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
+  unsigned ADDu = STI.isRV64() ? RISCV::ADD64 : RISCV::ADD;
 
   // First, compute final stack size.
   uint64_t StackSize = MFI->getStackSize();
@@ -444,10 +444,10 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   const RISCVInstrInfo &TII =
     *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
-  unsigned SP   = RISCV::sp;
-  unsigned FP   = RISCV::fp;
-  unsigned ZERO = RISCV::zero;
-  unsigned ADDu = RISCV::ADD;
+  unsigned SP   = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
+  unsigned FP   = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
+  unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
+  unsigned ADDu = STI.isRV64() ? RISCV::ADD64 : RISCV::ADD;
 
   // if framepointer enabled, restore the stack pointer.
   if (hasFP(MF)) {
@@ -542,7 +542,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     if (I->getOpcode() == RISCV::ADJCALLSTACKDOWN)
       Amount = -Amount;
 
-    unsigned SP = RISCV::sp;
+    unsigned SP = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
     TII.adjustStackPtr(SP, Amount, MBB, I);
   }
 
@@ -554,7 +554,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                      RegScavenger *RS) const {
   MachineRegisterInfo &MRI = MF.getRegInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  unsigned FP = RISCV::fp;
+  unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
 
   // Mark $fp as used if function has dedicated frame pointer.
   if (hasFP(MF))

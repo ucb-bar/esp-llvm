@@ -74,8 +74,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
 
-  //addRegisterClass(MVT::f128, &RISCV::FP128BitRegClass);
-
   // Compute derived properties from the register classes
   computeRegisterProperties();
 
@@ -1371,7 +1369,7 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   MVT VT = Op.getSimpleValueType();
-  unsigned RA = RISCV::ra;
+  unsigned RA = Subtarget.isRV64() ? RISCV::ra_64 : RISCV::ra;
   MFI->setReturnAddressIsTaken(true);
 
   // Return RA, which contains the return address. Mark it an implicit live-in.
@@ -1745,16 +1743,18 @@ SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
                                               SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
+  unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
   return DAG.getCopyFromReg(Op.getOperand(0), Op.getDebugLoc(),
-                            RISCV::sp, Op.getValueType());
+                            sp, Op.getValueType());
 }
 
 SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
                                                  SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
+  unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
   return DAG.getCopyToReg(Op.getOperand(0), Op.getDebugLoc(),
-                          RISCV::sp, Op.getOperand(1));
+                          sp, Op.getOperand(1));
 }
 
 SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
@@ -1917,7 +1917,9 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   BB->addSuccessor(copy0MBB);
   BB->addSuccessor(sinkMBB);
 
-  BuildMI(BB, DL, TII->get(RISCV::BNE)).addReg(RISCV::zero).addReg(MI->getOperand(3).getReg())
+  unsigned bne = Subtarget.isRV64() ? RISCV::BNE64 : RISCV::BNE;
+  unsigned zero = Subtarget.isRV64() ? RISCV::zero_64 : RISCV::zero;
+  BuildMI(BB, DL, TII->get(bne)).addReg(zero).addReg(MI->getOperand(3).getReg())
     .addMBB(sinkMBB);
 
   //  copy0MBB:

@@ -64,6 +64,8 @@ class InstR<string mnemonic, bits<7> op, bits<10> funct10,
   let Inst{6 - 0} = op;
 }
 
+//
+
 //R4-Type
 class InstR4<string mnemonic, bits<7> op, bits<5> funct5,
             SDPatternOperator operator1, SDPatternOperator operator2,
@@ -93,12 +95,20 @@ def mem : Operand<i32> {
   let PrintMethod = "printMemOperand";
 }
 
+def mem64 : Operand<i64> {
+  let MIOperandInfo = (ops GR64, imm64sx12);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printMemOperand";
+}
+
 def addr : ComplexPattern<iPTR, 2, "selectMemRegAddr">;
 //Load-Type
 class InstLoad<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator opNode,
-            RegisterOperand cls1>
-  : InstRISCV<4, (outs cls1:$dst), (ins mem:$addr), 
+            RegisterOperand cls1,
+            Operand memOp>
+  : InstRISCV<4, (outs cls1:$dst), (ins memOp:$addr), 
                 mnemonic#"\t$dst, $addr", 
                 [(set cls1:$dst, (opNode addr:$addr))]> {
   field bits<32> Inst;
@@ -117,8 +127,9 @@ class InstLoad<string mnemonic, bits<7> op, bits<3> funct3,
 
 class InstStore<string mnemonic, bits<7> op, bits<3> funct3,
                 SDPatternOperator opNode,
-                RegisterOperand cls1>
-  : InstRISCV<4, (outs), (ins cls1:$src, mem:$addr),
+                RegisterOperand cls1,
+                Operand memOp>
+  : InstRISCV<4, (outs), (ins cls1:$src, memOp:$addr),
               mnemonic#"\t$src, $addr", 
               [(opNode cls1:$src, addr:$addr)]> {
   field bits<32> Inst;

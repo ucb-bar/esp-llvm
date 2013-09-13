@@ -16,6 +16,7 @@
 #define LLVM_TARGET_RISCV_ISELLOWERING_H
 
 #include "RISCV.h"
+#include "RISCVSubtarget.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Function.h"
@@ -119,10 +120,10 @@ public:
 
   // Override TargetLowering.
   virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
-    return MVT::i32;
+    return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
   }
   virtual EVT getSetCCResultType(EVT VT) const {
-    return MVT::i32;
+    return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
   }
   virtual bool isFMAFasterThanMulAndAdd(EVT) const LLVM_OVERRIDE {
     return true;
