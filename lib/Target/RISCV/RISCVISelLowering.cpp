@@ -771,6 +771,8 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
         if(Subtarget.isRV32()){
           //for RV32 store in pair of two GR32
           RC = &RISCV::PairGR64BitRegClass;
+        } else {
+          RC = &RISCV::GR64BitRegClass;
         }
       } else if (RegVT == MVT::f32) {
           if(Subtarget.hasF())
