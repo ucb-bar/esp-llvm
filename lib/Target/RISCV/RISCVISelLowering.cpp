@@ -65,13 +65,13 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   MVT PtrVT = getPointerTy();
 
   // Set up the register classes.
-  if(Subtarget.isRV64())
+  if(Subtarget.isRV64()) {
     addRegisterClass(MVT::i64,  &RISCV::GR64BitRegClass);
-  else
+  }else
     addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
-  if(Subtarget.hasD())
+  if(Subtarget.hasD()){
     addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
-  else if(Subtarget.hasF())
+  }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
 
   // Compute derived properties from the register classes
@@ -164,8 +164,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
       setOperationAction(ISD::ROTR,            VT, Expand);
 
-      // We have instructions for signed but not unsigned FP conversion.
-      setOperationAction(ISD::FP_TO_UINT, VT, Expand);
     }
   }
 
@@ -187,11 +185,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
   // We have instructions for signed but not unsigned FP conversion.
   // Handle unsigned 32-bit types as signed 64-bit types.
-  setOperationAction(ISD::UINT_TO_FP, MVT::i32, Promote);
-  //setOperationAction(ISD::UINT_TO_FP, MVT::i64, Expand);
 
   // We have native support for a 64-bit CTLZ, via FLOGR.
-  setOperationAction(ISD::CTLZ, MVT::i32, Promote);
+  //setOperationAction(ISD::CTLZ, MVT::i32, Promote);
   //setOperationAction(ISD::CTLZ, MVT::i64, Legal);
 
   // Give LowerOperation the chance to replace 64-bit ORs with subregs.
@@ -221,6 +217,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i32, Expand);
 
   // Handle the various types of symbolic address.
   setOperationAction(ISD::ConstantPool,     PtrVT, Custom);
@@ -260,8 +257,46 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   }
 
   // We have fused multiply-addition for f32 and f64 but not f128.
-  setOperationAction(ISD::FMA, MVT::f32,  Legal);
-  setOperationAction(ISD::FMA, MVT::f64,  Legal);
+  if(Subtarget.hasF() || Subtarget.hasD()){
+    setOperationAction(ISD::FMA, MVT::f32,  Legal);
+    setOperationAction(ISD::BITCAST, MVT::i32, Legal);
+    setOperationAction(ISD::BITCAST, MVT::f32, Legal);
+    setOperationAction(ISD::UINT_TO_FP, MVT::i32, Legal);
+    setOperationAction(ISD::SINT_TO_FP, MVT::i32, Legal);
+    setOperationAction(ISD::FP_TO_UINT, MVT::i32, Legal);
+    setOperationAction(ISD::FP_TO_SINT, MVT::i32, Legal);
+  }
+  else{
+    setOperationAction(ISD::FMA, MVT::f32,  Expand);
+    setOperationAction(ISD::SETCC, MVT::f32, Expand);
+    setOperationAction(ISD::BITCAST, MVT::i32, Expand);
+    setOperationAction(ISD::BITCAST, MVT::f32, Expand);
+    setOperationAction(ISD::UINT_TO_FP, MVT::i32, Expand);
+    setOperationAction(ISD::SINT_TO_FP, MVT::i32, Expand);
+    setOperationAction(ISD::FP_TO_UINT, MVT::i32, Expand);
+    setOperationAction(ISD::FP_TO_SINT, MVT::i32, Expand);
+    setOperationAction(ISD::LOAD, MVT::f32, Promote);
+  }
+  if(Subtarget.hasD()){
+    setOperationAction(ISD::FMA, MVT::f64,  Legal);
+    setOperationAction(ISD::BITCAST, MVT::i64, Legal);
+    setOperationAction(ISD::BITCAST, MVT::f64, Legal);
+    setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
+    setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
+    setOperationAction(ISD::FP_TO_UINT, MVT::i64, Legal);
+    setOperationAction(ISD::FP_TO_SINT, MVT::i64, Legal);
+  }
+  else {
+    setOperationAction(ISD::FMA, MVT::f64,  Expand);
+    setOperationAction(ISD::SETCC, MVT::f64, Expand);
+    setOperationAction(ISD::BITCAST, MVT::i64, Expand);
+    setOperationAction(ISD::BITCAST, MVT::f64, Expand);
+    setOperationAction(ISD::UINT_TO_FP, MVT::i64, Expand);
+    setOperationAction(ISD::SINT_TO_FP, MVT::i64, Expand);
+    setOperationAction(ISD::FP_TO_UINT, MVT::i64, Expand);
+    setOperationAction(ISD::FP_TO_SINT, MVT::i64, Expand);
+    setOperationAction(ISD::LOAD, MVT::f64, Expand);
+  }
   setOperationAction(ISD::FMA, MVT::f128, Expand);
 
   // Needed so that we don't try to implement f128 constant loads using
@@ -276,8 +311,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
   // We have 64-bit FPR<->GPR moves, but need special handling for
   // 32-bit forms.
-  setOperationAction(ISD::BITCAST, MVT::i32, Custom);
-  setOperationAction(ISD::BITCAST, MVT::f32, Custom);
 
   // VASTART and VACOPY need to deal with the RISCV-specific varargs
   // structure, but VAEND is a no-op.
@@ -779,7 +812,9 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
             RC = &RISCV::FP32BitRegClass;
           else if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
-          else
+          else if(Subtarget.isRV64())
+            RC = &RISCV::GR64BitRegClass;
+          else 
             RC = &RISCV::GR32BitRegClass;
       } else if (RegVT == MVT::f64) {
           if(Subtarget.hasF())
@@ -1095,6 +1130,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (Glue.getNode())
     Ops.push_back(Glue);
 
+  //TODO:THIS MIGHT BE BROKEN WHY DO WE OVERWRITE CHAIN
   // Emit the call.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
   Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, &Ops[0], Ops.size());

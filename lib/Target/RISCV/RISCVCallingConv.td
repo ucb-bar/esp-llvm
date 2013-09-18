@@ -60,6 +60,7 @@ def CC_RISCV32 : CallingConv<[
 
 def RetCC_RISCV64 : CallingConv<[
 
+  CCIfType<[i8,i16,i32], CCPromoteToType<i64>>,
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
   // call-clobbered argument registers available for code that doesn't
   // care about the ABI.  (R6 is an argument register too, but is
