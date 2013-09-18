@@ -229,10 +229,10 @@ def LO12 : SDNodeXForm<imm, [{
 
 // Transformation Function - get the higher 20 bits for large immediate loading
 def HI20 : SDNodeXForm<imm, [{
-    uint64_t value = N->getZExtValue() & 0x00000800 ? 
+    uint32_t value = N->getZExtValue() & 0x00000800 ? 
                      (N->getZExtValue() >> 12)+1:
                      (N->getZExtValue() >> 12);
-    return getImm(N, value);
+    return getI32Imm(value % 20);
 }]>;
 
 //psuedo load low imm instruction to print operands better
@@ -271,7 +271,7 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
 
 include "RISCVInstrInfoRV64.td"
 include "RISCVInstrInfoM.td"
-//include "RISCVInstrInfoF.td"
+include "RISCVInstrInfoF.td"
 //include "RISCVInstrInfoA.td"
 //include "RISCVInstrInfoD.td"
 

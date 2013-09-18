@@ -206,7 +206,22 @@ def : Pat<(i64 imm64sx12:$imm), (ORI64 zero_64, imm64sx12:$imm)>;
 
 //psuedo load low imm instruction to print operands better
 def LLI64 : InstI<"ADDI", 0b0010011, 0b000       , add, GR64, imm64sxu12>;
-def : Pat<(i64 imm64:$imm), (LLI64 (LUI64 (HI20 imm64:$imm)), (LO12 imm64:$imm))>;
+def L32I : Pat<(i64 imm64sxu32:$imm), (LLI64 (LUI64 (HI20 imm64:$imm)), (LO12 imm64:$imm))>;
+
+///64 bit immediate loading
+// Transformation Function - get the lower 32 bits.
+def LO32 : SDNodeXForm<imm, [{
+    return getImm(N, N->getZExtValue() & 0xFFFFFFFF);
+}]>;
+
+// Transformation Function - get the higher 32 bits for large immediate loading
+def HI32 : SDNodeXForm<imm, [{
+    uint64_t value = N->getZExtValue() & 0x0000080000000 ? 
+                     (N->getZExtValue() >> 32)+1:
+                     (N->getZExtValue() >> 32);
+    return getImm(N, value);
+}]>;
+def : Pat<(i64 imm64:$imm), (ADD64 (SLL64  (HI32 imm64:$imm), (i64 32)), (LO32 imm64:$imm))>;
 
 
 

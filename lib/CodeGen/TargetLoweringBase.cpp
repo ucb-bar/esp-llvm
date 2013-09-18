@@ -1123,10 +1123,17 @@ void TargetLoweringBase::computeRegisterProperties() {
       TransformToType[MVT::f32] = MVT::f64;
       ValueTypeActions.setTypeAction(MVT::f32, TypePromoteInteger);
     } else {
-      NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::i32];
-      RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::i32];
-      TransformToType[MVT::f32] = MVT::i32;
-      ValueTypeActions.setTypeAction(MVT::f32, TypeSoftenFloat);
+      if(!isTypeLegal(MVT::i32) && isTypeLegal(MVT::i64)) {
+        NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::i64];
+        RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::i64];
+        TransformToType[MVT::f32] = MVT::i64;
+        ValueTypeActions.setTypeAction(MVT::f32, TypeSoftenFloat);
+      } else {
+        NumRegistersForVT[MVT::f32] = NumRegistersForVT[MVT::i32];
+        RegisterTypeForVT[MVT::f32] = RegisterTypeForVT[MVT::i32];
+        TransformToType[MVT::f32] = MVT::i32;
+        ValueTypeActions.setTypeAction(MVT::f32, TypeSoftenFloat);
+      }
     }
   }
 

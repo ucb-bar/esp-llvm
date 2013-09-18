@@ -141,6 +141,10 @@ def imm64sxu20 : Immediate<i64, [{
 def imm64zx20 : Immediate<i64, [{
   return isUInt<20>(N->getZExtValue());
 }], NOOP_SDNodeXForm, "U20Imm">;
+//sign-extended 32bit immediate for LUI/ADDI max load size
+def imm64sxu32 : Immediate<i64, [{
+  return isUInt<32>(N->getSExtValue());
+}], NOOP_SDNodeXForm, "U32Imm">;
 
 def simm64 : Immediate<i64, [{}], SIMM64, "S64Imm">;
 def uimm64 : Immediate<i64, [{}], UIMM64, "U64Imm">;

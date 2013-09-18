@@ -66,6 +66,11 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   inline SDValue getImm(const SDNode *Node, uint64_t Imm) {
     return CurDAG->getTargetConstant(Imm, Node->getValueType(0));
   }
+  /// getI32Imm - Return a target constant with the specified value, of type
+  /// i32.
+  SDValue getI32Imm(unsigned Imm) {
+    return CurDAG->getTargetConstant(Imm, MVT::i32);
+  }
 
   // Try to fold more of the base or index of AM into AM, where IsBase
   // selects between the base and index.

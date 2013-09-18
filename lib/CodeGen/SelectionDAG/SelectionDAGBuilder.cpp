@@ -377,6 +377,10 @@ static void getCopyToParts(SelectionDAG &DAG, SDLoc DL,
     if (PartVT.isFloatingPoint() && ValueVT.isFloatingPoint()) {
       assert(NumParts == 1 && "Do not know what to promote to!");
       Val = DAG.getNode(ISD::FP_EXTEND, DL, PartVT, Val);
+    } else if(PartVT.isInteger() && ValueVT.isFloatingPoint()) {
+        //convert small floating points to larger integet (f32->i64)
+        Val = DAG.getNode(ISD::FP_EXTEND, DL, EVT(MVT::f64), Val);
+        Val = DAG.getNode(ISD::BITCAST, DL, PartVT, Val);
     } else {
       assert((PartVT.isInteger() || PartVT == MVT::x86mmx) &&
              ValueVT.isInteger() &&

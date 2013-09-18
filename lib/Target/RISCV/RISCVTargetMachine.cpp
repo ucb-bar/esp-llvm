@@ -39,7 +39,7 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
     //n32 -- native integer width is 32bits
     DL(Subtarget.isRV64() ? 
        "E-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64-"
-       "f32:32-f64:64-f128:128-n32:64" :
+       "f64:64-f128:128-n32:64" :
        "E-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
        "f32:32-f64:64-f128:128-n32"),
     InstrInfo(*this), TLInfo(*this), TSInfo(*this),
