@@ -58,5 +58,5 @@ void RISCVConstantPoolValue::addSelectionDAGCSEId(FoldingSetNodeID &ID) {
 }
 
 void RISCVConstantPoolValue::print(raw_ostream &O) const {
-  O << GV << "@" << int(Modifier);
+  O << GV ;//<< "@" << int(Modifier);
 }

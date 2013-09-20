@@ -182,9 +182,13 @@ let mayLoad = 1 in {
 }
 //extended loads
 def : Pat<(i64 (extloadi1  addr:$addr)), (LBU64 addr:$addr)>;
+def : Pat<(extloadi1  addr:$addr), (LBU64 addr:$addr)>;
 def : Pat<(i64 (extloadi8  addr:$addr)), (LBU64 addr:$addr)>;
+def : Pat<(extloadi8  addr:$addr), (LBU64 addr:$addr)>;
 def : Pat<(i64 (extloadi16 addr:$addr)), (LHU64 addr:$addr)>;
+def : Pat<(extloadi16 addr:$addr), (LHU64 addr:$addr)>;
 def : Pat<(i64 (extloadi32 addr:$addr)), (LWU   addr:$addr)>;
+def : Pat<(extloadi32 addr:$addr), (LWU   addr:$addr)>;
 
 let mayStore = 1 in {
   def SW64 : InstStore<"SW" , 0b0100011, 0b010, truncstorei32, GR64, mem64>, Requires<[IsRV64]>;
@@ -222,6 +226,8 @@ def HI32 : SDNodeXForm<imm, [{
     return getImm(N, value);
 }]>;
 def : Pat<(i64 imm64:$imm), (ADD64 (SLL64  (HI32 imm64:$imm), (i64 32)), (LO32 imm64:$imm))>;
+//global addr loading
+def : Pat<(i64 (z_pcrel_wrapper tglobaladdr:$g)),(ADD64 (SLL64  (HI32 tglobaladdr:$g), (i64 32)), (LO32 tglobaladdr:$g))>;
 
 
 

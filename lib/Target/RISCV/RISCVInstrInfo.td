@@ -238,6 +238,8 @@ def HI20 : SDNodeXForm<imm, [{
 //psuedo load low imm instruction to print operands better
 def LLI : InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
 def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
+//global addr loading
+def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>;
 
 //===----------------------------------------------------------------------===//
 // Stack allocation

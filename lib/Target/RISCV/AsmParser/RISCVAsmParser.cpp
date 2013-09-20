@@ -448,11 +448,6 @@ void RISCVOperand::print(raw_ostream &OS) const {
 bool RISCVAsmParser::parseRegister(Register &Reg) {
   Reg.StartLoc = Parser.getTok().getLoc();
 
-  // Eat the % prefix.
-  if (Parser.getTok().isNot(AsmToken::Percent))
-    return true;
-  Parser.Lex();
-
   // Expect a register name.
   if (Parser.getTok().isNot(AsmToken::Identifier))
     return true;
