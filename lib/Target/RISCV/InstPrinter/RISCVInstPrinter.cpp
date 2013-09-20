@@ -24,15 +24,15 @@ void RISCVInstPrinter::printAddress(unsigned Base, int64_t Disp,
   if (Base) {
     O << '(';
     if (Index)
-      O << '%' << getRegisterName(Index) << ',';
-    O << '%' << getRegisterName(Base) << ')';
+      O << getRegisterName(Index) << ',';
+    O << getRegisterName(Base) << ')';
   } else
     assert(!Index && "Shouldn't have an index without a base");
 }
 
 void RISCVInstPrinter::printOperand(const MCOperand &MO, raw_ostream &O) {
   if (MO.isReg())
-    O << '%' << getRegisterName(MO.getReg());
+    O << getRegisterName(MO.getReg());
   else if (MO.isImm())
     O << MO.getImm();
   else if (MO.isExpr())
@@ -48,14 +48,14 @@ void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
 }
 
 void RISCVInstPrinter::printRegName(raw_ostream &O, unsigned RegNo) const {
-  O << '%' << getRegisterName(RegNo);
+  O << getRegisterName(RegNo);
 }
 
 void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
-     OS << '%' << getRegisterName(MI->getOperand(opNum).getReg());
-     OS << "(";
      printOperand(MI, opNum+1, OS);
+     OS << "(";
+     OS << getRegisterName(MI->getOperand(opNum).getReg());
      OS << ")";
 }
 
@@ -125,7 +125,7 @@ void RISCVInstPrinter::printAccessRegOperand(const MCInst *MI, int OpNum,
 void RISCVInstPrinter::printCallOperand(const MCInst *MI, int OpNum,
                                           raw_ostream &O) {
   printOperand(MI, OpNum, O);
-  O << "@PLT";
+  //O << "@PLT";
 }
 
 void RISCVInstPrinter::printOperand(const MCInst *MI, int OpNum,
