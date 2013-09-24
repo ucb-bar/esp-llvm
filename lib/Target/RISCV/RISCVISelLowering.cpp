@@ -275,7 +275,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::SINT_TO_FP, MVT::i32, Expand);
     setOperationAction(ISD::FP_TO_UINT, MVT::i32, Expand);
     setOperationAction(ISD::FP_TO_SINT, MVT::i32, Expand);
-    setOperationAction(ISD::LOAD, MVT::f32, Promote);
   }
   if(Subtarget.hasD()){
     setOperationAction(ISD::FMA, MVT::f64,  Legal);
@@ -295,7 +294,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::SINT_TO_FP, MVT::i64, Expand);
     setOperationAction(ISD::FP_TO_UINT, MVT::i64, Expand);
     setOperationAction(ISD::FP_TO_SINT, MVT::i64, Expand);
-    setOperationAction(ISD::LOAD, MVT::f64, Expand);
   }
   setOperationAction(ISD::FMA, MVT::f128, Expand);
 
@@ -1987,6 +1985,7 @@ MachineBasicBlock *RISCVTargetLowering::
 EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   switch (MI->getOpcode()) {
   case RISCV::SELECT_CC:
+  case RISCV::SELECT_CC64:
       return emitSelectCC(MI, MBB);
 /*TODO: no custom inserters (selects, atmoics)
   case RISCV::SelectF32:

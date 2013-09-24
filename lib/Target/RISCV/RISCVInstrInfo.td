@@ -28,36 +28,36 @@
 *RISCV Instructions
 ********************/
 //Integer arithmetic register-register
-def ADD : InstR<"ADD" , 0b0110011, 0b0000000000, add   , GR32, GR32>;
-def SUB : InstR<"SUB" , 0b0110011, 0b1000000000, sub   , GR32, GR32>;
-def SLL : InstR<"SLL" , 0b0110011, 0b1000000001, shl   , GR32, GR32>;
-def SLT : InstR<"SLT" , 0b0110011, 0b0000000010, setlt , GR32, GR32>;
-def SLTU: InstR<"SLTU", 0b0110011, 0b0000000011, setult, GR32, GR32>;
-def XOR : InstR<"XOR" , 0b0110011, 0b0000000100, xor   , GR32, GR32>;
-def SRL : InstR<"SRL" , 0b0110011, 0b0000000101, srl   , GR32, GR32>;
-def SRA : InstR<"SRA" , 0b0110011, 0b1000000101, sra   , GR32, GR32>;
-def OR  : InstR<"OR"  , 0b0110011, 0b0000000110, or    , GR32, GR32>;
-def AND : InstR<"AND" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
+def ADD : InstR<"add" , 0b0110011, 0b0000000000, add   , GR32, GR32>;
+def SUB : InstR<"sub" , 0b0110011, 0b1000000000, sub   , GR32, GR32>;
+def SLL : InstR<"sll" , 0b0110011, 0b1000000001, shl   , GR32, GR32>;
+def SLT : InstR<"slt" , 0b0110011, 0b0000000010, setlt , GR32, GR32>;
+def SLTU: InstR<"sltu", 0b0110011, 0b0000000011, setult, GR32, GR32>;
+def XOR : InstR<"xor" , 0b0110011, 0b0000000100, xor   , GR32, GR32>;
+def SRL : InstR<"srl" , 0b0110011, 0b0000000101, srl   , GR32, GR32>;
+def SRA : InstR<"sra" , 0b0110011, 0b1000000101, sra   , GR32, GR32>;
+def OR  : InstR<"or"  , 0b0110011, 0b0000000110, or    , GR32, GR32>;
+def AND : InstR<"and" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
 //Integer arithmetic register-immediate
-def ADDI: InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sx12>;
-def XORI: InstI<"XORI", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
-def ORI : InstI<"ORI" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
-def ANDI: InstI<"ANDI", 0b0010011, 0b111       , and, GR32, imm32sx12>;
+def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, imm32sx12>;
+def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
+def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
+def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, imm32sx12>;
 //TODO: enforce constraints here or up on level?
-def SLLI: InstI<"SLLI", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
+def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
   let IMM{11-6} = 0b000000; 
   //trap if $imm{5}!=0 TODO:how to do this?
 }
-def SRLI: InstI<"SRLI", 0b0010011, 0b101       , srl, GR32, imm32sx12> {
+def SRLI: InstI<"srli", 0b0010011, 0b101       , srl, GR32, imm32sx12> {
   let IMM{11-6} = 0b000000; 
   //trap if $src{5}!=0 TODO:how to do this?
 }
-def SRAI: InstI<"SRAI", 0b0010011, 0b101       , sra, GR32, imm32sx12> {
+def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, imm32sx12> {
   let IMM{11-6} = 0b000001; 
   //trap if $src{5}!=0 TODO:how to do this?
 }
-def SLTI : InstI<"SLTI", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
-def SLTIU: InstI<"SLTIU",0b0010011, 0b011, setult,GR32, imm32sx12>;
+def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
+def SLTIU: InstI<"sltiu",0b0010011, 0b011, setult,GR32, imm32sx12>;
 
 //Synthesized set operators
 //patterns to be used for 32 and 64bit
@@ -97,19 +97,19 @@ defm : SetgePats<GR32, SLT, SLTU, XORI>;
 
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
-  def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "J\t$target", 
+  def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "j\t$target", 
           [(br bb:$target)]>;
 }
 let isCall = 1 in {
   let Defs = [ra, v0, v1] in { //after call return addr and values are defined
-    def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "JAL\t$target", 
+    def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
           [(z_call pcrel32call:$target)]>;
   }
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
-    def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "JALR\t$target", 
+    def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "jalr\t$target", 
           //[(set GR32:$ra, (z_call addr:$target))]>{
           []>{
             field bits<32> Inst;
@@ -133,45 +133,45 @@ let isCall = 1 in {
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def BEQ : InstB<0b1100011, 0b000, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BEQ\t$src1, $src2, $target", 
+            "beq\t$src1, $src2, $target", 
             [(brcond (i32 (seteq GR32:$src1,  GR32:$src2)), bb:$target)]>;
   def BNE : InstB<0b1100011, 0b001, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BNE\t$src1, $src2, $target", 
+            "bne\t$src1, $src2, $target", 
             [(brcond (i32 (setne GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLT : InstB<0b1100011, 0b100, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BLT\t$src1, $src2, $target", 
+            "blt\t$src1, $src2, $target", 
             [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGE : InstB<0b1100011, 0b101, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BGE\t$src1, $src2, $target", 
+            "bge\t$src1, $src2, $target", 
             [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLTU: InstB<0b1100011, 0b110, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BLTU\t$src1, $src2, $target", 
+            "bltu\t$src1, $src2, $target", 
             [(brcond (i32 (setult GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGEU: InstB<0b1100011, 0b111, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BGEU\t$src1, $src2, $target", 
+            "bgeu\t$src1, $src2, $target", 
             [(brcond (i32 (setuge GR32:$src1, GR32:$src2)), bb:$target)]>;
 
 //Synthesize remaining condition codes by reverseing operands
   def BGT : InstB<0b1100011, 0b100, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BLT\t$src2, $src1, $target", 
+            "blt\t$src2, $src1, $target", 
             [(brcond (i32 (setgt GR32:$src2, GR32:$src1)), bb:$target)]>;
   def BGTU: InstB<0b1100011, 0b110, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BLTU\t$src2, $src1, $target", 
+            "bltu\t$src2, $src1, $target", 
             [(brcond (i32 (setugt GR32:$src2, GR32:$src1)), bb:$target)]>;
   def BLE : InstB<0b1100011, 0b101, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BGE\t$src2, $src1, $target", 
+            "bge\t$src2, $src1, $target", 
             [(brcond (i32 (setle GR32:$src2, GR32:$src1)), bb:$target)]>;
   def BLEU: InstB<0b1100011, 0b111, (outs), 
             (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "BGEU\t$src2, $src1, $target", 
+            "bgeu\t$src2, $src1, $target", 
             [(brcond (i32 (setule GR32:$src2, GR32:$src1)), bb:$target)]>;
 }
 //constant branches (e.g. br 1 $label or br 0 $label)
@@ -194,11 +194,11 @@ def : Pat<(select (i32 (seteq GR32:$lhs, 0)), GR32:$T, GR32:$F),
 
 //Load/Store Instructions
 let mayLoad = 1 in {
-  def LW : InstLoad <"LW" , 0b0000011, 0b010, load, GR32, mem>; 
-  def LH : InstLoad <"LH" , 0b0000011, 0b001, sextloadi16, GR32, mem>; 
-  def LHU: InstLoad <"LHU", 0b0000011, 0b101, zextloadi16, GR32, mem>; 
-  def LB : InstLoad <"LB" , 0b0000011, 0b000, sextloadi8, GR32, mem>; 
-  def LBU: InstLoad <"LBU", 0b0000011, 0b100, zextloadi8, GR32, mem>; 
+  def LW : InstLoad <"lw" , 0b0000011, 0b010, load, GR32, mem>; 
+  def LH : InstLoad <"lh" , 0b0000011, 0b001, sextloadi16, GR32, mem>; 
+  def LHU: InstLoad <"lhu", 0b0000011, 0b101, zextloadi16, GR32, mem>; 
+  def LB : InstLoad <"lb" , 0b0000011, 0b000, sextloadi8, GR32, mem>; 
+  def LBU: InstLoad <"lbu", 0b0000011, 0b100, zextloadi8, GR32, mem>; 
 }
 //extended loads
 def : Pat<(i32 (extloadi1  addr:$addr)), (LBU addr:$addr)>;
@@ -206,18 +206,18 @@ def : Pat<(i32 (extloadi8  addr:$addr)), (LBU addr:$addr)>;
 def : Pat<(i32 (extloadi16 addr:$addr)), (LHU addr:$addr)>;
 
 let mayStore = 1 in {
-  def SW : InstStore<"SW" , 0b0100011, 0b010, store        , GR32, mem>;
-  def SH : InstStore<"SH" , 0b0100011, 0b001, truncstorei16, GR32, mem>; 
-  def SB : InstStore<"SB" , 0b0100011, 0b000, truncstorei8 , GR32, mem>; 
+  def SW : InstStore<"sw" , 0b0100011, 0b010, store        , GR32, mem>;
+  def SH : InstStore<"sh" , 0b0100011, 0b001, truncstorei16, GR32, mem>; 
+  def SB : InstStore<"sb" , 0b0100011, 0b000, truncstorei8 , GR32, mem>; 
 }
 
 //Upper Immediate
 def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sxu20:$imm),
-               "LUI\t$dst, $imm",
+               "lui\t$dst, $imm",
                [(set GR32:$dst, (shl imm32sx20:$imm, (i32 12)))]>;
 
 def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
-               "AUIPC\t$dst, $target",
+               "auipc\t$dst, $target",
                [(set GR32:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
 
 //simple immediate loading
@@ -236,7 +236,7 @@ def HI20 : SDNodeXForm<imm, [{
 }]>;
 
 //psuedo load low imm instruction to print operands better
-def LLI : InstI<"ADDI", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
+def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
 def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
 //global addr loading
 def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>;
@@ -253,7 +253,7 @@ def ADJCALLSTACKUP   : Pseudo<(outs), (ins i64imm:$amt1, i64imm:$amt2),
 //hardcoded JALR to be return
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
     isCodeGenOnly = 1, Defs = [v0, v1] in {
-  def RET : InstRISCV<4, (outs), (ins), "RET", 
+  def RET : InstRISCV<4, (outs), (ins), "ret", 
           []>{
             field bits<32> Inst;
             
