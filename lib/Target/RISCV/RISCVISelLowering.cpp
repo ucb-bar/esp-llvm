@@ -1955,8 +1955,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   unsigned bne = Subtarget.isRV64() ? RISCV::BNE64 : RISCV::BNE;
   unsigned zero = Subtarget.isRV64() ? RISCV::zero_64 : RISCV::zero;
-  BuildMI(BB, DL, TII->get(bne)).addReg(zero).addReg(MI->getOperand(3).getReg())
-    .addMBB(sinkMBB);
+  BuildMI(BB, DL, TII->get(bne)).addMBB(sinkMBB).addReg(zero).addReg(MI->getOperand(3).getReg());
 
   //  copy0MBB:
   //   %FalseValue = ...

@@ -209,28 +209,28 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
   unsigned CC = Cond[0].getImm();
   switch(CC) {
     case RISCV::CCMASK_CMP_EQ:
-      BuildMI(&MBB, DL, get(RISCV::BEQ)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BEQ)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     case RISCV::CCMASK_CMP_NE:
-      BuildMI(&MBB, DL, get(RISCV::BNE)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BNE)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     case RISCV::CCMASK_CMP_LT:
-      BuildMI(&MBB, DL, get(RISCV::BLT)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BLT)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     case (RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO):
-      BuildMI(&MBB, DL, get(RISCV::BLTU)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BLTU)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     case RISCV::CCMASK_CMP_GE:
-      BuildMI(&MBB, DL, get(RISCV::BGE)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BGE)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
-      BuildMI(&MBB, DL, get(RISCV::BGEU)).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg()).addMBB(TBB);
+      BuildMI(&MBB, DL, get(RISCV::BGEU)).addMBB(TBB).addReg(Cond[1].getReg())
+          .addReg(Cond[2].getReg());
       break;
     default:
       llvm_unreachable("Invalid branch condition code!");
