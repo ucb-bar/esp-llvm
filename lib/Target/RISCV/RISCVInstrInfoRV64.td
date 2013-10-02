@@ -225,11 +225,36 @@ def HI32 : SDNodeXForm<imm, [{
                      (N->getZExtValue() >> 32);
     return getImm(N, value);
 }]>;
-def : Pat<(i64 imm64:$imm), (ADD64 (LO32 imm64:$imm), (SLL64 (i64 32), (HI32 imm64:$imm)))>;
+def : Pat<(i64 imm64:$imm), (ADD64 
+                        (LLI64 (LUI64 (HI20 (i64 (LO32 $imm)))), (LO12 (i64 (LO32 $imm)))), 
+                        (SLL64 (i64 32), 
+                        (LLI64 (LUI64 (HI20 (i64 (HI32 $imm)))), (LO12 (i64 (HI32 $imm))))))>;
 //global addr loading
-def : Pat<(i64 (z_pcrel_wrapper tglobaladdr:$g)),(ADD64 (LO32 tglobaladdr:$g), (SLL64 (i64 32), (HI32 tglobaladdr:$g)))>;
+def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
+def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;
+def : Pat<(RISCVHi tjumptable:$in), (LUI64 tjumptable:$in)>;
+def : Pat<(RISCVHi tconstpool:$in), (LUI64 tconstpool:$in)>;
+def : Pat<(RISCVHi tglobaltlsaddr:$in), (LUI64 tglobaltlsaddr:$in)>;
+def : Pat<(RISCVHi texternalsym:$in), (LUI64 texternalsym:$in)>;
 
+def : Pat<(RISCVLo tglobaladdr:$in), (ADDI64 zero_64, tglobaladdr:$in)>;
+def : Pat<(RISCVLo tblockaddress:$in), (ADDI64 zero_64, tblockaddress:$in)>;
+def : Pat<(RISCVLo tjumptable:$in), (ADDI64 zero_64, tjumptable:$in)>;
+def : Pat<(RISCVLo tconstpool:$in), (ADDI64 zero_64, tconstpool:$in)>;
+def : Pat<(RISCVLo tglobaltlsaddr:$in),
+          (ADDI64 zero_64, tglobaltlsaddr:$in)>;
+def : Pat<(RISCVLo texternalsym:$in), (ADDI64 zero_64, texternalsym:$in)>;
 
+def : Pat<(add GR64:$hi, (RISCVLo tglobaladdr:$lo)),
+          (ADDI64 GR64:$hi, tglobaladdr:$lo)>;
+def : Pat<(add GR64:$hi, (RISCVLo tblockaddress:$lo)),
+          (ADDI64 GR64:$hi, tblockaddress:$lo)>;
+def : Pat<(add GR64:$hi, (RISCVLo tjumptable:$lo)),
+          (ADDI64 GR64:$hi, tjumptable:$lo)>;
+def : Pat<(add GR64:$hi, (RISCVLo tconstpool:$lo)),
+          (ADDI64 GR64:$hi, tconstpool:$lo)>;
+def : Pat<(add GR64:$hi, (RISCVLo tglobaltlsaddr:$lo)),
+          (ADDI64 GR64:$hi, tglobaltlsaddr:$lo)>;
 
 
 //===----------------------------------------------------------------------===//

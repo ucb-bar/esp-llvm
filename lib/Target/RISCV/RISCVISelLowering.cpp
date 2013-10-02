@@ -1413,8 +1413,40 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   return DAG.getCopyFromReg(DAG.getEntryNode(), Op.getDebugLoc(), Reg, VT);
 }
 
-SDValue RISCVTargetLowering::lowerGlobalAddress(GlobalAddressSDNode *Node,
+static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
+  EVT Ty = Op.getValueType();
+
+  if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
+    return DAG.getTargetGlobalAddress(N->getGlobal(), Op.getDebugLoc(), Ty, 0,
+                                      Flag);
+  if (ExternalSymbolSDNode *N = dyn_cast<ExternalSymbolSDNode>(Op))
+    return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flag);
+  if (BlockAddressSDNode *N = dyn_cast<BlockAddressSDNode>(Op))
+    return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, 0, Flag);
+  if (JumpTableSDNode *N = dyn_cast<JumpTableSDNode>(Op))
+    return DAG.getTargetJumpTable(N->getIndex(), Ty, Flag);
+  if (ConstantPoolSDNode *N = dyn_cast<ConstantPoolSDNode>(Op))
+    return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlignment(),
+                                     N->getOffset(), Flag);
+
+  llvm_unreachable("Unexpected node type.");
+  return SDValue();
+}
+
+
+static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
+  DebugLoc DL = Op.getDebugLoc();
+  EVT Ty = Op.getValueType();
+  SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
+  SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
+  SDValue ResHi = DAG.getNode(RISCVISD::Hi, DL, Ty, Hi);
+  SDValue ResLo = DAG.getNode(RISCVISD::Lo, DL, Ty, Lo);
+  return DAG.getNode(ISD::ADD, DL, Ty, ResHi, ResLo);
+}
+
+SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
+  GlobalAddressSDNode *Node = cast<GlobalAddressSDNode>(Op);
   DebugLoc DL = Node->getDebugLoc();
   const GlobalValue *GV = Node->getGlobal();
   int64_t Offset = Node->getOffset();
@@ -1422,6 +1454,12 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(GlobalAddressSDNode *Node,
   Reloc::Model RM = TM.getRelocationModel();
   CodeModel::Model CM = TM.getCodeModel();
 
+  if(RM != Reloc::PIC_) {
+      //%hi/%lo relocation
+      return getAddrNonPIC(Op,DAG);
+  }
+  llvm_unreachable("Can not handle PIC global addresses yet");
+  /*TODO: remove old cruft
   SDValue Result;
   if (Subtarget.isPC32DBLSymbol(GV, RM, CM)) {
     // Make sure that the offset is aligned to a halfword.  If it isn't,
@@ -1450,6 +1488,7 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(GlobalAddressSDNode *Node,
                          DAG.getConstant(Offset, PtrVT));
 
   return Result;
+                         */
 }
 
 SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
@@ -1803,7 +1842,7 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   case ISD::SELECT_CC:
     return lowerSELECT_CC(Op, DAG);
   case ISD::GlobalAddress:
-    return lowerGlobalAddress(cast<GlobalAddressSDNode>(Op), DAG);
+    return lowerGlobalAddress(Op, DAG);
   case ISD::GlobalTLSAddress:
     return lowerGlobalTLSAddress(cast<GlobalAddressSDNode>(Op), DAG);
   case ISD::BlockAddress:
@@ -1867,6 +1906,8 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(RET_FLAG);
     OPCODE(CALL);
     OPCODE(PCREL_WRAPPER);
+    OPCODE(Hi);
+    OPCODE(Lo);
     OPCODE(CMP);
     OPCODE(UCMP);
     OPCODE(SELECT_CC);

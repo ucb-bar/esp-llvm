@@ -10,8 +10,11 @@
 #define DEBUG_TYPE "asm-printer"
 
 #include "RISCVInstPrinter.h"
+#include "RISCVInstrInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCSymbol.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -30,13 +33,47 @@ void RISCVInstPrinter::printAddress(unsigned Base, int64_t Disp,
     assert(!Index && "Shouldn't have an index without a base");
 }
 
-void RISCVInstPrinter::printOperand(const MCOperand &MO, raw_ostream &O) {
-  if (MO.isReg())
-    O << getRegisterName(MO.getReg());
-  else if (MO.isImm())
-    O << MO.getImm();
-  else if (MO.isExpr())
-    O << *MO.getExpr();
+static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
+  int Offset = 0;
+  const MCSymbolRefExpr *SRE;
+  
+  if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(Expr)) {
+    SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
+    const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(BE->getRHS());
+    assert(SRE && CE && "Binary expression must be sym+const.");
+    Offset = CE->getValue();
+  }
+  else if (!(SRE = dyn_cast<MCSymbolRefExpr>(Expr)))
+    assert(false && "Unexpected MCExpr type.");
+ 
+  MCSymbolRefExpr::VariantKind Kind = SRE->getKind();
+    
+  switch (Kind) {
+  default:                                 llvm_unreachable("Invalid kind!");
+  case MCSymbolRefExpr::VK_None:           break;
+  case MCSymbolRefExpr::VK_Mips_ABS_HI:    OS << "%hi(";     break;
+  case MCSymbolRefExpr::VK_Mips_ABS_LO:    OS << "%lo(";     break;
+  }
+
+  OS << SRE->getSymbol();
+      
+  if (Offset) {
+    if (Offset > 0)
+      OS << '+';
+    OS << Offset; 
+  }                   
+                          
+  if (Kind != MCSymbolRefExpr::VK_None)
+    OS << ')';
+}
+
+void RISCVInstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
+  if (MC.isReg())
+    O << getRegisterName(MC.getReg());
+  else if (MC.isImm())
+    O << MC.getImm();
+  else if (MC.isExpr())
+    printExpr(MC.getExpr(), O);
   else
     llvm_unreachable("Invalid operand");
 }
@@ -61,58 +98,82 @@ void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum,
 
 void RISCVInstPrinter::printS12ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<12>(Value) && "Invalid s12imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isInt<12>(Value) && "Invalid s12imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printU12ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<12>(Value) && "Invalid u12imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isUInt<12>(Value) && "Invalid u12imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printS20ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<20>(Value) && "Invalid s20imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isInt<20>(Value) && "Invalid s20imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printU20ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<20>(Value) && "Invalid u20imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isUInt<20>(Value) && "Invalid u20imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printS32ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<32>(Value) && "Invalid s32imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isInt<32>(Value) && "Invalid s32imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printU32ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<32>(Value) && "Invalid u32imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isUInt<32>(Value) && "Invalid u32imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printS64ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isInt<64>(Value) && "Invalid s64imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isInt<64>(Value) && "Invalid s64imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printU64ImmOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
-  int64_t Value = MI->getOperand(OpNum).getImm();
-  assert(isUInt<64>(Value) && "Invalid u64imm argument");
-  O << Value;
+  if(MI->getOperand(OpNum).isImm()){
+    int64_t Value = MI->getOperand(OpNum).getImm();
+    assert(isUInt<64>(Value) && "Invalid u64imm argument");
+    O << Value;
+  }else
+    printOperand(MI, OpNum, O);
 }
 
 void RISCVInstPrinter::printAccessRegOperand(const MCInst *MI, int OpNum,
