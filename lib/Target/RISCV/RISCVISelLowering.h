@@ -40,6 +40,14 @@ namespace RISCVISD {
     // accesses (LARL).  Operand 0 is the address.
     PCREL_WRAPPER,
 
+    // Get the Higher 20 bits from a 32-bit immediate
+    // No relation with Mips Hi register
+    Hi,
+
+    // Get the Lower 12 bits from a 32-bit immediate
+    // No relation with Mips Lo register
+    Lo,
+
     // Signed integer and floating-point comparisons.  The operands are the
     // two values to compare.
     CMP,
@@ -271,7 +279,7 @@ private:
   //SDValue lowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerGlobalAddress(GlobalAddressSDNode *Node,
+  SDValue lowerGlobalAddress(SDValue Op,
                              SelectionDAG &DAG) const;
   SDValue lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
                                 SelectionDAG &DAG) const;

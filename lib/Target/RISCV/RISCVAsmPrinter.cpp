@@ -56,6 +56,34 @@ EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
   OutStreamer.EmitValue(Expr, Size);
 }
 
+void RISCVAsmPrinter::printOperand(const MachineInstr *MI, int OpNo, raw_ostream &O) {
+  const MachineOperand &MO = MI->getOperand(OpNo); 
+  //look at target flags to see if we should wrap this operand
+  switch(MO.getTargetFlags()){
+    case RISCVII::MO_ABS_HI: O << "%hi("; break;
+    case RISCVII::MO_ABS_LO: O << "%lo("; break;
+  }
+ switch (MO.getType()) {
+    case MachineOperand::MO_Register:
+    case MachineOperand::MO_Immediate: {
+      RISCVMCInstLower Lower(Mang, MF->getContext(), *this);
+      MCOperand MC(Lower.lowerOperand(MI->getOperand(OpNo)));
+      RISCVInstPrinter::printOperand(MC, O);
+      break;
+      }
+    case MachineOperand::MO_GlobalAddress:
+      O << Mang->getSymbol(MO.getGlobal());
+      break;
+    default:
+      llvm_unreachable("<unknown operand type>");
+  }
+
+  if(MO.getTargetFlags()) {
+    O << ")";
+  }
+}
+
+
 bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI,
                                         unsigned OpNo,
                                         unsigned AsmVariant,
@@ -66,9 +94,7 @@ bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI,
       return true;
     OS << -int64_t(MI->getOperand(OpNo).getImm());
   } else {
-    RISCVMCInstLower Lower(Mang, MF->getContext(), *this);
-    MCOperand MO(Lower.lowerOperand(MI->getOperand(OpNo)));
-    RISCVInstPrinter::printOperand(MO, OS);
+    printOperand(MI, OpNo, OS);
   }
   return false;
 }

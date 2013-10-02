@@ -37,7 +37,10 @@ namespace RISCVII {
     MO_SYMBOL_MODIFIER = (1 << 0),
 
     // @GOT (aka @GOTENT)
-    MO_GOT = (1 << 0)
+    MO_GOT = (1 << 0),
+
+    MO_ABS_HI,
+    MO_ABS_LO
   };
 }
 

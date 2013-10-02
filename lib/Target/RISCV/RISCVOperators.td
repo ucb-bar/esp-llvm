@@ -102,6 +102,10 @@ def z_atomic_loadw_umin : AtomicWOp<"ATOMIC_LOADW_UMIN">;
 def z_atomic_loadw_umax : AtomicWOp<"ATOMIC_LOADW_UMAX">;
 def z_atomic_cmp_swapw  : AtomicWOp<"ATOMIC_CMP_SWAPW", SDT_ZAtomicCmpSwapW>;
 
+//global addr
+def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;
+def RISCVLo    : SDNode<"RISCVISD::Lo", SDTIntUnaryOp>;
+
 //===----------------------------------------------------------------------===//
 // Pattern fragments
 //===----------------------------------------------------------------------===//

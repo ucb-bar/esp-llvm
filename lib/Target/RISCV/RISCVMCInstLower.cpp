@@ -48,6 +48,10 @@ MCOperand RISCVMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
                                                  const MCSymbol *Symbol,
                                                  int64_t Offset) const {
   MCSymbolRefExpr::VariantKind Kind = getVariantKind(MO.getTargetFlags());
+  switch(MO.getTargetFlags()) {
+    case RISCVII::MO_ABS_HI:    Kind = MCSymbolRefExpr::VK_Mips_ABS_HI; break;
+    case RISCVII::MO_ABS_LO:    Kind = MCSymbolRefExpr::VK_Mips_ABS_LO; break;
+  }
   const MCExpr *Expr = MCSymbolRefExpr::Create(Symbol, Kind, Ctx);
   if (Offset) {
     const MCExpr *OffsetExpr = MCConstantExpr::Create(Offset, Ctx);

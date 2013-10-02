@@ -38,6 +38,7 @@ public:
   virtual void EmitInstruction(const MachineInstr *MI) LLVM_OVERRIDE;
   virtual void EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV)
     LLVM_OVERRIDE;
+  void printOperand(const MachineInstr *MI, int opNum, raw_ostream &O);
   virtual bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                                unsigned AsmVariant, const char *ExtraCode,
                                raw_ostream &OS) LLVM_OVERRIDE;
