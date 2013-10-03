@@ -162,6 +162,42 @@ def fpimm0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+0.0); }]>;
 def fpimmneg0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(-0.0); }]>;
 
 //===----------------------------------------------------------------------===//
+// Memory address operands
+//===----------------------------------------------------------------------===//
+
+def mem : Operand<i32> {
+  let MIOperandInfo = (ops GR32, imm32sx12);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printMemOperand";
+}
+
+def mem64 : Operand<i64> {
+  let MIOperandInfo = (ops GR64, imm64sx12);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printMemOperand";
+}
+
+def memreg32 : Operand<i32> {
+  let MIOperandInfo = (ops GR32);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printMemRegOperand";
+}
+
+def memreg64 : Operand<i64> {
+  let MIOperandInfo = (ops GR64);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printMemRegOperand";
+}
+
+
+def regaddr : ComplexPattern<iPTR, 1, "selectRegAddr">;
+def addr    : ComplexPattern<iPTR, 2, "selectMemRegAddr">;
+
+//===----------------------------------------------------------------------===//
 // Symbolic address operands
 //===----------------------------------------------------------------------===//
 
@@ -224,24 +260,3 @@ def disp12imm64 : Operand<i64>;
 // 20-bit displacement operands.
 def disp20imm32 : Operand<i32>;
 def disp20imm64 : Operand<i64>;
-
-//===----------------------------------------------------------------------===//
-// Miscellaneous
-//===----------------------------------------------------------------------===//
-
-// Access registers.  At present we just use them for accessing the thread
-// pointer, so we don't expose them as register to LLVM.
-def AccessReg : AsmOperandClass {
-  let Name = "AccessReg";
-  let ParserMethod = "parseAccessReg";
-}
-def access_reg : Immediate<i8, [{ return N->getZExtValue() < 16; }],
-                           NOOP_SDNodeXForm, "AccessReg"> {
-  let ParserMatchClass = AccessReg;
-}
-
-// A 4-bit condition-code mask.
-def cond4 : PatLeaf<(i8 imm), [{ return (N->getZExtValue() < 16); }]>,
-            Operand<i8> {
-  let PrintMethod = "printCond4Operand";
-}

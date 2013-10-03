@@ -96,6 +96,14 @@ void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum,
      OS << ")";
 }
 
+void RISCVInstPrinter::printMemRegOperand(const MCInst *MI, int opNum, 
+                                         raw_ostream &OS) {
+     OS << "0"; //No offset for this ever
+     OS << "(";
+     OS << getRegisterName(MI->getOperand(opNum).getReg());
+     OS << ")";
+}
+
 void RISCVInstPrinter::printS12ImmOperand(const MCInst *MI, int OpNum,
                                            raw_ostream &O) {
   if(MI->getOperand(OpNum).isImm()){
