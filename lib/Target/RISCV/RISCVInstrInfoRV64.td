@@ -263,6 +263,6 @@ def : Pat<(add GR64:$hi, (RISCVLo tglobaltlsaddr:$lo)),
 
 include "RISCVInstrInfoRV64M.td"
 //include "RISCVInstrInfoRV64F.td"
-//include "RISCVInstrInfoRV64A.td"
+include "RISCVInstrInfoRV64A.td"
 //include "RISCVInstrInfoRV64D.td"
 

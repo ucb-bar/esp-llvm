@@ -126,6 +126,13 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
     return true;
   }
 
+  bool selectRegAddr(SDValue Addr, SDValue &Base) {
+    //always just register
+    Base = Addr;
+    //Offset = CurDAG->getTargetConstant(0, Addr.getValueType());
+    return true;
+  }
+
   bool replaceUsesWithZeroReg(MachineRegisterInfo *MRI,
                               const MachineInstr& MI) {
     unsigned DstReg = 0, ZeroReg = 0;

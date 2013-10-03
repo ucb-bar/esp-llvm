@@ -167,21 +167,92 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     }
   }
 
-  // Type legalization will convert 8- and 16-bit atomic operations into
-  // forms that operate on i32s (but still keeping the original memory VT).
-  // Lower them into full i32 operations.
-  setOperationAction(ISD::ATOMIC_SWAP,      MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, Custom);
-  setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Custom);
+  //Some Atmoic ops are legal
+  if(Subtarget.hasA()) {
+    if(Subtarget.isRV64()) {
+      //push 32 bits up to 64
+      setOperationAction(ISD::ATOMIC_SWAP,      MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, Promote);
+      setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, Promote);
+      //Legal in RV64A
+      setOperationAction(ISD::ATOMIC_SWAP,      MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Legal);
+      //These are not native instructions
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
+    } else {
+      //Legal in RV32A
+      setOperationAction(ISD::ATOMIC_SWAP,      MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, Legal);
+      //Expand 64 bit into 32?
+      setOperationAction(ISD::ATOMIC_SWAP,      MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
+      //These are not native instructions
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
+      setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
+    }
+  } else {
+    //No atomic ops so expand all
+    setOperationAction(ISD::ATOMIC_SWAP,      MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_SWAP,      MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_ADD,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_AND,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_OR,   MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_XOR,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_MIN,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
+    setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
+  }
 
   // We have instructions for signed but not unsigned FP conversion.
   // Handle unsigned 32-bit types as signed 64-bit types.
@@ -1446,49 +1517,13 @@ static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  GlobalAddressSDNode *Node = cast<GlobalAddressSDNode>(Op);
-  DebugLoc DL = Node->getDebugLoc();
-  const GlobalValue *GV = Node->getGlobal();
-  int64_t Offset = Node->getOffset();
-  EVT PtrVT = getPointerTy();
   Reloc::Model RM = TM.getRelocationModel();
-  CodeModel::Model CM = TM.getCodeModel();
 
   if(RM != Reloc::PIC_) {
       //%hi/%lo relocation
       return getAddrNonPIC(Op,DAG);
   }
   llvm_unreachable("Can not handle PIC global addresses yet");
-  /*TODO: remove old cruft
-  SDValue Result;
-  if (Subtarget.isPC32DBLSymbol(GV, RM, CM)) {
-    // Make sure that the offset is aligned to a halfword.  If it isn't,
-    // create an "anchor" at the previous 12-bit boundary.
-    // FIXME check whether there is a better way of handling this.
-    if (Offset & 1) {
-      Result = DAG.getTargetGlobalAddress(GV, DL, PtrVT,
-                                          Offset & ~uint64_t(0xfff));
-      Offset &= 0xfff;
-    } else {
-      Result = DAG.getTargetGlobalAddress(GV, DL, PtrVT, Offset);
-      Offset = 0;
-    }
-    Result = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
-  } else {
-    Result = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, RISCVII::MO_GOT);
-    Result = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
-    Result = DAG.getLoad(PtrVT, DL, DAG.getEntryNode(), Result,
-                         MachinePointerInfo::getGOT(), false, false, false, 0);
-  }
-
-  // If there was a non-zero offset that we didn't fold, create an explicit
-  // addition for it.
-  if (Offset != 0)
-    Result = DAG.getNode(ISD::ADD, DL, PtrVT, Result,
-                         DAG.getConstant(Offset, PtrVT));
-
-  return Result;
-                         */
 }
 
 SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
@@ -1684,7 +1719,6 @@ SDValue RISCVTargetLowering::lowerSDIVREM(SDValue Op,
 
 SDValue RISCVTargetLowering::lowerUDIVREM(SDValue Op,
                                             SelectionDAG &DAG) const {
-  EVT VT = Op.getValueType();
   DebugLoc DL = Op.getDebugLoc();
 
   // DL(G) uses a double-width dividend, so we need to clear the even
