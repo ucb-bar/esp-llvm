@@ -22,15 +22,12 @@ using namespace llvm;
 #include "RISCVGenAsmWriter.inc"
 
 void RISCVInstPrinter::printAddress(unsigned Base, int64_t Disp,
-                                      unsigned Index, raw_ostream &O) {
+                                      raw_ostream &O) {
   O << Disp;
   if (Base) {
     O << '(';
-    if (Index)
-      O << getRegisterName(Index) << ',';
     O << getRegisterName(Base) << ')';
-  } else
-    assert(!Index && "Shouldn't have an index without a base");
+  }
 }
 
 static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
@@ -212,14 +209,14 @@ void RISCVInstPrinter::printOperand(const MCInst *MI, int OpNum,
 void RISCVInstPrinter::printBDAddrOperand(const MCInst *MI, int OpNum,
                                             raw_ostream &O) {
   printAddress(MI->getOperand(OpNum).getReg(),
-               MI->getOperand(OpNum + 1).getImm(), 0, O);
+               MI->getOperand(OpNum + 1).getImm(), O);
 }
 
 void RISCVInstPrinter::printBDXAddrOperand(const MCInst *MI, int OpNum,
                                              raw_ostream &O) {
   printAddress(MI->getOperand(OpNum).getReg(),
                MI->getOperand(OpNum + 1).getImm(),
-               MI->getOperand(OpNum + 2).getReg(), O);
+               O);
 }
 
 void RISCVInstPrinter::printCond4Operand(const MCInst *MI, int OpNum,
