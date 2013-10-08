@@ -96,6 +96,13 @@ void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum,
      OS << ")";
 }
 
+void RISCVInstPrinter::printJALRMemOperand(const MCInst *MI, int opNum, 
+                                         raw_ostream &OS) {
+     OS << getRegisterName(MI->getOperand(opNum).getReg());
+     OS << ",";
+     printOperand(MI, opNum+1, OS);
+}
+
 void RISCVInstPrinter::printMemRegOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
      OS << "0"; //No offset for this ever

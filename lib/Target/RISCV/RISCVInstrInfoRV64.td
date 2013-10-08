@@ -83,28 +83,30 @@ defm : SetgePats<GR64, SLT64, SLTU64, XORI64>, Requires<[IsRV64]>;
 //Unconditional Jumps
 let isCall = 1 in {
   let Defs = [ra_64, v0_64, v1_64] in { //after call return addr and values are defined
+  //let Defs = [ra_64] in { //after call return addr and values are defined
     def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "jal\t$target", 
           [(z_call pcrel64call:$target)]>, Requires<[IsRV64]>;
   }
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
-    def JALR64: InstRISCV<4, (outs GR64:$ra), (ins mem:$target), "jalr\t$target", 
-          //[(set GR32:$ra, (z_call addr:$target))]>{
-          []>{
+  let Defs = [ra_64, v0_64, v1_64] in {
+    def JALR64: InstRISCV<4, (outs), (ins jalrmem64:$target), "jalr\t$target", 
+          [(z_call addr:$target)]>, Requires<[IsRV64]>{
             field bits<32> Inst;
 
-            bits<5> RD;
+            //bits<5> RD;
             bits<5> RS1;
             bits<12> IMM;
 
-            let Inst{31-27} = RD;
+            let Inst{31-27} = 0b00001;
             let Inst{26-22} = RS1;
             let Inst{21-17} = IMM{11-7};
             let Inst{16-10} = IMM{6 -0};
             let Inst{9 - 7} = 0b000;
             let Inst{6 - 0} = 0b1101011;
           }
+  }
 }
  
 
@@ -229,6 +231,9 @@ def : Pat<(i64 imm64:$imm), (ADD64
                         (LLI64 (LUI64 (HI20 (i64 (LO32 $imm)))), (LO12 (i64 (LO32 $imm)))), 
                         (SLL64 (i64 32), 
                         (LLI64 (LUI64 (HI20 (i64 (HI32 $imm)))), (LO12 (i64 (HI32 $imm))))))>;
+
+//call
+def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;
