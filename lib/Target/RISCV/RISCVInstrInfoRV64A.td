@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+//TODO: add LR/SC and acq/rel
+
 //TODO add gr32 operations
 def AMOSWAP_D : InstA<"amoswap.d" , 0b0101111, 0b00000, 0b011, atomic_swap     , GR64, memreg64>, Requires<[IsRV64, HasA]>;
 def AMOADD_D  : InstA<"amoadd.D"  , 0b0101111, 0b00001, 0b011, atomic_load_add , GR64, memreg64>, Requires<[IsRV64, HasA]>;

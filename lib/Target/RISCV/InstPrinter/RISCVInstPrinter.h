@@ -53,6 +53,7 @@ private:
   void printS20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU20ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printMemOperand(const MCInst *MI, int OpNUm, raw_ostream &O);
+  void printJALRMemOperand(const MCInst *MI, int OpNUm, raw_ostream &O);
   void printMemRegOperand(const MCInst *MI, int OpNUm, raw_ostream &O);
   void printS32ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printU32ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);

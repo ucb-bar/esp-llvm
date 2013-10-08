@@ -1181,7 +1181,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Callee = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Callee);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
-    Callee = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Callee);
   }
 
   // The first call operand is the chain and the second is the target address.

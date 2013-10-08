@@ -179,6 +179,13 @@ def mem64 : Operand<i64> {
   let PrintMethod = "printMemOperand";
 }
 
+def jalrmem64 : Operand<i64> {
+  let MIOperandInfo = (ops GR64, imm64sx12);
+  //let EncoderMethod = "getMemRegEncoding";
+  let OperandType = "OPERAND_MEMORY";
+  let PrintMethod = "printJALRMemOperand";
+}
+
 def memreg32 : Operand<i32> {
   let MIOperandInfo = (ops GR32);
   //let EncoderMethod = "getMemRegEncoding";
@@ -196,6 +203,7 @@ def memreg64 : Operand<i64> {
 
 def regaddr : ComplexPattern<iPTR, 1, "selectRegAddr">;
 def addr    : ComplexPattern<iPTR, 2, "selectMemRegAddr">;
+def raaddr  : ComplexPattern<i64 , 2, "selectMemRegAddr", [add]>;
 
 //===----------------------------------------------------------------------===//
 // Symbolic address operands
@@ -222,7 +230,7 @@ def pcrel32call : PCRelAddress<i32, "pcrel32call"> {
   let EncoderMethod = "getPLT32DBLEncoding";
 }
 
-def pcrel64call : PCRelAddress<i64, "pcrel32call"> {
+def pcrel64call : PCRelAddress<i64, "pcrel64call"> {
   let PrintMethod = "printCallOperand";
   let EncoderMethod = "getPLT64DBLEncoding";
 }
