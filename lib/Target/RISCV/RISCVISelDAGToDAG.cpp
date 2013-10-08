@@ -443,7 +443,7 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
   switch (Opcode) {
   case ISD::FrameIndex: {
-    SDValue imm = CurDAG->getTargetConstant(0, MVT::i32);
+    SDValue imm = CurDAG->getTargetConstant(0, Subtarget.isRV64() ? MVT::i64 : MVT::i32);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     SDValue TFI = CurDAG->getTargetFrameIndex(FI, TLI.getPointerTy());
     unsigned Opc = Subtarget.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
@@ -473,13 +473,11 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
                              char ConstraintCode,
                              std::vector<SDValue> &OutOps) {
   assert(ConstraintCode == 'm' && "Unexpected constraint code");
-  // Accept addresses with short displacements, which are compatible
-  // with Q, R, S and T.  But keep the index operand for future expansion.
-  SDValue Base, Disp, Index;
 
+  SDValue Base, Offset;
+  selectMemRegAddr(Op, Base, Offset);
   OutOps.push_back(Base);
-  OutOps.push_back(Disp);
-  OutOps.push_back(Index);
+  OutOps.push_back(Offset);
   return false;
 }
 

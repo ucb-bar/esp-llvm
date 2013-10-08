@@ -31,7 +31,7 @@ public:
   static const char *getRegisterName(unsigned RegNo);
 
   // Print an address with the given base, displacement and index.
-  static void printAddress(unsigned Base, int64_t Disp, unsigned Index,
+  static void printAddress(unsigned Base, int64_t Disp,
                            raw_ostream &O);
 
   // Print the given operand.
