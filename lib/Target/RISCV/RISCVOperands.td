@@ -74,6 +74,7 @@ def UIMM64 : SDNodeXForm<imm, [{
 // Immediate asm operands.
 //===----------------------------------------------------------------------===//
 
+def U4Imm  : ImmediateAsmOperand<"U4Imm">;
 def S12Imm : ImmediateAsmOperand<"S12Imm">;
 def U12Imm : ImmediateAsmOperand<"U12Imm">;
 def S20Imm : ImmediateAsmOperand<"S20Imm">;
@@ -150,6 +151,17 @@ def simm64 : Immediate<i64, [{}], SIMM64, "S64Imm">;
 def uimm64 : Immediate<i64, [{}], UIMM64, "U64Imm">;
 
 def imm64 : ImmLeaf<i64, [{}]>;
+
+//===----------------------------------------------------------------------===//
+// Fence immediates
+//===----------------------------------------------------------------------===//
+
+def fenceImm : Immediate<i32, [{
+  return isUInt<4>(N->getZExtValue());
+}], NOOP_SDNodeXForm, "U4Imm">;
+def fenceImm64 : Immediate<i64, [{
+  return isUInt<4>(N->getZExtValue());
+}], NOOP_SDNodeXForm, "U4Imm">;
 
 //===----------------------------------------------------------------------===//
 // Floating-point immediates
