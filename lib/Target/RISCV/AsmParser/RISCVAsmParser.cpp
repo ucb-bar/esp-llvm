@@ -233,6 +233,7 @@ public:
   bool isPairFP64() const { return isReg(PairFP64Reg); }
   bool isPairFP128() const { return isReg(PairFP128Reg); }
   bool isFP128() const { return isReg(FP128Reg); }
+  bool isU4Imm() const { return isImm(0, 15); }
   bool isU12Imm() const { return isImm(0, 4096); }
   bool isS12Imm() const { return isImm(-2048, 2047); }
   bool isU20Imm() const { return isImm(0, 1048576); }

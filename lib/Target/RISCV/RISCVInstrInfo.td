@@ -267,6 +267,29 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
    }
   def : Pat<(z_retflag), (RET)>;
 
+//Fence
+def FENCE: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence", 
+      [(z_fence fenceImm:$pred, fenceImm:$succ)]>{
+        field bits<32> Inst;
+
+        bits<4> pred;
+        bits<4> succ;
+
+        let Inst{31-28} = 0b0000;
+        let Inst{27   } = pred{3};//PI;
+        let Inst{26   } = pred{2};//PO;
+        let Inst{25   } = pred{1};//PR;
+        let Inst{24   } = pred{0};//PW;
+        let Inst{23   } = succ{3};//SI;
+        let Inst{22   } = succ{2};//SO;
+        let Inst{21   } = succ{1};//SR;
+        let Inst{20   } = succ{0};//SW;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b000;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b0001111;
+      }
+
 //===----------------------------------------------------------------------===//
 // Subtarget features
 //===----------------------------------------------------------------------===//

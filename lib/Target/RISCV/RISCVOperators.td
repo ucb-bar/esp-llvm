@@ -37,6 +37,10 @@ def SDT_ZGR128Binary64      : SDTypeProfile<1, 2,
                                             [SDTCisVT<0, untyped>,
                                              SDTCisVT<1, untyped>,
                                              SDTCisVT<2, i64>]>;
+def SDT_ZFence              : SDTypeProfile<0, 2,[SDTCisVT<0, i32>,
+                                                  SDTCisVT<1, i32>]>;
+def SDT_ZFence64            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>]>;
 def SDT_ZAtomicLoadBinaryW  : SDTypeProfile<1, 5,
                                             [SDTCisVT<0, i32>,
                                              SDTCisPtrTy<1>,
@@ -84,6 +88,9 @@ def z_umul_lohi64       : SDNode<"RISCVISD::UMUL_LOHI64", SDT_ZGR128Binary64>;
 def z_sdivrem64         : SDNode<"RISCVISD::SDIVREM64", SDT_ZGR128Binary64>;
 def z_udivrem32         : SDNode<"RISCVISD::UDIVREM32", SDT_ZGR128Binary32>;
 def z_udivrem64         : SDNode<"RISCVISD::UDIVREM64", SDT_ZGR128Binary64>;
+
+def z_fence             : SDNode<"RISCVISD::FENCE", SDT_ZFence, [SDNPHasChain, SDNPSideEffect]>;
+def z_fence64           : SDNode<"RISCVISD::FENCE", SDT_ZFence64, [SDNPHasChain, SDNPSideEffect]>;
 
 class AtomicWOp<string name, SDTypeProfile profile = SDT_ZAtomicLoadBinaryW>
   : SDNode<"RISCVISD::"##name, profile,

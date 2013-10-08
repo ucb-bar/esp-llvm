@@ -167,6 +167,8 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     }
   }
 
+  //to have the best chance and doing something good with fences custom lower them
+  setOperationAction(ISD::ATOMIC_FENCE,      MVT::Other, Custom);
   //Some Atmoic ops are legal
   if(Subtarget.hasA()) {
     if(Subtarget.isRV64()) {
@@ -1727,6 +1729,40 @@ SDValue RISCVTargetLowering::lowerUDIVREM(SDValue Op,
   return DAG.getMergeValues(Ops, 2, DL);
 }
 
+SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const {
+  DebugLoc DL = Op.getDebugLoc();
+  
+  unsigned PI,PO,PR,PW,SI,SO,SR,SW;
+  switch(Op.getConstantOperandVal(1)) {
+    case NotAtomic:
+    case Unordered:
+    case Monotonic:
+    case Acquire:
+    case Release:
+    case AcquireRelease:
+    case SequentiallyConsistent:
+      PI = 1 << 3;
+      PO = 1 << 2;
+      PR = 1 << 1;
+      PW = 1 << 0;
+  } 
+
+  switch(Op.getConstantOperandVal(2)) {
+    case SingleThread:
+    case CrossThread:
+      SI = 1 << 3;
+      SO = 1 << 2;
+      SR = 1 << 1;
+      SW = 1 << 0;
+  }
+
+  unsigned pred = PI | PO | PR | PW;
+  unsigned succ = SI | SO | SR | SW;
+  return DAG.getNode(RISCVISD::FENCE, DL, MVT::Other,Op.getOperand(0),
+                       DAG.getConstant(pred, Subtarget.isRV64() ? MVT::i64 : MVT::i32),
+                       DAG.getConstant(succ, Subtarget.isRV64() ? MVT::i64 : MVT::i32));
+}
+
 // Op is an 8-, 16-bit or 32-bit ATOMIC_LOAD_* operation.  Lower the first
 // two into the fullword ATOMIC_LOADW_* operation given by Opcode.
 SDValue RISCVTargetLowering::lowerATOMIC_LOAD(SDValue Op,
@@ -1900,6 +1936,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     //return lowerUDIVREM(Op, DAG);
   //case ISD::OR:
     //return lowerOR(Op, DAG);
+  case ISD::ATOMIC_FENCE:
+    return lowerATOMIC_FENCE(Op,DAG);
   case ISD::ATOMIC_SWAP:
     return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_SWAPW);
   case ISD::ATOMIC_LOAD_ADD:
@@ -1941,6 +1979,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(PCREL_WRAPPER);
     OPCODE(Hi);
     OPCODE(Lo);
+    OPCODE(FENCE);
     OPCODE(CMP);
     OPCODE(UCMP);
     OPCODE(SELECT_CC);
