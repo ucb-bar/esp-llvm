@@ -433,7 +433,7 @@ unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
   const MCInstrDesc &MCID = get(Opcode);
   //int64_t Offset2 = (MCID.TSFlags & RISCVII::Is128Bit ? Offset + 8 : Offset);
   int64_t Offset2 = Offset;
-  if (isUInt<12>(Offset) && isUInt<12>(Offset2)) {
+  if (isInt<12>(Offset) && isInt<12>(Offset2)) {
     return Opcode;
   }
   if (isInt<20>(Offset) && isInt<20>(Offset2)) {
@@ -451,21 +451,22 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
   const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   const TargetRegisterClass *RC = STI.isRV64() ?
     &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+  unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
 
   //create virtual reg to store immediate
   *Reg = RegInfo.createVirtualRegister(RC);
   if (isInt<12>(Value)){
     Opcode = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(RISCV::zero).addImm(Value);
+    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(Value);
   } else {
     assert(isInt<32>(Value) && "Huge values not handled yet");
     uint64_t upper20 = (Value & 0x0000000000000800) ? 
         0x00000000000FFFFF & (Value >> 12)
       : 0x00000000000FFFFF & ((Value >> 12) +1);
     uint64_t lower12 = 0x0000000000000FFF & (Value);
-    Opcode = RISCV::LUI;
+    Opcode = STI.isRV64() ? RISCV::LUI64 : RISCV::LUI;
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addImm(upper20);
-    Opcode = RISCV::LLI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(RISCV::zero).addImm(lower12);
+    Opcode = STI.isRV64() ? RISCV::LLI64 : RISCV::LLI;
+    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(lower12);
   }
 }

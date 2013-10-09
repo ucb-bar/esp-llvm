@@ -276,7 +276,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
-  setOperationAction(ISD::UMUL_LOHI, MVT::i64, Custom);
+  setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
 
   // FIXME: Can we support these natively?
   //setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);

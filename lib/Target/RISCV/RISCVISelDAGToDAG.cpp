@@ -106,7 +106,7 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
     // Addresses of the form FI+const or FI|const
     if (CurDAG->isBaseWithConstantOffset(Addr)) {
       ConstantSDNode *CN = dyn_cast<ConstantSDNode>(Addr.getOperand(1));
-      if (isInt<16>(CN->getSExtValue())) {
+      if (isInt<12>(CN->getSExtValue())) {
   
         // If the first operand is a FI, get the TargetFI Node
         if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>
@@ -244,7 +244,7 @@ FunctionPass *llvm::createRISCVISelDag(RISCVTargetMachine &TM,
 static bool selectOffset(RISCVAddressingMode::OffRange OffR, int64_t Val) {
   switch (OffR) {
   case RISCVAddressingMode::Off12Only:
-    return isUInt<12>(Val);
+    return isInt<12>(Val);
   }
   llvm_unreachable("Unhandled offset range");
 }
@@ -322,12 +322,12 @@ static bool shouldUseLA(SDNode *Base, int64_t Disp, SDNode *Index) {
 
     // Always use LA if the displacement is small enough.  It should always
     // be no worse than AGHI (and better if it avoids a move).
-    if (isUInt<12>(Disp))
+    if (isInt<12>(Disp))
       return true;
 
     // For similar reasons, always use LAY if the constant is too big for AGHI.
     // LAY should be no worse than AGFI.
-    if (!isInt<16>(Disp))
+    if (!isInt<12>(Disp))
       return true;
   } else {
     // Don't use LA for plain registers.

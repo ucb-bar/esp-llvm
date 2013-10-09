@@ -347,56 +347,56 @@ class PCR<bits<16> num, string n> : RISCVReg<n> {
   let HWEncoding = num;
 }
 //Scratch register for exception handlers
-def sup0     : PCR<0,"p0">;
+def sup0     : PCR<0,"cr0">;
 //Scratch register for exception handlers
-def sup1     : PCR<1,"p1">;
+def sup1     : PCR<1,"cr1">;
 //exception program counter
-def epc      : PCR<2, "p2">;
+def epc      : PCR<2, "cr2">;
 //Bad virtual address
-def badvaddr : PCR<3, "p3">;
+def badvaddr : PCR<3, "cr3">;
 //Page table base register
-def ptbr     : PCR<4, "p4">;
+def ptbr     : PCR<4, "cr4">;
 //Address space ID
-def asid     : PCR<5, "p5">;
+def asid     : PCR<5, "cr5">;
 //Cycle counter for timer
-def count    : PCR<6, "p6">;
+def count    : PCR<6, "cr6">;
 //Timer compare value
-def compare  : PCR<7, "p7">;
+def compare  : PCR<7, "cr7">;
 //Exception handler address
-def evec     : PCR<8, "p8">;
+def evec     : PCR<8, "cr8">;
 //Cause of exception
-def cause    : PCR<9, "p9">;
+def cause    : PCR<9, "cr9">;
 //status reg
-def status   : PCR<10, "p10">;
+def status   : PCR<10, "cr10">;
 //Hart ID
-def hartid   : PCR<11,"p11">;
+def hartid   : PCR<11,"cr11">;
 //Implementation ID
-def impl     : PCR<12,"p12">;
+def impl     : PCR<12,"cr12">;
 //Flush address translation cache
-def fatc     : PCR<13, "p13">;
+def fatc     : PCR<13, "cr13">;
 //Send inter-processor interrupt
-def send_ipi : PCR<14,"p14">;
+def send_ipi : PCR<14,"cr14">;
 //Clear inter-processor interrupt
-def clear_ipi: PCR<15,"p15">;
+def clear_ipi: PCR<15,"cr15">;
 //Reserved 
-def pr0      : PCR<16,"p16">;
-def pr1      : PCR<17,"p17">;
-def pr2      : PCR<18,"p18">;
-def pr3      : PCR<19,"p19">;
-def pr4      : PCR<20,"p20">;
-def pr5      : PCR<21,"p21">;
-def pr6      : PCR<22,"p22">;
-def pr7      : PCR<23,"p23">;
-def pr8      : PCR<24,"p24">;
-def pr9      : PCR<25,"p25">;
-def pr10     : PCR<26,"p26">;
-def pr11     : PCR<27,"p27">;
-def pr12     : PCR<28,"p28">;
-def pr13     : PCR<29,"p29">;
+def pr0      : PCR<16,"cr16">;
+def pr1      : PCR<17,"cr17">;
+def pr2      : PCR<18,"cr18">;
+def pr3      : PCR<19,"cr19">;
+def pr4      : PCR<20,"cr20">;
+def pr5      : PCR<21,"cr21">;
+def pr6      : PCR<22,"cr22">;
+def pr7      : PCR<23,"cr23">;
+def pr8      : PCR<24,"cr24">;
+def pr9      : PCR<25,"cr25">;
+def pr10     : PCR<26,"cr26">;
+def pr11     : PCR<27,"cr27">;
+def pr12     : PCR<28,"cr28">;
+def pr13     : PCR<29,"cr29">;
 //Test output register
-def tohost   : PCR<30,"p30">;
+def tohost   : PCR<30,"cr30">;
 //Test input register
-def fromhost : PCR<31,"p31">;
+def fromhost : PCR<31,"cr31">;
 
 //PCRs 
 defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
