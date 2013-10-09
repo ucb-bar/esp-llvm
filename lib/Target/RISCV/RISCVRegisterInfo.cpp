@@ -151,7 +151,7 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
 
     FrameReg = Reg;
     //TODO:understand what NewImm is used for in Mips code
-    //Offset = SignExtend64<12>(NewImm);
+    Offset = SignExtend64<12>(0);
     IsKill = true;
   }
 

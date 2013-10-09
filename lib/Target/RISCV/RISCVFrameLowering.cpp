@@ -525,7 +525,7 @@ RISCVFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
   // immediate field and there are no variable sized objects on the stack.
   // Make sure the second register scavenger spill slot can be accessed with one
   // instruction.
-  return isInt<16>(MFI->getMaxCallFrameSize() + getStackAlignment()) &&
+  return isInt<12>(MFI->getMaxCallFrameSize() + getStackAlignment()) &&
     !MFI->hasVarSizedObjects();
 }
 
@@ -582,7 +582,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   uint64_t MaxSPOffset = MF.getInfo<RISCVMachineFunctionInfo>()->getIncomingArgSize() +
     estimateStackSize(MF);
 
-  if (isInt<16>(MaxSPOffset))
+  if (isInt<12>(MaxSPOffset))
     return;
 
   const TargetRegisterClass *RC = &RISCV::GR32BitRegClass;
