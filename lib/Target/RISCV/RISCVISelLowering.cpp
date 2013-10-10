@@ -192,11 +192,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Legal);
       setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Legal);
       setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Legal);
+      //custom emit but still legal at DAG level
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
       //These are not native instructions
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
     } else {
@@ -220,11 +221,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
+      //custom emit but still legal at DAG level
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
       //These are not native instructions
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
     }
@@ -248,10 +250,11 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
-    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+    //custom emit but still legal at DAG level
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
     setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
-    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
   }
@@ -1847,15 +1850,10 @@ SDValue RISCVTargetLowering::lowerATOMIC_LOAD(SDValue Op,
 
 // Node is an 8- or 16-bit ATOMIC_CMP_SWAP operation.  Lower the first two
 // into a fullword ATOMIC_CMP_SWAPW operation.
+/*
 SDValue RISCVTargetLowering::lowerATOMIC_CMP_SWAP(SDValue Op,
                                                     SelectionDAG &DAG) const {
   AtomicSDNode *Node = cast<AtomicSDNode>(Op.getNode());
-
-  // We have native support for 32-bit compare and swap.
-  EVT NarrowVT = Node->getMemoryVT();
-  EVT WideVT = MVT::i32;
-  if (NarrowVT == WideVT)
-    return Op;
 
   int64_t BitSize = NarrowVT.getSizeInBits();
   SDValue ChainIn = Node->getOperand(0);
@@ -1866,20 +1864,18 @@ SDValue RISCVTargetLowering::lowerATOMIC_CMP_SWAP(SDValue Op,
   DebugLoc DL = Node->getDebugLoc();
   EVT PtrVT = Addr.getValueType();
 
-  // Get the address of the containing word.
-  SDValue AlignedAddr = DAG.getNode(ISD::AND, DL, PtrVT, Addr,
-                                    DAG.getConstant(-4, PtrVT));
+  //loop:
+  //lr v1, 0(a0)
+  SDValue lr = DAG.getNode(LR, DL, EVT, Addr, DAG.getConstant(0,EVT));
+  //bne v1, a1, return
+  SDValue bne = DAG.getNode(BNE, DL, EVT, lr, CmpVal, end);
+  //sc v0, 0(a0), a2
+  SDValue sc = DAG.getNode(SC, DL, EVT, Addr, DAG.getConstant(0,EVT), SwapVal);
+  //bnez v0, loop
+  SDValue bnez = DAG.getNode(BNE, DL, EVT, sc, zero, loop);
+  //end:
+  
 
-  // Get the number of bits that the word must be rotated left in order
-  // to bring the field to the top bits of a GR32.
-  SDValue BitShift = DAG.getNode(ISD::SHL, DL, PtrVT, Addr,
-                                 DAG.getConstant(3, PtrVT));
-  BitShift = DAG.getNode(ISD::TRUNCATE, DL, WideVT, BitShift);
-
-  // Get the complementing shift amount, for rotating a field in the top
-  // bits back to its proper position.
-  SDValue NegBitShift = DAG.getNode(ISD::SUB, DL, WideVT,
-                                    DAG.getConstant(0, WideVT), BitShift);
 
   // Construct the ATOMIC_CMP_SWAPW node.
   SDVTList VTList = DAG.getVTList(WideVT, MVT::Other);
@@ -1890,6 +1886,7 @@ SDValue RISCVTargetLowering::lowerATOMIC_CMP_SWAP(SDValue Op,
                                              NarrowVT, MMO);
   return AtomicOp;
 }
+*/
 
 SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
                                               SelectionDAG &DAG) const {
@@ -1928,48 +1925,12 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerJumpTable(cast<JumpTableSDNode>(Op), DAG);
   case ISD::ConstantPool:
     return lowerConstantPool(cast<ConstantPoolSDNode>(Op), DAG);
-  //case ISD::BITCAST:
-    //return lowerBITCAST(Op, DAG);
   case ISD::VASTART:
     return lowerVASTART(Op, DAG);
   case ISD::VACOPY:
     return lowerVACOPY(Op, DAG);
-  //case ISD::DYNAMIC_STACKALLOC:
-    //return lowerDYNAMIC_STACKALLOC(Op, DAG);
-  //case ISD::UMUL_LOHI:
-    //return lowerUMUL_LOHI(Op, DAG);
-  //case ISD::SDIVREM:
-    //return lowerSDIVREM(Op, DAG);
-  //case ISD::UDIVREM:
-    //return lowerUDIVREM(Op, DAG);
-  //case ISD::OR:
-    //return lowerOR(Op, DAG);
   case ISD::ATOMIC_FENCE:
-    return lowerATOMIC_FENCE(Op,DAG);
-  case ISD::ATOMIC_SWAP:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_SWAPW);
-  case ISD::ATOMIC_LOAD_ADD:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_ADD);
-  case ISD::ATOMIC_LOAD_SUB:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_SUB);
-  case ISD::ATOMIC_LOAD_AND:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_AND);
-  case ISD::ATOMIC_LOAD_OR:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_OR);
-  case ISD::ATOMIC_LOAD_XOR:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_XOR);
-  case ISD::ATOMIC_LOAD_NAND:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_NAND);
-  case ISD::ATOMIC_LOAD_MIN:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_MIN);
-  case ISD::ATOMIC_LOAD_MAX:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_MAX);
-  case ISD::ATOMIC_LOAD_UMIN:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_UMIN);
-  case ISD::ATOMIC_LOAD_UMAX:
-    return lowerATOMIC_LOAD(Op, DAG, RISCVISD::ATOMIC_LOADW_UMAX);
-  case ISD::ATOMIC_CMP_SWAP:
-    return lowerATOMIC_CMP_SWAP(Op, DAG);
+    return lowerATOMIC_FENCE(Op, DAG);
   case ISD::STACKSAVE:
     return lowerSTACKSAVE(Op, DAG);
   case ISD::STACKRESTORE:
@@ -1996,18 +1957,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(SDIVREM64);
     OPCODE(UDIVREM32);
     OPCODE(UDIVREM64);
-    OPCODE(ATOMIC_SWAPW);
-    OPCODE(ATOMIC_LOADW_ADD);
-    OPCODE(ATOMIC_LOADW_SUB);
-    OPCODE(ATOMIC_LOADW_AND);
-    OPCODE(ATOMIC_LOADW_OR);
-    OPCODE(ATOMIC_LOADW_XOR);
-    OPCODE(ATOMIC_LOADW_NAND);
-    OPCODE(ATOMIC_LOADW_MIN);
-    OPCODE(ATOMIC_LOADW_MAX);
-    OPCODE(ATOMIC_LOADW_UMIN);
-    OPCODE(ATOMIC_LOADW_UMAX);
-    OPCODE(ATOMIC_CMP_SWAPW);
+    //OPCODE(ATOMIC_CMP_SWAPW);
   }
   return NULL;
 #undef OPCODE
@@ -2100,6 +2050,85 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   return BB;
 }
 
+MachineBasicBlock *
+RISCVTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
+                                      MachineBasicBlock *BB,
+                                      unsigned Size) const {
+  assert((Size == 4 || Size == 8) && "Unsupported size for EmitAtomicCmpSwap.");
+
+  MachineFunction *MF = BB->getParent();
+  MachineRegisterInfo &RegInfo = MF->getRegInfo();
+  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
+  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  DebugLoc DL = MI->getDebugLoc();
+  unsigned LR, SC, ZERO, BNE, BEQ;
+
+  if (Size == 4) {
+    LR = Subtarget.isRV64() ? RISCV::LR_W64 : RISCV::LR_W;
+    SC = Subtarget.isRV64() ? RISCV::SC_W64 : RISCV::SC_W;
+  }
+  else {
+    LR = RISCV::LR_D;
+    SC = RISCV::SC_D;
+  }
+  BNE = Subtarget.isRV64() ? RISCV::BNE64 : RISCV::BNE;
+  BEQ = Subtarget.isRV64() ? RISCV::BEQ64 : RISCV::BEQ;
+  ZERO = Subtarget.isRV64() ? RISCV::zero_64 : RISCV::zero;
+
+  unsigned Dest    = MI->getOperand(0).getReg();
+  unsigned Ptr     = MI->getOperand(1).getReg();
+  unsigned OldVal  = MI->getOperand(2).getReg();
+  unsigned NewVal  = MI->getOperand(3).getReg();
+
+  unsigned Success = RegInfo.createVirtualRegister(RC);
+
+  // insert new blocks after the current block
+  const BasicBlock *LLVM_BB = BB->getBasicBlock();
+  MachineBasicBlock *loop1MBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *loop2MBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineBasicBlock *exitMBB = MF->CreateMachineBasicBlock(LLVM_BB);
+  MachineFunction::iterator It = BB;
+  ++It;
+  MF->insert(It, loop1MBB);
+  MF->insert(It, loop2MBB);
+  MF->insert(It, exitMBB);
+
+  // Transfer the remainder of BB and its successor edges to exitMBB.
+  exitMBB->splice(exitMBB->begin(), BB,
+                  llvm::next(MachineBasicBlock::iterator(MI)), BB->end());
+  exitMBB->transferSuccessorsAndUpdatePHIs(BB);
+
+  //  thisMBB:
+  //    ...
+  //    fallthrough --> loop1MBB
+  BB->addSuccessor(loop1MBB);
+  loop1MBB->addSuccessor(exitMBB);
+  loop1MBB->addSuccessor(loop2MBB);
+  loop2MBB->addSuccessor(loop1MBB);
+  loop2MBB->addSuccessor(exitMBB);
+
+  // loop1MBB:
+  //   lr dest, 0(ptr)
+  //   bne dest, oldval, exitMBB
+  BB = loop1MBB;
+  BuildMI(BB, DL, TII->get(LR), Dest).addReg(Ptr);
+  BuildMI(BB, DL, TII->get(BNE))
+    .addReg(Dest).addReg(OldVal).addMBB(exitMBB);
+
+  // loop2MBB:
+  //   sc success, newval, 0(ptr)
+  //   beq success, $0, loop1MBB
+  BB = loop2MBB;
+  BuildMI(BB, DL, TII->get(SC), Success)
+    .addReg(NewVal).addReg(Ptr);
+  BuildMI(BB, DL, TII->get(BEQ))
+    .addReg(Success).addReg(ZERO).addMBB(loop1MBB);
+
+  MI->eraseFromParent();   // The instruction is gone now.
+
+  return exitMBB;
+}
+
 
 MachineBasicBlock *RISCVTargetLowering::
 EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
@@ -2107,190 +2136,8 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   case RISCV::SELECT_CC:
   case RISCV::SELECT_CC64:
       return emitSelectCC(MI, MBB);
-/*TODO: no custom inserters (selects, atmoics)
-  case RISCV::SelectF32:
-  case RISCV::Select64:
-  case RISCV::SelectF64:
-  case RISCV::SelectF128:
-    return emitSelect(MI, MBB);
-
-  case RISCV::AEXT128_64:
-    return emitExt128(MI, MBB, false, RISCV::subreg_low);
-  case RISCV::ZEXT128_32:
-    return emitExt128(MI, MBB, true, RISCV::subreg_low32);
-  case RISCV::ZEXT128_64:
-    return emitExt128(MI, MBB, true, RISCV::subreg_low);
-
-  case RISCV::ATOMIC_SWAPW:
-    return emitAtomicLoadBinary(MI, MBB, 0, 0);
-  case RISCV::ATOMIC_SWAP_32:
-    return emitAtomicLoadBinary(MI, MBB, 0, 32);
-  case RISCV::ATOMIC_SWAP_64:
-    return emitAtomicLoadBinary(MI, MBB, 0, 64);
-
-  case RISCV::ATOMIC_LOADW_AR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AR, 0);
-  case RISCV::ATOMIC_LOADW_AFI:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AFI, 0);
-  case RISCV::ATOMIC_LOAD_AR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AR, 32);
-  case RISCV::ATOMIC_LOAD_AHI:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AHI, 32);
-  case RISCV::ATOMIC_LOAD_AFI:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AFI, 32);
-  case RISCV::ATOMIC_LOAD_AGR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AGR, 64);
-  case RISCV::ATOMIC_LOAD_AGHI:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AGHI, 64);
-  case RISCV::ATOMIC_LOAD_AGFI:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::AGFI, 64);
-
-  case RISCV::ATOMIC_LOADW_SR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::SR, 0);
-  case RISCV::ATOMIC_LOAD_SR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::SR, 32);
-  case RISCV::ATOMIC_LOAD_SGR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::SGR, 64);
-
-  case RISCV::ATOMIC_LOADW_NR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NR, 0);
-  case RISCV::ATOMIC_LOADW_NILH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH32, 0);
-  case RISCV::ATOMIC_LOAD_NR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NR, 32);
-  case RISCV::ATOMIC_LOAD_NILL32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILL32, 32);
-  case RISCV::ATOMIC_LOAD_NILH32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH32, 32);
-  case RISCV::ATOMIC_LOAD_NILF32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILF32, 32);
-  case RISCV::ATOMIC_LOAD_NGR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NGR, 64);
-  case RISCV::ATOMIC_LOAD_NILL:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILL, 64);
-  case RISCV::ATOMIC_LOAD_NILH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH, 64);
-  case RISCV::ATOMIC_LOAD_NIHL:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHL, 64);
-  case RISCV::ATOMIC_LOAD_NIHH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHH, 64);
-  case RISCV::ATOMIC_LOAD_NILF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILF, 64);
-  case RISCV::ATOMIC_LOAD_NIHF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHF, 64);
-
-  case RISCV::ATOMIC_LOADW_OR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OR, 0);
-  case RISCV::ATOMIC_LOADW_OILH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILH32, 0);
-  case RISCV::ATOMIC_LOAD_OR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OR, 32);
-  case RISCV::ATOMIC_LOAD_OILL32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILL32, 32);
-  case RISCV::ATOMIC_LOAD_OILH32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILH32, 32);
-  case RISCV::ATOMIC_LOAD_OILF32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILF32, 32);
-  case RISCV::ATOMIC_LOAD_OGR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OGR, 64);
-  case RISCV::ATOMIC_LOAD_OILL:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILL, 64);
-  case RISCV::ATOMIC_LOAD_OILH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILH, 64);
-  case RISCV::ATOMIC_LOAD_OIHL:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OIHL, 64);
-  case RISCV::ATOMIC_LOAD_OIHH:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OIHH, 64);
-  case RISCV::ATOMIC_LOAD_OILF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OILF, 64);
-  case RISCV::ATOMIC_LOAD_OIHF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::OIHF, 64);
-
-  case RISCV::ATOMIC_LOADW_XR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XR, 0);
-  case RISCV::ATOMIC_LOADW_XILF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XILF32, 0);
-  case RISCV::ATOMIC_LOAD_XR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XR, 32);
-  case RISCV::ATOMIC_LOAD_XILF32:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XILF32, 32);
-  case RISCV::ATOMIC_LOAD_XGR:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XGR, 64);
-  case RISCV::ATOMIC_LOAD_XILF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XILF, 64);
-  case RISCV::ATOMIC_LOAD_XIHF:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::XIHF, 64);
-
-  case RISCV::ATOMIC_LOADW_NRi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NR, 0, true);
-  case RISCV::ATOMIC_LOADW_NILHi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH32, 0, true);
-  case RISCV::ATOMIC_LOAD_NRi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NR, 32, true);
-  case RISCV::ATOMIC_LOAD_NILL32i:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILL32, 32, true);
-  case RISCV::ATOMIC_LOAD_NILH32i:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH32, 32, true);
-  case RISCV::ATOMIC_LOAD_NILF32i:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILF32, 32, true);
-  case RISCV::ATOMIC_LOAD_NGRi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NGR, 64, true);
-  case RISCV::ATOMIC_LOAD_NILLi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILL, 64, true);
-  case RISCV::ATOMIC_LOAD_NILHi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILH, 64, true);
-  case RISCV::ATOMIC_LOAD_NIHLi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHL, 64, true);
-  case RISCV::ATOMIC_LOAD_NIHHi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHH, 64, true);
-  case RISCV::ATOMIC_LOAD_NILFi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NILF, 64, true);
-  case RISCV::ATOMIC_LOAD_NIHFi:
-    return emitAtomicLoadBinary(MI, MBB, RISCV::NIHF, 64, true);
-
-  case RISCV::ATOMIC_LOADW_MIN:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CR,
-                                RISCV::CCMASK_CMP_LE, 0);
-  case RISCV::ATOMIC_LOAD_MIN_32:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CR,
-                                RISCV::CCMASK_CMP_LE, 32);
-  case RISCV::ATOMIC_LOAD_MIN_64:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CGR,
-                                RISCV::CCMASK_CMP_LE, 64);
-
-  case RISCV::ATOMIC_LOADW_MAX:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CR,
-                                RISCV::CCMASK_CMP_GE, 0);
-  case RISCV::ATOMIC_LOAD_MAX_32:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CR,
-                                RISCV::CCMASK_CMP_GE, 32);
-  case RISCV::ATOMIC_LOAD_MAX_64:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CGR,
-                                RISCV::CCMASK_CMP_GE, 64);
-
-  case RISCV::ATOMIC_LOADW_UMIN:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLR,
-                                RISCV::CCMASK_CMP_LE, 0);
-  case RISCV::ATOMIC_LOAD_UMIN_32:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLR,
-                                RISCV::CCMASK_CMP_LE, 32);
-  case RISCV::ATOMIC_LOAD_UMIN_64:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLGR,
-                                RISCV::CCMASK_CMP_LE, 64);
-
-  case RISCV::ATOMIC_LOADW_UMAX:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLR,
-                                RISCV::CCMASK_CMP_GE, 0);
-  case RISCV::ATOMIC_LOAD_UMAX_32:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLR,
-                                RISCV::CCMASK_CMP_GE, 32);
-  case RISCV::ATOMIC_LOAD_UMAX_64:
-    return emitAtomicLoadMinMax(MI, MBB, RISCV::CLGR,
-                                RISCV::CCMASK_CMP_GE, 64);
-
-  case RISCV::ATOMIC_CMP_SWAPW:
-    return emitAtomicCmpSwapW(MI, MBB);
-*/
+  case RISCV::ATOMIC_CMP_SWAP_8:
+    return emitAtomicCmpSwap(MI, MBB, 8);
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }

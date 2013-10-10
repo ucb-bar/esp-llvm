@@ -48,7 +48,7 @@ def SDT_ZAtomicLoadBinaryW  : SDTypeProfile<1, 5,
                                              SDTCisVT<3, i32>,
                                              SDTCisVT<4, i32>,
                                              SDTCisVT<5, i32>]>;
-def SDT_ZAtomicCmpSwapW     : SDTypeProfile<1, 6,
+def SDT_ZAtomicCmpSwap      : SDTypeProfile<1, 6,
                                             [SDTCisVT<0, i32>,
                                              SDTCisPtrTy<1>,
                                              SDTCisVT<2, i32>,
@@ -91,23 +91,6 @@ def z_udivrem64         : SDNode<"RISCVISD::UDIVREM64", SDT_ZGR128Binary64>;
 
 def z_fence             : SDNode<"RISCVISD::FENCE", SDT_ZFence, [SDNPHasChain, SDNPSideEffect]>;
 def z_fence64           : SDNode<"RISCVISD::FENCE", SDT_ZFence64, [SDNPHasChain, SDNPSideEffect]>;
-
-class AtomicWOp<string name, SDTypeProfile profile = SDT_ZAtomicLoadBinaryW>
-  : SDNode<"RISCVISD::"##name, profile,
-           [SDNPHasChain, SDNPMayStore, SDNPMayLoad, SDNPMemOperand]>;
-
-def z_atomic_swapw      : AtomicWOp<"ATOMIC_SWAPW">;
-def z_atomic_loadw_add  : AtomicWOp<"ATOMIC_LOADW_ADD">;
-def z_atomic_loadw_sub  : AtomicWOp<"ATOMIC_LOADW_SUB">;
-def z_atomic_loadw_and  : AtomicWOp<"ATOMIC_LOADW_AND">;
-def z_atomic_loadw_or   : AtomicWOp<"ATOMIC_LOADW_OR">;
-def z_atomic_loadw_xor  : AtomicWOp<"ATOMIC_LOADW_XOR">;
-def z_atomic_loadw_nand : AtomicWOp<"ATOMIC_LOADW_NAND">;
-def z_atomic_loadw_min  : AtomicWOp<"ATOMIC_LOADW_MIN">;
-def z_atomic_loadw_max  : AtomicWOp<"ATOMIC_LOADW_MAX">;
-def z_atomic_loadw_umin : AtomicWOp<"ATOMIC_LOADW_UMIN">;
-def z_atomic_loadw_umax : AtomicWOp<"ATOMIC_LOADW_UMAX">;
-def z_atomic_cmp_swapw  : AtomicWOp<"ATOMIC_CMP_SWAPW", SDT_ZAtomicCmpSwapW>;
 
 //global addr
 def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;

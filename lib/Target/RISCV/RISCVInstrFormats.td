@@ -40,6 +40,12 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
   let TSFlags{1} = SimpleStore;
 }
 
+class PsuedoInst<dag outs, dag ins, list<dag> pattern>
+  : InstRISCV<4, outs, ins,"PSEUDO", pattern> {
+  let isPseudo = 1;
+  let isCodeGenOnly = 1;
+}
+
 /***************
 *RISCV Instruction Formats
 */
@@ -62,6 +68,48 @@ class InstR<string mnemonic, bits<7> op, bits<10> funct10,
   let Inst{21-17} = RS2;
   let Inst{16- 7} = funct10;
   let Inst{6 - 0} = op;
+}
+
+//LR/SC
+class InstLR<string mnemonic, bits<3> funct3,
+             RegisterOperand cls1, Operand cls2>
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2), 
+                mnemonic#"\t$dst, $src2", 
+                []> {
+  field bits<32> Inst;
+
+  bits<5> RD;
+  bits<5> RS1;
+
+  let Inst{31-27} = 0b00010;
+  let Inst{26} = 0;//aq
+  let Inst{25} = 0;//rl
+  let Inst{24-20} = 0b0000;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = 0b0101111;
+}
+
+class InstSC<string mnemonic, bits<3> funct3,
+             RegisterOperand reg, Operand memOp>
+  : InstRISCV<4, (outs reg:$dst), (ins memOp:$src1, reg:$src2), 
+                mnemonic#"\t$dst, $src2, $src1", 
+                []> {
+  field bits<32> Inst;
+
+  bits<5> RD;
+  bits<5> RS1;
+  bits<5> RS2;
+
+  let Inst{31-27} = 0b00011;
+  let Inst{26} = 0;//aq
+  let Inst{25} = 0;//rl
+  let Inst{24-20} = RS2;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = 0b0101111;
 }
 
 //A-Type

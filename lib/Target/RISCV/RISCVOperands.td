@@ -198,7 +198,7 @@ def jalrmem64 : Operand<i64> {
   let PrintMethod = "printJALRMemOperand";
 }
 
-def memreg32 : Operand<i32> {
+def memreg : Operand<i32> {
   let MIOperandInfo = (ops GR32);
   //let EncoderMethod = "getMemRegEncoding";
   let OperandType = "OPERAND_MEMORY";

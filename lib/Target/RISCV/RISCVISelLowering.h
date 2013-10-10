@@ -307,6 +307,9 @@ private:
   // Implement EmitInstrWithCustomInserter for individual operation types.
   MachineBasicBlock *emitSelectCC(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
+  MachineBasicBlock *emitAtomicCmpSwap(MachineInstr *MI,
+                                        MachineBasicBlock *BB,
+                                        unsigned Size) const;
   MachineBasicBlock *emitExt128(MachineInstr *MI,
                                 MachineBasicBlock *MBB,
                                 bool ClearEven, unsigned SubReg) const;
