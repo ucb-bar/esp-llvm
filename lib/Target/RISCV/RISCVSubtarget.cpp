@@ -26,7 +26,8 @@ RISCVSubtarget::RISCVSubtarget(const std::string &TT,
   std::string CPUName = CPU;
   if (CPUName.empty()){
     CPUName = "RV64I";
-    HasA = true;
+    //HasA = true;
+    //HasM = true;
   }
 
   // Parse features string.
