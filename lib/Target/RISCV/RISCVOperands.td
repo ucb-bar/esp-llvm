@@ -35,6 +35,12 @@ class PCRelAddress<ValueType vt, string self>
   let MIOperandInfo = (ops !cast<Operand>(self));
 }
 
+class PCRelAddressNoWrap<ValueType vt, string self>
+  : ComplexPattern<vt, 1, "selectPCRelAddress">,
+    Operand<vt> {
+  let MIOperandInfo = (ops !cast<Operand>(self));
+}
+
 // Constructs an AsmOperandClass for addressing mode FORMAT, treating the
 // registers as having BITSIZE bits and displacements as having DISPSIZE bits.
 class AddressAsmOperand<string format, string bitsize, string dispsize>
@@ -242,7 +248,7 @@ def pcrel32call : PCRelAddress<i32, "pcrel32call"> {
   let EncoderMethod = "getPLT32DBLEncoding";
 }
 
-def pcrel64call : PCRelAddress<i64, "pcrel64call"> {
+def pcrel64call : PCRelAddressNoWrap<i64, "pcrel64call"> {
   let PrintMethod = "printCallOperand";
   let EncoderMethod = "getPLT64DBLEncoding";
 }

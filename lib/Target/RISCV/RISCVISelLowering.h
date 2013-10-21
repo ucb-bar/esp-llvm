@@ -138,6 +138,7 @@ public:
   virtual bool isFMAFasterThanMulAndAdd(EVT) const LLVM_OVERRIDE {
     return true;
   }
+  bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
   virtual bool isFPImmLegal(const APFloat &Imm, EVT VT) const;
   virtual const char *getTargetNodeName(unsigned Opcode) const LLVM_OVERRIDE;
   virtual std::pair<unsigned, const TargetRegisterClass *>

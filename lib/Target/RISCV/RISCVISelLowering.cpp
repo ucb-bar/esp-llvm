@@ -393,6 +393,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::VAEND,   MVT::Other, Expand);
 }
 
+
+bool RISCVTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
+  // The RISCV target isn't yet aware of offsets.
+  return false;
+}
+
 bool RISCVTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
   // We can load zero using LZ?R and negative zero using LZ?R;LC?BR.
   return Imm.isZero() || Imm.isNegZero();
@@ -1191,7 +1197,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // associated Target* opcodes.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
-    Callee = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Callee);
+    //Callee = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Callee);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
   }
@@ -1585,7 +1591,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
   EVT PtrVT = getPointerTy();
 
   SDValue Result = DAG.getTargetBlockAddress(BA, PtrVT, Offset);
-  Result = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
+  //Result = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
   return Result;
 }
 

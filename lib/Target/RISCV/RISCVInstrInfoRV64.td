@@ -234,6 +234,7 @@ def : Pat<(i64 imm64:$imm), (ADD64
 
 //call
 def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
+def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;
