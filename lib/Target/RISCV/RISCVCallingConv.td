@@ -102,14 +102,14 @@ def CC_RISCV64 : CallingConv<[
 // Callee-saved register lists.
 //===----------------------------------------------------------------------===//
 
-def CSR_RV32  : CalleeSavedRegs<(add sp, tp, (sequence "s%u", 11, 0))>;
-def CSR_RV32F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), sp, tp,
+def CSR_RV32  : CalleeSavedRegs<(add ra, sp, tp, (sequence "s%u", 11, 0))>;
+def CSR_RV32F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), ra, sp, tp,
                                      (sequence "s%u", 11, 0))>;
-def CSR_RV32D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), sp, tp,
+def CSR_RV32D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), ra, sp, tp,
                                      (sequence "s%u", 11, 0))>;
 
-def CSR_RV64  : CalleeSavedRegs<(add sp_64, tp_64, (sequence "s%u_64", 11, 0))>;
-def CSR_RV64F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), sp_64, tp_64,
+def CSR_RV64  : CalleeSavedRegs<(add ra_64, sp_64, tp_64, (sequence "s%u_64", 11, 0))>;
+def CSR_RV64F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), ra_64, sp_64, tp_64,
                                      (sequence "s%u_64", 11, 0))>;
-def CSR_RV64D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), sp_64, tp_64,
+def CSR_RV64D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), ra_64, sp_64, tp_64,
                                      (sequence "s%u_64", 11, 0))>;
