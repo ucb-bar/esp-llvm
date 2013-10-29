@@ -156,7 +156,7 @@ def imm64sxu32 : Immediate<i64, [{
 def simm64 : Immediate<i64, [{}], SIMM64, "S64Imm">;
 def uimm64 : Immediate<i64, [{}], UIMM64, "U64Imm">;
 
-def imm64 : ImmLeaf<i64, [{}]>;
+def imm64 : ImmLeaf<i64, [{}]>, Operand<i64>;
 
 //===----------------------------------------------------------------------===//
 // Fence immediates

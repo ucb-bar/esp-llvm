@@ -272,10 +272,10 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // The architecture has 32-bit SMUL_LOHI and UMUL_LOHI (MR and MLR),
   // but they aren't really worth using.  There is no 64-bit SMUL_LOHI,
   // but there is a 64-bit UMUL_LOHI: MLGR.
-  setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
-  setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
-  setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
-  setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
+  //setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
+  //setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
+  //setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
+  //setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
@@ -2032,7 +2032,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   unsigned bne = Subtarget.isRV64() ? RISCV::BNE64 : RISCV::BNE;
   unsigned zero = Subtarget.isRV64() ? RISCV::zero_64 : RISCV::zero;
-  BuildMI(BB, DL, TII->get(bne)).addMBB(sinkMBB).addReg(zero).addReg(MI->getOperand(3).getReg());
+  BuildMI(BB, DL, TII->get(bne)).addMBB(sinkMBB).addReg(zero).addReg(MI->getOperand(1).getReg());
 
   //  copy0MBB:
   //   %FalseValue = ...
@@ -2049,8 +2049,8 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   BuildMI(*BB, BB->begin(), DL,
           TII->get(RISCV::PHI), MI->getOperand(0).getReg())
-    .addReg(MI->getOperand(1).getReg()).addMBB(thisMBB)
-    .addReg(MI->getOperand(2).getReg()).addMBB(copy0MBB);
+    .addReg(MI->getOperand(3).getReg()).addMBB(copy0MBB)
+    .addReg(MI->getOperand(2).getReg()).addMBB(thisMBB);
 
   MI->eraseFromParent();   // The pseudo instruction is gone now.
   return BB;
@@ -2118,8 +2118,8 @@ RISCVTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   //   bne dest, oldval, exitMBB
   BB = loop1MBB;
   BuildMI(BB, DL, TII->get(LR), Dest).addReg(Ptr);
-  BuildMI(BB, DL, TII->get(BNE))
-    .addReg(Dest).addReg(OldVal).addMBB(exitMBB);
+  BuildMI(BB, DL, TII->get(BNE)).addMBB(exitMBB)
+    .addReg(Dest).addReg(OldVal);
 
   // loop2MBB:
   //   sc success, newval, 0(ptr)
@@ -2127,8 +2127,8 @@ RISCVTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
   BB = loop2MBB;
   BuildMI(BB, DL, TII->get(SC), Success)
     .addReg(NewVal).addReg(Ptr);
-  BuildMI(BB, DL, TII->get(BEQ))
-    .addReg(Success).addReg(ZERO).addMBB(loop1MBB);
+  BuildMI(BB, DL, TII->get(BEQ)).addMBB(loop1MBB)
+    .addReg(Success).addReg(ZERO);
 
   MI->eraseFromParent();   // The instruction is gone now.
 
