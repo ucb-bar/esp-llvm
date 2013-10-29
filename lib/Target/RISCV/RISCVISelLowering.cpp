@@ -389,8 +389,11 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // VASTART and VACOPY need to deal with the RISCV-specific varargs
   // structure, but VAEND is a no-op.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
-  setOperationAction(ISD::VAEND,   MVT::Other, Expand);
+  setOperationAction(ISD::VAARG  , MVT::Other, Expand);
+  setOperationAction(ISD::VACOPY , MVT::Other, Expand);
+  setOperationAction(ISD::VAEND  , MVT::Other, Expand);
+  //setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
+  //setOperationAction(ISD::VAEND,   MVT::Other, Expand);
 }
 
 
@@ -1658,30 +1661,13 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
   SDValue Addr    = Op.getOperand(1);
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
   DebugLoc DL     = Op.getDebugLoc();
+  SDValue FI      = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
+                                 getPointerTy());
 
-  // The initial values of each field.
-  const unsigned NumFields = 4;
-  SDValue Fields[NumFields] = {
-    DAG.getConstant(FuncInfo->getVarArgsFirstGPR(), PtrVT),
-    DAG.getConstant(FuncInfo->getVarArgsFirstFPR(), PtrVT),
-    DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(), PtrVT),
-    DAG.getFrameIndex(FuncInfo->getRegSaveFrameIndex(), PtrVT)
-  };
-
-  // Store each field into its respective slot.
-  SDValue MemOps[NumFields];
-  unsigned Offset = 0;
-  for (unsigned I = 0; I < NumFields; ++I) {
-    SDValue FieldAddr = Addr;
-    if (Offset != 0)
-      FieldAddr = DAG.getNode(ISD::ADD, DL, PtrVT, FieldAddr,
-                              DAG.getIntPtrConstant(Offset));
-    MemOps[I] = DAG.getStore(Chain, DL, Fields[I], FieldAddr,
-                             MachinePointerInfo(SV, Offset),
-                             false, false, 0);
-    Offset += 8;
-  }
-  return DAG.getNode(ISD::TokenFactor, DL, MVT::Other, MemOps, NumFields);
+  // vastart just stores the address of the VarArgsFrameIndex slot into the
+  // memory location argument.
+  return DAG.getStore(Chain, DL, FI, Addr,
+                      MachinePointerInfo(SV), false, false, 0);
 }
 
 SDValue RISCVTargetLowering::lowerVACOPY(SDValue Op,
@@ -1958,8 +1944,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerConstantPool(cast<ConstantPoolSDNode>(Op), DAG);
   case ISD::VASTART:
     return lowerVASTART(Op, DAG);
-  case ISD::VACOPY:
-    return lowerVACOPY(Op, DAG);
+  //case ISD::VACOPY:
+    //return lowerVACOPY(Op, DAG);
   case ISD::ATOMIC_FENCE:
     return lowerATOMIC_FENCE(Op, DAG);
   case ISD::STACKSAVE:
