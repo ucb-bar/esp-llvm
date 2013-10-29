@@ -8,10 +8,10 @@
 //===----------------------------------------------------------------------===//
 
 //special 64bit instructions
-def ADDW : InstR<"addw" , 0b0111011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
-def SUBW : InstR<"subw" , 0b0111011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
+//def ADDW : InstR<"addw" , 0b0111011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
+//def SUBW : InstR<"subw" , 0b0111011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
 def SLLW : InstR<"sllw" , 0b0111011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRLW : InstR<"srlw" , 0b0111011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
+//def SRLW : InstR<"srlw" , 0b0111011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
 def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
 
 //Integer arithmetic register-immediate
@@ -82,7 +82,9 @@ defm : SetgePats<GR64, SLT64, SLTU64, XORI64>, Requires<[IsRV64]>;
 
 //Unconditional Jumps
 let isCall = 1 in {
-  let Defs = [ra_64, v0_64, v1_64] in { //after call return addr and values are defined
+  let Defs = [ra_64, v0_64, v1_64, //after call return addr and values are defined
+           a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
+           t0_64, t1_64, t2_64, t3_64, t4_64] in {
   //let Defs = [ra_64] in { //after call return addr and values are defined
     def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "jal\t$target", 
           [(z_call pcrel64call:$target)]>, Requires<[IsRV64]>;
@@ -90,7 +92,9 @@ let isCall = 1 in {
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
-  let Defs = [ra_64, v0_64, v1_64] in {
+  let Defs = [ra_64, v0_64, v1_64,
+           a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
+           t0_64, t1_64, t2_64, t3_64, t4_64] in {
     def JALR64: InstRISCV<4, (outs), (ins jalrmem64:$target), "jalr\t$target", 
           [(z_call addr:$target)]>, Requires<[IsRV64]>{
             field bits<32> Inst;
@@ -114,47 +118,47 @@ let isCall = 1 in {
 //TODO:refactor to class
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def BEQ64 : InstB<0b1100011, 0b000, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "beq\t$src1, $src2, $target", 
               [(brcond (i64 (seteq GR64:$src1,  GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BNE64 : InstB<0b1100011, 0b001, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bne\t$src1, $src2, $target", 
               [(brcond (i64 (setne GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BLT64 : InstB<0b1100011, 0b100, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "blt\t$src1, $src2, $target", 
               [(brcond (i64 (setlt GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BGE64 : InstB<0b1100011, 0b101, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bge\t$src1, $src2, $target", 
               [(brcond (i64 (setge GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BLTU64: InstB<0b1100011, 0b110, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bltu\t$src1, $src2, $target", 
               [(brcond (i64 (setult GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BGEU64: InstB<0b1100011, 0b111, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bgeu\t$src1, $src2, $target", 
               [(brcond (i64 (setuge GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
 
 //Synthesize remaining condition codes by reverseing operands
   def BGT64 : InstB<0b1100011, 0b100, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "blt\t$src2, $src1, $target", 
-              [(brcond (i64 (setgt GR64:$src2, GR64:$src1)), bb:$target)]>, Requires<[IsRV64]>;
+              [(brcond (i64 (setgt GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BGTU64: InstB<0b1100011, 0b110, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bltu\t$src2, $src1, $target", 
-              [(brcond (i64 (setugt GR64:$src2, GR64:$src1)), bb:$target)]>, Requires<[IsRV64]>;
+              [(brcond (i64 (setugt GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BLE64 : InstB<0b1100011, 0b101, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bge\t$src2, $src1, $target", 
-              [(brcond (i64 (setle GR64:$src2, GR64:$src1)), bb:$target)]>, Requires<[IsRV64]>;
+              [(brcond (i64 (setle GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
   def BLEU64: InstB<0b1100011, 0b111, (outs), 
-              (ins brtarget:$target, GR64:$src2, GR64:$src1), 
+              (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "bgeu\t$src2, $src1, $target", 
-              [(brcond (i64 (setule GR64:$src2, GR64:$src1)), bb:$target)]>, Requires<[IsRV64]>;
+              [(brcond (i64 (setule GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
 }
 //constant branches (e.g. br 1 $label or br 0 $label)
 def : Pat<(brcond GR64Bit:$cond, bb:$target),
@@ -227,11 +231,16 @@ def HI32 : SDNodeXForm<imm, [{
                      (N->getZExtValue() >> 32);
     return getImm(N, value);
 }]>;
-def : Pat<(i64 imm64:$imm), (ADD64 
+/*def : Pat<(i64 imm64:$imm), (ADD64 
                         (LLI64 (LUI64 (HI20 (i64 (LO32 $imm)))), (LO12 (i64 (LO32 $imm)))), 
                         (SLL64 (i64 32), 
                         (LLI64 (LUI64 (HI20 (i64 (HI32 $imm)))), (LO12 (i64 (HI32 $imm))))))>;
-
+*/
+def LI : InstRISCV<4, (outs GR64:$dst), (ins imm64:$imm), "li\t$dst, $imm",
+  []> {
+    let isPseudo = 1;
+}
+def : Pat<(i64 imm64:$imm), (LI imm64:$imm)>; //cheat and use gas for these
 //call
 def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;

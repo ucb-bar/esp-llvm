@@ -78,9 +78,9 @@ multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, 
 
 multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
   def : Pat<(setgt RC:$lhs, RC:$rhs),
-            (SLTOp RC:$rhs, RC:$lhs)>;
+            (SLTOp RC:$lhs, RC:$rhs)>;
   def : Pat<(setugt RC:$lhs, RC:$rhs),
-            (SLTuOp RC:$rhs, RC:$lhs)>;
+            (SLTuOp RC:$lhs, RC:$rhs)>;
 }
 
 multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {

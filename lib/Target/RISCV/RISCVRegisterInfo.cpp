@@ -141,7 +141,7 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   if (!MI.isDebugValue() && !isInt<12>(Offset)) {
     MachineBasicBlock &MBB = *MI.getParent();
     DebugLoc DL = II->getDebugLoc();
-    unsigned ADD = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::ADDW : RISCV::ADD;
+    unsigned ADD = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::ADD64 : RISCV::ADD;
     unsigned NewImm;
     unsigned Reg;
 
