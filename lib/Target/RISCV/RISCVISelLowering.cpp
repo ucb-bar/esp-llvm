@@ -803,10 +803,8 @@ RISCVTargetLowering::RISCVCC::handleByValArg(unsigned ValNo, MVT ValVT,
   unsigned Align = std::min(std::max(ArgFlags.getByValAlign(), RegSize),
                             RegSize * 2);
 
-  /*TODO:do we need this
   if (useRegsForByval())
     allocateRegs(ByVal, ByValSize, Align);
-  */
 
   // Allocate space on caller's stack.
   ByVal.Address = CCInfo.AllocateStack(ByValSize - RegSize * ByVal.NumRegs,
@@ -826,6 +824,33 @@ unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
 
 const uint16_t *RISCVTargetLowering::RISCVCC::intArgRegs() const {
   return IsRV32 ? RV32IntRegs : RV64IntRegs;
+}
+/*
+const uint16_t *MipsTargetLowering::MipsCC::shadowRegs() const {
+  return IsRV32 ? RV32IntRegs :Regs;
+}*/
+
+void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
+                                              unsigned ByValSize,
+                                              unsigned Align) {
+  unsigned RegSize = regSize(), NumIntArgRegs = numIntArgRegs();
+  const uint16_t *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
+  assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
+         "Byval argument's size and alignment should be a multiple of"
+         "RegSize.");
+
+  ByVal.FirstIdx = CCInfo.getFirstUnallocated(IntArgRegs, NumIntArgRegs);
+
+  // If Align > RegSize, the first arg register must be even.
+  if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
+    CCInfo.AllocateReg(IntArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
+    ++ByVal.FirstIdx;
+  }
+
+  // Mark the registers allocated.
+  for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumIntArgRegs);
+       ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
+    CCInfo.AllocateReg(IntArgRegs[I]);//, ShadowRegs[I]);
 }
 //End RISCVCC Implementation
 
