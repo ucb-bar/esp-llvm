@@ -31,16 +31,16 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
     // requirements for stack variables though.
 
     //Quick doc on this incomprehensible garbage below ('-' are delimiters)
-    //E -- Big endian
+    //e -- little endian
     //p:64:64:64 -- pointers are 32bits abi alignment is 32bits preferred alignment is also 32 bits
     //i1:8:16 -- int1 are abi 8 bit aligned and preferred 16
     //i8,u16,i32,f32 -- same as above omitting preferred as needed
     //a0:8:16 -- aggregate type of 0bit? should be 8 bit by api and 16 by pref
     //n32 -- native integer width is 32bits
     DL(Subtarget.isRV64() ? 
-       "E-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64-"
+       "e-p:64:64:64-i1:8:16-i8:8:16-i16:16-i32:32-i64:64-"
        "f64:64-f128:128-n32:64" :
-       "E-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
+       "e-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
        "f32:32-f64:64-f128:128-n32"),
     InstrInfo(*this), TLInfo(*this), TSInfo(*this),
     FrameLowering(*this, Subtarget) {

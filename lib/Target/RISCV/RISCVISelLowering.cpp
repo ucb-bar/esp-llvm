@@ -701,6 +701,44 @@ RISCVTargetLowering::RISCVCC::RISCVCC(CallingConv::ID CC, bool IsRV32_,
 }
 
 void RISCVTargetLowering::RISCVCC::
+analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Args,
+                    bool IsVarArg, bool IsSoftFloat, const SDNode *CallNode,
+                    std::vector<ArgListEntry> &FuncArgs) {
+  assert((CallConv != CallingConv::Fast || !IsVarArg) &&
+         "CallingConv::Fast shouldn't be used for vararg functions.");
+
+  unsigned NumOpnds = Args.size();
+  llvm::CCAssignFn *FixedFn = fixedArgFn(), *VarFn = varArgFn();
+
+  for (unsigned I = 0; I != NumOpnds; ++I) {
+    MVT ArgVT = Args[I].VT;
+    ISD::ArgFlagsTy ArgFlags = Args[I].Flags;
+    bool R;
+
+    if (ArgFlags.isByVal()) {
+      handleByValArg(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags);
+      continue;
+    }
+
+    if (IsVarArg && !Args[I].IsFixed)
+      R = VarFn(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
+    else {
+      MVT RegVT = getRegVT(ArgVT, FuncArgs[Args[I].OrigArgIndex].Ty, CallNode,
+                           IsSoftFloat);
+      R = FixedFn(I, ArgVT, RegVT, CCValAssign::Full, ArgFlags, CCInfo);
+    }
+
+    if (R) {
+#ifndef NDEBUG
+      dbgs() << "Call operand #" << I << " has unhandled type "
+             << EVT(ArgVT).getEVTString();
+#endif
+      llvm_unreachable(0);
+    }
+  }
+}
+
+void RISCVTargetLowering::RISCVCC::
 analyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Args,
                        bool IsSoftFloat, Function::const_arg_iterator FuncArg) {
   unsigned NumArgs = Args.size();
@@ -793,6 +831,103 @@ copyByValRegs(SDValue Chain, DebugLoc DL, std::vector<SDValue> &OutChains,
   }
 }
 
+// Copy byVal arg to registers and stack.
+void RISCVTargetLowering::
+passByValArg(SDValue Chain, DebugLoc DL,
+             std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
+             SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
+             MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
+             const RISCVCC &CC, const ByValArgInfo &ByVal,
+             const ISD::ArgFlagsTy &Flags, bool isLittle) const {
+  unsigned ByValSize = Flags.getByValSize();
+  unsigned Offset = 0; // Offset in # of bytes from the beginning of struct.
+  unsigned RegSize = CC.regSize();
+  unsigned Alignment = std::min(Flags.getByValAlign(), RegSize);
+  EVT PtrTy = getPointerTy(), RegTy = MVT::getIntegerVT(RegSize * 8);
+
+  if (ByVal.NumRegs) {
+    const uint16_t *ArgRegs = CC.intArgRegs();
+    bool LeftoverBytes = (ByVal.NumRegs * RegSize > ByValSize);
+    unsigned I = 0;
+
+    // Copy words to registers.
+    for (; I < ByVal.NumRegs - LeftoverBytes; ++I, Offset += RegSize) {
+      SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
+                                    DAG.getConstant(Offset, PtrTy));
+      SDValue LoadVal = DAG.getLoad(RegTy, DL, Chain, LoadPtr,
+                                    MachinePointerInfo(), false, false, false,
+                                    Alignment);
+      MemOpChains.push_back(LoadVal.getValue(1));
+      unsigned ArgReg = ArgRegs[ByVal.FirstIdx + I];
+      RegsToPass.push_back(std::make_pair(ArgReg, LoadVal));
+    }
+
+    // Return if the struct has been fully copied.
+    if (ByValSize == Offset)
+      return;
+
+    // Copy the remainder of the byval argument with sub-word loads and shifts.
+    if (LeftoverBytes) {
+      assert((ByValSize > Offset) && (ByValSize < Offset + RegSize) &&
+             "Size of the remainder should be smaller than RegSize.");
+      SDValue Val;
+
+      for (unsigned LoadSize = RegSize / 2, TotalSizeLoaded = 0;
+           Offset < ByValSize; LoadSize /= 2) {
+        unsigned RemSize = ByValSize - Offset;
+
+        if (RemSize < LoadSize)
+          continue;
+
+        // Load subword.
+        SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
+                                      DAG.getConstant(Offset, PtrTy));
+        SDValue LoadVal =
+          DAG.getExtLoad(ISD::ZEXTLOAD, DL, RegTy, Chain, LoadPtr,
+                         MachinePointerInfo(), MVT::getIntegerVT(LoadSize * 8),
+                         false, false, Alignment);
+        MemOpChains.push_back(LoadVal.getValue(1));
+
+        // Shift the loaded value.
+        unsigned Shamt;
+
+        if (isLittle)
+          Shamt = TotalSizeLoaded;
+        else
+          Shamt = (RegSize - (TotalSizeLoaded + LoadSize)) * 8;
+
+        SDValue Shift = DAG.getNode(ISD::SHL, DL, RegTy, LoadVal,
+                                    DAG.getConstant(Shamt, MVT::i32));
+
+        if (Val.getNode())
+          Val = DAG.getNode(ISD::OR, DL, RegTy, Val, Shift);
+        else
+          Val = Shift;
+
+        Offset += LoadSize;
+        TotalSizeLoaded += LoadSize;
+        Alignment = std::min(Alignment, LoadSize);
+      }
+
+      unsigned ArgReg = ArgRegs[ByVal.FirstIdx + I];
+      RegsToPass.push_back(std::make_pair(ArgReg, Val));
+      return;
+    }
+  }
+
+  // Copy remainder of byval arg to it with memcpy.
+  unsigned MemCpySize = ByValSize - Offset;
+  SDValue Src = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
+                            DAG.getConstant(Offset, PtrTy));
+  SDValue Dst = DAG.getNode(ISD::ADD, DL, PtrTy, StackPtr,
+                            DAG.getIntPtrConstant(ByVal.Address));
+  Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
+                        DAG.getConstant(MemCpySize, PtrTy), Alignment,
+                        /*isVolatile=*/false, /*AlwaysInline=*/false,
+                        MachinePointerInfo(0), MachinePointerInfo(0));
+  MemOpChains.push_back(Chain);
+}
+
 void
 RISCVTargetLowering::RISCVCC::handleByValArg(unsigned ValNo, MVT ValVT,
                                            MVT LocVT,
@@ -828,8 +963,17 @@ unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
 const uint16_t *RISCVTargetLowering::RISCVCC::intArgRegs() const {
   return IsRV32 ? RV32IntRegs : RV64IntRegs;
 }
+
+llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::fixedArgFn() const {
+  return IsRV32 ? CC_RISCV32 : CC_RISCV64;
+}
+
+llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::varArgFn() const {
+  return IsRV32 ? CC_RISCV32 : CC_RISCV64;
+}
+
 /*
-const uint16_t *MipsTargetLowering::MipsCC::shadowRegs() const {
+const uint16_t *RISCVTargetLowering::RISCVCC::shadowRegs() const {
   return IsRV32 ? RV32IntRegs :Regs;
 }*/
 
@@ -1147,6 +1291,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
   MachineFunction &MF = DAG.getMachineFunction();
+  MachineFrameInfo *MFI = MF.getFrameInfo();
   EVT PtrVT = getPointerTy();
 
   // RISCV target does not yet support tail call optimization.
@@ -1155,10 +1300,15 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, TM, ArgLocs, *DAG.getContext());
+  RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo);
+  RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, getTargetMachine().Options.UseSoftFloat,
+                                   Callee.getNode(), CLI.Args);
+/*
   if(Subtarget.isRV64())
     ArgCCInfo.AnalyzeCallOperands(Outs, CC_RISCV64);
   else
     ArgCCInfo.AnalyzeCallOperands(Outs, CC_RISCV32);
+*/
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = ArgCCInfo.getNextStackOffset();
@@ -1166,15 +1316,32 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Mark the start of the call.
   Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, PtrVT, true));
 
+  RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
+
   // Copy argument values to their designated locations.
-  SmallVector<std::pair<unsigned, SDValue>, 9> RegsToPass;
+  //SmallVector<std::pair<unsigned, SDValue>, 9> RegsToPass;
+  std::deque< std::pair<unsigned, SDValue> > RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
   for (unsigned I = 0, E = ArgLocs.size(); I != E; ++I) {
     CCValAssign &VA = ArgLocs[I];
     SDValue ArgValue = OutVals[I];
+    ISD::ArgFlagsTy Flags = Outs[I].Flags;
 
-    if (VA.getLocInfo() == CCValAssign::Indirect) {
+    // ByVal Arg.
+    if (Flags.isByVal()) {
+      assert(Flags.getByValSize() &&
+             "ByVal args of size 0 should have been ignored by front-end.");
+      assert(ByValArg != RISCVCCInfo.byval_end());
+      assert(!isTailCall &&
+             "Do not tail-call optimize if there is a byval argument.");
+      passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, ArgValue,
+                   RISCVCCInfo, *ByValArg, Flags, true);// Subtarget is little endian so we have false
+      ++ByValArg;
+      continue;
+    }
+
+    /*if (VA.getLocInfo() == CCValAssign::Indirect) {
       // Store the argument in a stack slot and pass its address.
       SDValue SpillSlot = DAG.CreateStackTemporary(VA.getValVT());
       int FI = cast<FrameIndexSDNode>(SpillSlot)->getIndex();
@@ -1182,7 +1349,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                          MachinePointerInfo::getFixedStack(FI),
                                          false, false, 0));
       ArgValue = SpillSlot;
-    } else
+    } else */
       ArgValue = convertValVTToLocVT(DAG, DL, VA, ArgValue);
 
     if (VA.isRegLoc())
@@ -1683,35 +1850,6 @@ SDValue RISCVTargetLowering::lowerVACOPY(SDValue Op,
                        /*Align*/8, /*isVolatile*/false, /*AlwaysInline*/false,
                        MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }
-
-/*
-SDValue RISCVTargetLowering::
-lowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const {
-  SDValue Chain = Op.getOperand(0);
-  SDValue Size  = Op.getOperand(1);
-  DebugLoc DL   = Op.getDebugLoc();
-
-  unsigned SPReg = getStackPointerRegisterToSaveRestore();
-
-  // Get a reference to the stack pointer.
-  SDValue OldSP = DAG.getCopyFromReg(Chain, DL, SPReg, MVT::i64);
-
-  // Get the new stack pointer value.
-  SDValue NewSP = DAG.getNode(ISD::SUB, DL, MVT::i64, OldSP, Size);
-
-  // Copy the new stack pointer back.
-  Chain = DAG.getCopyToReg(Chain, DL, SPReg, NewSP);
-
-  // The allocated data lives above the 160 bytes allocated for the standard
-  // frame, plus any outgoing stack arguments.  We don't know how much that
-  // amounts to yet, so emit a special ADJDYNALLOC placeholder.
-  SDValue ArgAdjust = DAG.getNode(RISCVISD::ADJDYNALLOC, DL, MVT::i64);
-  SDValue Result = DAG.getNode(ISD::ADD, DL, MVT::i64, NewSP, ArgAdjust);
-
-  SDValue Ops[2] = { Result, Chain };
-  return DAG.getMergeValues(Ops, 2, DL);
-}
-*/
 
 SDValue RISCVTargetLowering::lowerUMUL_LOHI(SDValue Op,
                                               SelectionDAG &DAG) const {
