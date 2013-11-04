@@ -22,6 +22,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Target/TargetLowering.h"
 #include <string>
+#include <deque>
 
 namespace llvm {
 namespace RISCVISD {
@@ -335,6 +336,13 @@ private:
                      SmallVectorImpl<SDValue> &InVals,
                      const Argument *FuncArg,
                      const RISCVCC &CC, const ByValArgInfo &ByVal) const;
+    /// passByValArg - Pass a byval argument in registers or on stack.
+    void passByValArg(SDValue Chain, DebugLoc DL,
+                      std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
+                      SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
+                      MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
+                      const RISCVCC &CC, const ByValArgInfo &ByVal,
+                      const ISD::ArgFlagsTy &Flags, bool isLittle) const;
   // writeVarArgRegs - Write variable function arguments passed in registers
   // to the stack. Also create a stack frame object for the first variable
   // argument.
