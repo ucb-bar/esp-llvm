@@ -71,9 +71,9 @@ multiclass SeteqPats<RegisterOperand RC, Instruction SLTiuOp, Instruction XOROp,
 
 multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
   def : Pat<(setle RC:$lhs, RC:$rhs),
-            (XORIOp (SLTOp RC:$rhs, RC:$lhs), 1)>;
+            (XORIOp (SLTOp RC:$lhs, RC:$rhs), 1)>;
   def : Pat<(setule RC:$lhs, RC:$rhs),
-            (XORIOp (SLTuOp RC:$rhs, RC:$lhs), 1)>;
+            (XORIOp (SLTuOp RC:$lhs, RC:$rhs), 1)>;
 }
 
 multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
@@ -85,9 +85,9 @@ multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> 
 
 multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
   def : Pat<(setge RC:$lhs, RC:$rhs),
-            (XORIOp (SLTOp RC:$lhs, RC:$rhs), 1)>;
+            (XORIOp (SLTOp RC:$rhs, RC:$lhs), 1)>;
   def : Pat<(setuge RC:$lhs, RC:$rhs),
-            (XORIOp (SLTuOp RC:$lhs, RC:$rhs), 1)>;
+            (XORIOp (SLTuOp RC:$rhs, RC:$lhs), 1)>;
 }
 
 defm : SeteqPats<GR32, SLTIU, XOR, SLTU, zero>;
