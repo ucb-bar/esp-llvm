@@ -47,7 +47,7 @@ RISCVFrameLowering::RISCVFrameLowering(const RISCVTargetMachine &tm,
     |  FPR save area                |
     +-------------------------------+ <-- frame_pointer_rtx (virtual)
     |  local variables              |
-      P +-------------------------------+
+  P +-------------------------------+
     |  outgoing stack arguments     |
     +-------------------------------+
     |  caller-allocated save area   |
@@ -70,6 +70,7 @@ bool RISCVFrameLowering::hasFP(const MachineFunction &MF) const {
       MFI->hasVarSizedObjects() || MFI->isFrameAddressTaken();
 }
 
+/*
 uint64_t RISCVFrameLowering::estimateStackSize(const MachineFunction &MF) const {
   const MachineFrameInfo *MFI = MF.getFrameInfo();
   const TargetRegisterInfo &TRI = *MF.getTarget().getRegisterInfo();
@@ -102,7 +103,7 @@ uint64_t RISCVFrameLowering::estimateStackSize(const MachineFunction &MF) const 
                                 std::max(MaxAlign, getStackAlignment()));
 
   return RoundUpToAlignment(Offset, getStackAlignment());
-}
+}*/
 
 //using namespace llvm;
 
@@ -553,6 +554,7 @@ void RISCVFrameLowering::
 processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                      RegScavenger *RS) const {
   MachineRegisterInfo &MRI = MF.getRegInfo();
+  MachineFrameInfo *MFI = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
 
@@ -580,7 +582,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
 
   // Set scavenging frame index if necessary.
   uint64_t MaxSPOffset = MF.getInfo<RISCVMachineFunctionInfo>()->getIncomingArgSize() +
-    estimateStackSize(MF);
+    MFI->estimateStackSize(MF);
 
   if (isInt<12>(MaxSPOffset))
     return;

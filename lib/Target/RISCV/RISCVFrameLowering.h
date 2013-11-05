@@ -52,7 +52,7 @@ public:
   unsigned ehDataReg(unsigned I) const;
 
 protected:
-  uint64_t estimateStackSize(const MachineFunction &MF) const;
+  //uint64_t estimateStackSize(const MachineFunction &MF) const;
 };
 
 } // End llvm namespace

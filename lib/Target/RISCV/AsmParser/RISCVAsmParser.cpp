@@ -255,7 +255,8 @@ static const unsigned GR32Regs[] = {
   RISCV::sp  , RISCV::tp  , RISCV::v0  , RISCV::v1,
   RISCV::a0  , RISCV::a1  , RISCV::a2  , RISCV::a3  , RISCV::a4,
   RISCV::a5  , RISCV::a6  , RISCV::a7  ,
-  RISCV::t0  , RISCV::t1  , RISCV::t2  , RISCV::t3  , RISCV::t4 , RISCV::t5 
+  RISCV::t0  , RISCV::t1  , RISCV::t2  , RISCV::t3  , RISCV::t4 , 
+  RISCV::gp 
 };
 
 static const unsigned GR64Regs[] = {
@@ -266,7 +267,8 @@ static const unsigned GR64Regs[] = {
   RISCV::sp_64  , RISCV::tp_64  , RISCV::v0_64  , RISCV::v1_64  ,
   RISCV::a0_64  , RISCV::a1_64  , RISCV::a2_64  , RISCV::a3_64  , RISCV::a4_64 ,
   RISCV::a5_64  , RISCV::a6_64  , RISCV::a7_64  ,
-  RISCV::t0_64  , RISCV::t1_64  , RISCV::t2_64  , RISCV::t3_64  , RISCV::t4_64 , RISCV::t5_64 
+  RISCV::t0_64  , RISCV::t1_64  , RISCV::t2_64  , RISCV::t3_64  , RISCV::t4_64 , 
+  RISCV::gp_64 
 };
 
 static const unsigned PairGR64Regs[] = {
