@@ -8,11 +8,12 @@
 //===----------------------------------------------------------------------===//
 
 //special 64bit instructions
+//TODO:reenable *W instructions pre making them only used on smaller than 64bit values
 //def ADDW : InstR<"addw" , 0b0111011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
 //def SUBW : InstR<"subw" , 0b0111011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
-def SLLW : InstR<"sllw" , 0b0111011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
+//def SLLW : InstR<"sllw" , 0b0111011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
 //def SRLW : InstR<"srlw" , 0b0111011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
+//def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
 
 //Integer arithmetic register-immediate
 def ADDIW: InstI<"addiw", 0b0011011, 0b000       , add, GR32, imm32sx12>, Requires<[IsRV64]>;
