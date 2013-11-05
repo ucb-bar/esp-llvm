@@ -95,7 +95,7 @@ def CC_RISCV64 : CallingConv<[
   CCIfType<[f32, f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64]>>>,
 
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
-  CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
 ]>;
 
 //===----------------------------------------------------------------------===//

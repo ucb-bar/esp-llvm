@@ -389,7 +389,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // VASTART and VACOPY need to deal with the RISCV-specific varargs
   // structure, but VAEND is a no-op.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction(ISD::VAARG  , MVT::Other, Expand);
+  //we always write var args with word boundary so we have to customize this
+  //TODO: it seems like the default imp should store values that vaarg know how to get
+  setOperationAction(ISD::VAARG  , MVT::Other, Custom);
   setOperationAction(ISD::VACOPY , MVT::Other, Expand);
   setOperationAction(ISD::VAEND  , MVT::Other, Expand);
   //setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
@@ -1837,18 +1839,27 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
                       MachinePointerInfo(SV), false, false, 0);
 }
 
-SDValue RISCVTargetLowering::lowerVACOPY(SDValue Op,
-                                           SelectionDAG &DAG) const {
-  SDValue Chain      = Op.getOperand(0);
-  SDValue DstPtr     = Op.getOperand(1);
-  SDValue SrcPtr     = Op.getOperand(2);
-  const Value *DstSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
-  const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
-  DebugLoc DL        = Op.getDebugLoc();
-
-  return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(32),
-                       /*Align*/8, /*isVolatile*/false, /*AlwaysInline*/false,
-                       MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
+SDValue RISCVTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const{
+  SDNode *Node = Op.getNode();
+  EVT VT = Node->getValueType(0);
+  SDValue InChain = Node->getOperand(0);
+  SDValue VAListPtr = Node->getOperand(1);
+  EVT PtrVT = VAListPtr.getValueType();
+  const Value *SV = cast<SrcValueSDNode>(Node->getOperand(2))->getValue();
+  DebugLoc DL = Node->getDebugLoc();
+  SDValue VAList = DAG.getLoad(PtrVT, DL, InChain, VAListPtr,
+                               MachinePointerInfo(SV), false, false, false, 0);
+  // Increment the pointer, VAList, to the next vaarg.
+  SDValue NextPtr = DAG.getNode(ISD::ADD, DL, PtrVT, VAList,
+                                DAG.getIntPtrConstant(VT.getSizeInBits()/8));
+  // Store the incremented VAList to the legalized pointer.
+  InChain = DAG.getStore(VAList.getValue(1), DL, NextPtr,
+                         VAListPtr, MachinePointerInfo(SV), false, false, 0);
+  // Load the actual argument out of the pointer VAList.
+  // We can't count on greater alignment than the word size.
+  return DAG.getLoad(VT, DL, InChain, VAList, MachinePointerInfo(),
+                     false, false, false,
+                     std::min(PtrVT.getSizeInBits(), VT.getSizeInBits())/8);
 }
 
 SDValue RISCVTargetLowering::lowerUMUL_LOHI(SDValue Op,
@@ -2082,8 +2093,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerConstantPool(cast<ConstantPoolSDNode>(Op), DAG);
   case ISD::VASTART:
     return lowerVASTART(Op, DAG);
-  //case ISD::VACOPY:
-    //return lowerVACOPY(Op, DAG);
+  case ISD::VAARG:
+    return lowerVAARG(Op, DAG);
   case ISD::ATOMIC_FENCE:
     return lowerATOMIC_FENCE(Op, DAG);
   case ISD::STACKSAVE:
