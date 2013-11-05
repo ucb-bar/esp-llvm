@@ -66,7 +66,7 @@ multiclass SeteqPats<RegisterOperand RC, Instruction SLTiuOp, Instruction XOROp,
   def : Pat<(seteq RC:$lhs, RC:$rhs),
             (SLTiuOp (XOROp RC:$lhs, RC:$rhs), 1)>;
   def : Pat<(setne RC:$lhs, RC:$rhs),
-            (SLTuOp ZEROReg, (XOROp RC:$lhs, RC:$rhs))>;
+            (SLTuOp (XOROp RC:$lhs, RC:$rhs), ZEROReg)>;
 }
 
 multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
@@ -230,9 +230,9 @@ def LO12 : SDNodeXForm<imm, [{
 // Transformation Function - get the higher 20 bits for large immediate loading
 def HI20 : SDNodeXForm<imm, [{
     uint32_t value = N->getZExtValue() & 0x00000800 ? 
-                     (N->getZExtValue() >> 12)+1:
+                     (N->getZExtValue() >> 12):
                      (N->getZExtValue() >> 12);
-    return getI32Imm(value % 20);
+    return getI32Imm(value & 0x000FFFFF);
 }]>;
 
 //psuedo load low imm instruction to print operands better
