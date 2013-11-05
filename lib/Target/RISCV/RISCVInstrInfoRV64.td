@@ -85,7 +85,7 @@ defm : SetgePats<GR64, SLT64, SLTU64, XORI64>, Requires<[IsRV64]>;
 let isCall = 1 in {
   let Defs = [ra_64, v0_64, v1_64, //after call return addr and values are defined
            a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
-           t0_64, t1_64, t2_64, t3_64, t4_64] in {
+           t0_64, t1_64, t2_64, t3_64, t4_64, gp_64] in {
   //let Defs = [ra_64] in { //after call return addr and values are defined
     def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "jal\t$target", 
           [(z_call pcrel64call:$target)]>, Requires<[IsRV64]>;
@@ -237,12 +237,12 @@ def HI32 : SDNodeXForm<imm, [{
                         (SLL64 (i64 32), 
                         (LLI64 (LUI64 (HI20 (i64 (HI32 $imm)))), (LO12 (i64 (HI32 $imm))))))>;
 */
-def LI : InstRISCV<4, (outs GR64:$dst), (ins imm64:$imm), "li\t$dst, $imm",
+def LI64 : InstRISCV<4, (outs GR64:$dst), (ins imm64:$imm), "li\t$dst, $imm",
   []> {
     let isPseudo = 1;
 }
-def : Pat<(i64 imm64:$imm), (LI imm64:$imm)>; //cheat and use gas for these
-def : Pat<(i64 imm64sxu32:$imm), (LI imm64sxu32:$imm)>; //cheat and use gas for these
+def : Pat<(i64 imm64:$imm), (LI64 imm64:$imm)>; //cheat and use gas for these
+def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas for these
 //call
 def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;

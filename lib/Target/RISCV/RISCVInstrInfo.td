@@ -101,7 +101,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
           [(br bb:$target)]>;
 }
 let isCall = 1 in {
-  let Defs = [ra, v0, v1] in { //after call return addr and values are defined
+  let Defs = [ra, v0, v1, gp] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
           [(z_call pcrel32call:$target)]>;
   }
@@ -237,7 +237,12 @@ def HI20 : SDNodeXForm<imm, [{
 
 //psuedo load low imm instruction to print operands better
 def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
-def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
+//def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
+def LI : InstRISCV<4, (outs GR32:$dst), (ins imm32:$imm), "li\t$dst, $imm",
+  []> {
+    let isPseudo = 1;
+}
+def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
 def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>;
 

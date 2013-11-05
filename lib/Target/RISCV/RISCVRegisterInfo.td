@@ -100,7 +100,7 @@ def t1   : GPR32<27,"x27">, DwarfRegNum<[27]>;
 def t2   : GPR32<28,"x28">, DwarfRegNum<[28]>;
 def t3   : GPR32<29,"x29">, DwarfRegNum<[29]>;
 def t4   : GPR32<30,"x30">, DwarfRegNum<[30]>;
-def t5   : GPR32<31,"x31">, DwarfRegNum<[31]>;
+def gp   : GPR32<31,"x31">, DwarfRegNum<[31]>;
 
 //All regs are 32bit
 defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
@@ -109,7 +109,8 @@ defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
   sp, tp,
   v0, v1,
   a0, a1, a2, a3, a4, a5, a6, a7, 
-  t0, t1, t2, t3, t4, t5)>;
+  t0, t1, t2, t3, t4, 
+  gp)>;
 
 // Base and index registers.  Everything except R0, which in an address
 // context evaluates as 0.
@@ -176,7 +177,7 @@ def t1_64   : GPR64<27,"x27">, DwarfRegNum<[27]>;
 def t2_64   : GPR64<28,"x28">, DwarfRegNum<[28]>;
 def t3_64   : GPR64<29,"x29">, DwarfRegNum<[29]>;
 def t4_64   : GPR64<30,"x30">, DwarfRegNum<[30]>;
-def t5_64   : GPR64<31,"x31">, DwarfRegNum<[31]>;
+def gp_64   : GPR64<31,"x31">, DwarfRegNum<[31]>;
 
 //All regs are 32bit
 defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
@@ -185,7 +186,8 @@ defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
   sp_64, tp_64,
   v0_64, v1_64,
   a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64, 
-  t0_64, t1_64, t2_64, t3_64, t4_64, t5_64)>;
+  t0_64, t1_64, t2_64, t3_64, t4_64, 
+  gp_64)>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairGPR128<bits<16> num, string n, list<Register> subregs>

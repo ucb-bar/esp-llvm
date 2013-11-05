@@ -459,6 +459,7 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
     Opcode = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(Value);
   } else {
+  /*
     assert(isInt<32>(Value) && "Huge values not handled yet");
     uint64_t upper20 = (Value & 0x0000000000000800) ? 
         0x00000000000FFFFF & (Value >> 12)
@@ -468,5 +469,8 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addImm(upper20);
     Opcode = STI.isRV64() ? RISCV::LLI64 : RISCV::LLI;
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(lower12);
+*/
+  //cheat with li
+  BuildMI(MBB, MBBI, DL, get(RISCV::LI), *Reg).addImm(Value);
   }
 }

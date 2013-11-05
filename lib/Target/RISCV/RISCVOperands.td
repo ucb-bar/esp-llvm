@@ -120,7 +120,7 @@ def imm32zx20 : Immediate<i32, [{
 def simm32 : Immediate<i32, [{}], SIMM32, "S32Imm">;
 def uimm32 : Immediate<i32, [{}], UIMM32, "U32Imm">;
 
-def imm32 : ImmLeaf<i32, [{}]>;
+def imm32 : ImmLeaf<i32, [{}]>, Operand<i32>;
 
 //===----------------------------------------------------------------------===//
 // 64-bit immediates
