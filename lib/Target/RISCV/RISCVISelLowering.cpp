@@ -762,6 +762,10 @@ analyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Args,
       continue;
     }
 
+    if(ArgFlags.isSRet()) {
+      
+    }
+
     MVT RegVT = getRegVT(ArgVT, FuncArg->getType(), 0, IsSoftFloat);
 
     if (!FixedFn(I, ArgVT, RegVT, CCValAssign::Full, ArgFlags, CCInfo))
@@ -1021,6 +1025,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(),
                  getTargetMachine(), ArgLocs, *DAG.getContext());
+  
   RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo);
   Function::const_arg_iterator FuncArg =
     DAG.getMachineFunction().getFunction()->arg_begin();
@@ -1040,6 +1045,21 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     EVT ValVT = VA.getValVT();
     ISD::ArgFlagsTy Flags = Ins[i].Flags;
     bool IsRegLoc = VA.isRegLoc();
+
+    //handle SRet
+    /* Now handled in callingconv?
+    if(i == 0 && Flags.isSRet()) {
+      //the first argument is a pointer to the memory to place the struct
+      const TargetRegisterClass *RC = Subtarget.isRV64() ? 
+                     &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+      EVT RegVT = getPointerTy();
+      unsigned ArgReg = Subtarget.isRV64() ? RISCV::a0_64 : RISCV::a0;
+      unsigned Reg = addLiveIn(DAG.getMachineFunction(), ArgReg, RC);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
+      InVals.push_back(ArgValue);
+      continue;
+    }
+   */
 
     if (Flags.isByVal()) {
       assert(Flags.getByValSize() &&
@@ -1146,20 +1166,6 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     }
   }
 
-  // The RISCV ABIs for returning structs by value requires that we copy
-  // the sret argument into $v0 for the return. Save the argument into
-  // a virtual register so that we can access it from the return points.
-  if (DAG.getMachineFunction().getFunction()->hasStructRetAttr()) {
-    unsigned Reg = RISCVFI->getSRetReturnReg();
-    if (!Reg) {
-      Reg = MF.getRegInfo().
-        createVirtualRegister(getRegClassFor(Subtarget.isRV64() ? MVT::i64 : MVT::i32));
-      RISCVFI->setSRetReturnReg(Reg);
-    }
-    SDValue Copy = DAG.getCopyToReg(DAG.getEntryNode(), DL, Reg, InVals[0]);
-    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, Copy, Chain);
-  }
-
   if (IsVarArg)
     writeVarArgRegs(OutChains, RISCVCCInfo, Chain, DL, DAG);
 
@@ -1172,111 +1178,6 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   }
 
   return Chain;
-    /*
-  MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  RISCVMachineFunctionInfo *FuncInfo =
-    MF.getInfo<RISCVMachineFunctionInfo>();
-  const RISCVFrameLowering *TFL =
-    static_cast<const RISCVFrameLowering *>(TM.getFrameLowering());
-
-  // Assign locations to all of the incoming arguments.
-  SmallVector<CCValAssign, 16> ArgLocs;
-  CCState CCInfo(CallConv, IsVarArg, MF, TM, ArgLocs, *DAG.getContext());
-  CCInfo.AnalyzeFormalArguments(Ins, CC_RISCV);
-
-  unsigned NumFixedGPRs = 0;
-  unsigned NumFixedFPRs = 0;
-  for (unsigned I = 0, E = ArgLocs.size(); I != E; ++I) {
-    SDValue ArgValue;
-    CCValAssign &VA = ArgLocs[I];
-    EVT LocVT = VA.getLocVT();
-    if (VA.isRegLoc()) {
-      // Arguments passed in registers
-      const TargetRegisterClass *RC;
-      switch (LocVT.getSimpleVT().SimpleTy) {
-      default:
-        // Integers smaller than i64 should be promoted to i64.
-        llvm_unreachable("Unexpected argument type");
-      case MVT::i32:
-        NumFixedGPRs += 1;
-        RC = &RISCV::GR32BitRegClass;
-        break;
-      case MVT::f32:
-        NumFixedFPRs += 1;
-        RC = &RISCV::FP32BitRegClass;
-        break;
-      }
-
-      unsigned VReg = MRI.createVirtualRegister(RC);
-      MRI.addLiveIn(VA.getLocReg(), VReg);
-      ArgValue = DAG.getCopyFromReg(Chain, DL, VReg, LocVT);
-    } else {
-      assert(VA.isMemLoc() && "Argument not register or memory");
-
-      // Create the frame index object for this incoming parameter.
-      int FI = MFI->CreateFixedObject(LocVT.getSizeInBits() / 8,
-                                      VA.getLocMemOffset(), true);
-
-      // Create the SelectionDAG nodes corresponding to a load
-      // from this parameter.  Unpromoted ints and floats are
-      // passed as right-justified 8-byte values.
-      EVT PtrVT = getPointerTy();
-      SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
-      if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
-        FIN = DAG.getNode(ISD::ADD, DL, PtrVT, FIN, DAG.getIntPtrConstant(4));
-      ArgValue = DAG.getLoad(LocVT, DL, Chain, FIN,
-                             MachinePointerInfo::getFixedStack(FI),
-                             false, false, false, 0);
-    }
-
-    // Convert the value of the argument register into the value that's
-    // being passed.
-    InVals.push_back(convertLocVTToValVT(DAG, DL, VA, Chain, ArgValue));
-  }
-
-  if (IsVarArg) {
-    // Save the number of non-varargs registers for later use by va_start, etc.
-    FuncInfo->setVarArgsFirstGPR(NumFixedGPRs);
-    FuncInfo->setVarArgsFirstFPR(NumFixedFPRs);
-
-    // Likewise the address (in the form of a frame index) of where the
-    // first stack vararg would be.  The 1-byte size here is arbitrary.
-    int64_t StackSize = CCInfo.getNextStackOffset();
-    FuncInfo->setVarArgsFrameIndex(MFI->CreateFixedObject(1, StackSize, true));
-
-    // ...and a similar frame index for the caller-allocated save area
-    // that will be used to store the incoming registers.
-    int64_t RegSaveOffset = TFL->getOffsetOfLocalArea();
-    unsigned RegSaveIndex = MFI->CreateFixedObject(1, RegSaveOffset, true);
-    FuncInfo->setRegSaveFrameIndex(RegSaveIndex);
-
-    // Store the FPR varargs in the reserved frame slots.  (We store the
-    // GPRs as part of the prologue.)
-    if (NumFixedFPRs < RISCV::NumArgFPRs) {
-      SDValue MemOps[RISCV::NumArgFPRs];
-      for (unsigned I = NumFixedFPRs; I < RISCV::NumArgFPRs; ++I) {
-        unsigned Offset = TFL->getRegSpillOffset(RISCV::ArgFPRs[I]);
-        int FI = MFI->CreateFixedObject(8, RegSaveOffset + Offset, true);
-        SDValue FIN = DAG.getFrameIndex(FI, getPointerTy());
-        unsigned VReg = MF.addLiveIn(RISCV::ArgFPRs[I],
-                                     &RISCV::FP32BitRegClass);
-        SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, VReg, MVT::f64);
-        MemOps[I] = DAG.getStore(ArgValue.getValue(1), DL, ArgValue, FIN,
-                                 MachinePointerInfo::getFixedStack(FI),
-                                 false, false, 0);
-
-      }
-      // Join the stores, which are independent of one another.
-      Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other,
-                          &MemOps[NumFixedFPRs],
-                          RISCV::NumArgFPRs - NumFixedFPRs);
-    }
-  }
-
-  return Chain;
-  */
 }
 
 SDValue
@@ -1292,6 +1193,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   bool &isTailCall = CLI.IsTailCall;
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
+  bool isStructRet    = (Outs.empty()) ? false : Outs[0].Flags.isSRet();
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   EVT PtrVT = getPointerTy();
@@ -1363,8 +1265,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       // Work out the address of the stack slot.  Unpromoted ints and
       // floats are passed as right-justified 8-byte values.
       if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, RISCV::sp, PtrVT);
-      unsigned Offset = RISCVMC::CallFrameSize + VA.getLocMemOffset();
+        StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
+      unsigned Offset = /*RISCVMC::CallFrameSize +*/ VA.getLocMemOffset();
       if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
         Offset += 4;
       SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
@@ -1435,8 +1337,51 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   else
     RetCCInfo.AnalyzeCallResult(Ins, RetCC_RISCV32);
 
+  //Look for SRet 
+  if (isStructRet) {
+    //TODO: we need to differeniate whether LLVM is going to store into the struct pointer
+    //itself
+
+    //Accoriding to the ABI, if the struct fits in registers it will be returned in them
+    //For now we will save this back to the struct and hope that if this struct is
+    //passed by val in the future, the save and loads will be optimized out
+    ISD::ArgFlagsTy Flags = Outs[0].Flags;
+    assert(Flags.isSRet());
+    //We check how many values are in the struct
+    assert(CLI.Args[0].Ty->isPointerTy() && "SRet is always a pointer to a struct");
+    Type *structType = CLI.Args[0].Ty->getContainedType(0);
+    
+/*
+    if(structType->getStructNumElements() == 2){
+      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
+      SDValue Address = OutVals[0];
+      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
+                                   MachinePointerInfo(), false, false, 0);
+      Chain = Store;
+      Glue = Chain.getValue(1);
+  
+      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
+      SDValue offset = DAG.getConstant(structType->getStructElementType(0)->getScalarSizeInBits()/8, MVT::i64);
+      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, OutVals[0], offset);
+      SDValue Store2 = DAG.getStore(Chain, DL, ArgValue2, Address2,
+                                 MachinePointerInfo(), false, false, 0);
+      Chain = Store2;
+      Glue = Chain.getValue(1);
+    }else if(structType->getStructNumElements() == 1){
+      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
+      SDValue Address = OutVals[0];
+      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
+                                   MachinePointerInfo(), false, false, 0);
+      Chain = Store;
+      Glue = Chain.getValue(1);
+    }
+*/
+  }
+
   // Copy all of the result registers out of their specified physreg.
   for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
+    ISD::ArgFlagsTy Flags = Ins[I].Flags;
+
     CCValAssign &VA = RetLocs[I];
 
     // Copy the value out, gluing the copy to the end of the call sequence.
@@ -1469,12 +1414,73 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
   else
     RetCCInfo.AnalyzeReturn(Outs, RetCC_RISCV32);
 
+  //Look for SRet 
+  SDValue Glue;
+  if (MF.getFunction()->hasStructRetAttr()) {
+    //Accoriding to the ABI, if the struct fits in registers (less than 2 words)
+    //then it is put in v0,v1. Otherwise we must write the sruct to the sret pointer
+    //which is always passed in a0
+    
+    //For now we will always write to the sret pointer since it is passed to us
+    //that write is done after the function call so we will also write the first two
+    //struct fields to v0 and v1 for that code to use
+    
+    //CopyToReg(OutVals[0] to v0)
+    //SDValue RetValue0 = OutVals[0];
+    //We check how many values are in the struct
+    //assert(CLI.Args[0].Ty->isPointerTy() && "SRet is always a pointer to a struct");
+    //Type *structType = CLI.Args[0].Ty->getContainedType(0);
+    
+    //if(structType->getStructNumElements() == 2){
+    //DEAD CODE
+    /*
+      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
+      SDValue Address = DAG.getRegister(RISCV::a0_64, getPointerTy());
+      SDValue Load = DAG.getLoad(MVT::i64, DL, Chain, Address,
+                                    MachinePointerInfo(), false, false, false,
+                                    0);
+      //copy the loaded value to the v0
+      Chain = DAG.getCopyToReg(Chain, DL, RISCV::v0_64, Load);
+
+      //SDValue LoadVal = DAG.getLoad(Chain, DL, ArgValue, Address,
+                                   //MachinePointerInfo(), false, false, 0);
+      Glue = Chain.getValue(1);
+  
+      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
+      SDValue offset = DAG.getConstant(8, MVT::i64);
+      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, Address, offset);
+      SDValue Load2 = DAG.getLoad(MVT::i64, DL, Chain, Address2,
+                                    MachinePointerInfo(), false, false, false,
+                                    0);
+      //copy the loaded value to the v1
+      Chain = DAG.getCopyToReg(Chain, DL, RISCV::v1_64, Load2);
+      Glue = Chain.getValue(1);
+    */
+    /*}else if(structType->getStructNumElements() == 1){
+      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
+      SDValue Address = OutVals[0];
+      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
+                                   MachinePointerInfo(), false, false, 0);
+      Chain = Store;
+      Glue = Chain.getValue(1);
+  
+      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
+      SDValue offset = DAG.getConstant(structType->getStructElementType(0)->getScalarSizeInBits()/8, MVT::i64);
+      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, OutVals[0], offset);
+      SDValue Store2 = DAG.getStore(Chain, DL, ArgValue2, Address2,
+                                 MachinePointerInfo(), false, false, 0);
+      Chain = Store2;
+      Glue = Chain.getValue(1);
+    }
+*/
+  }
+
   // Quick exit for void returns
   if (RetLocs.empty())
     return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, Chain);
 
+
   // Copy the result values into the output registers.
-  SDValue Glue;
   SmallVector<SDValue, 4> RetOps;
   RetOps.push_back(Chain);
   for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
@@ -2283,11 +2289,11 @@ RISCVTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
 
   // loop2MBB:
   //   sc success, newval, 0(ptr)
-  //   beq success, $0, loop1MBB
+  //   bNE success, $0, loop1MBB
   BB = loop2MBB;
   BuildMI(BB, DL, TII->get(SC), Success)
     .addReg(NewVal).addReg(Ptr);
-  BuildMI(BB, DL, TII->get(BEQ)).addMBB(loop1MBB)
+  BuildMI(BB, DL, TII->get(BNE)).addMBB(loop1MBB)
     .addReg(Success).addReg(ZERO);
 
   MI->eraseFromParent();   // The instruction is gone now.

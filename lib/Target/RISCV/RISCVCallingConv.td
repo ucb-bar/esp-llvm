@@ -20,6 +20,8 @@ class CCIfSubtarget<string F, CCAction A>:
 // SVR4 return value calling convention
 //===----------------------------------------------------------------------===//
 def RetCC_RISCV32 : CallingConv<[
+  CCIf<"State.getMachineFunction().getFunction()->getReturnType()->isStructTy() && State.getMachineFunction().getFunction()->getReturnType()->getStructNumElements() > 2"
+      , CCAssignToStack<8, 8>>,
 
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
   // call-clobbered argument registers available for code that doesn't
@@ -43,6 +45,8 @@ def RetCC_RISCV32 : CallingConv<[
 //===----------------------------------------------------------------------===//
 //TODO:this is a very simple version of the RISCV calling convention just to start with
 def CC_RISCV32 : CallingConv<[
+  //Always assign the sret pointer to the first arg reg
+  CCIfSRet<CCAssignToReg<[a0]>>,
   //Promote small int types to i32
   CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
@@ -59,6 +63,11 @@ def CC_RISCV32 : CallingConv<[
 ]>;
 
 def RetCC_RISCV64 : CallingConv<[
+  CCIf<"State.getMachineFunction().getFunction()->getReturnType()->isStructTy() && State.getMachineFunction().getFunction()->getReturnType()->getStructNumElements() > 2"
+     , CCAssignToStack<8, 8>>,
+
+  //if(State.getMachineFunction().getFunction().getReturnType().isStructTy() &&
+     //ReturnType().getStructNumElements() > 2) CCAssignToStack<8, 8>>
 
   CCIfType<[i8,i16,i32], CCPromoteToType<i64>>,
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
@@ -83,6 +92,8 @@ def RetCC_RISCV64 : CallingConv<[
 //===----------------------------------------------------------------------===//
 //TODO:this is a very simple version of the RISCV calling convention just to start with
 def CC_RISCV64 : CallingConv<[
+  //Always assign the sret pointer to the first arg reg
+  CCIfSRet<CCAssignToReg<[a0_64]>>,
   //Promote small int types to i64
   CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
 
