@@ -93,7 +93,7 @@ class InstLR<string mnemonic, bits<3> funct3,
 
 class InstSC<string mnemonic, bits<3> funct3,
              RegisterOperand reg, Operand memOp>
-  : InstRISCV<4, (outs reg:$dst), (ins memOp:$src1, reg:$src2), 
+  : InstRISCV<4, (outs reg:$dst), (ins reg:$src2, memOp:$src1), 
                 mnemonic#"\t$dst, $src2, $src1", 
                 []> {
   field bits<32> Inst;

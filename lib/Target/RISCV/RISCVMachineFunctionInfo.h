@@ -18,10 +18,7 @@ namespace llvm {
 
 class RISCVMachineFunctionInfo : public MachineFunctionInfo {
   MachineFunction& MF;
-  /// SRetReturnReg - Some subtargets require that sret lowering includes
-  /// returning the value of the returned struct in a register. This field
-  /// holds the virtual register into which the sret argument is passed.
-  unsigned SRetReturnReg;
+
   unsigned SavedGPRFrameSize;
   unsigned LowSavedGPR;
   unsigned HighSavedGPR;
@@ -41,12 +38,9 @@ class RISCVMachineFunctionInfo : public MachineFunctionInfo {
 
 public:
   explicit RISCVMachineFunctionInfo(MachineFunction &MF)
-    : MF(MF), SRetReturnReg(0), SavedGPRFrameSize(0), LowSavedGPR(0), HighSavedGPR(0), VarArgsFirstGPR(0),
+    : MF(MF), SavedGPRFrameSize(0), LowSavedGPR(0), HighSavedGPR(0), VarArgsFirstGPR(0),
       VarArgsFirstFPR(0), VarArgsFrameIndex(0), RegSaveFrameIndex(0),
       ManipulatesSP(false), CallsEhReturn(false) {}
-
-  unsigned getSRetReturnReg() const { return SRetReturnReg; }
-  void setSRetReturnReg(unsigned Reg) { SRetReturnReg = Reg; }
 
   // Get and set the number of bytes allocated by generic code to store
   // call-saved GPRs.
