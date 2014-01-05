@@ -118,12 +118,14 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       FBB = 0;
 
       // Delete the JMP if it's equivalent to a fall-through.
+/*For now don't do this as a test
       if (MBB.isLayoutSuccessor(ThisTarget->getMBB())) {
         TBB = 0;
         I->eraseFromParent();
         I = MBB.end();
         continue;
       }
+*/
 
       // TBB is used to indicate the unconditinal destination.
       TBB = ThisTarget->getMBB();
