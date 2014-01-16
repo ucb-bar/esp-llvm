@@ -271,9 +271,10 @@ def fa0_p64 : PairFPR64<0, "f18", [fa0, fa1]>;
 def fa1_p64 : PairFPR64<1, "f20", [fa2, fa3]>;
 def fa2_p64 : PairFPR64<2, "f22", [fa4, fa5]>;
 def fa3_p64 : PairFPR64<3, "f24", [fa6, fa7]>;
+def fv0_p64 : PairFPR64<4, "f16", [fv0, fv1]>;
 
 defm PairFP64 : RISCVRegClass<"PairFP64", f64, 64, (add
-  fa0_p64, fa1_p64, fa2_p64, fa3_p64)>;
+  fa0_p64, fa1_p64, fa2_p64, fa3_p64, fv0_p64)>;
 
 // Lower 32 bits of one of the 16 64-bit floating-point registers
 class FPR64<bits<16> num, string n> : RISCVReg<n> {
@@ -418,4 +419,4 @@ defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
 def PC : RISCVReg<"pc">;
 defm PCReg : RISCVRegClass<"PCReg", i32, 32,(add PC)>;
 //FP status register
-def FSR : RISCVReg<"fsr">;
+def FCSR : RISCVReg<"fcsr">;

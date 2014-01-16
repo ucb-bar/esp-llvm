@@ -33,11 +33,18 @@ def RetCC_RISCV32 : CallingConv<[
   // other floating-point argument registers available for code that
   // doesn't care about the ABI.  All floating-point argument registers
   // are call-clobbered, so we can use all of them here.
-  CCIfType<[f32], CCAssignToReg<[fv0, fv1]>>
+  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
+  CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0_p64]>>>,
+
+  CCIfType<[f32], CCAssignToReg<[v0, v1]>>,
 
   // ABI-compliant code returns long double by reference, but that conversion
   // is left to higher-level code.  Perhaps we could add an f128 definition
   // here for code that doesn't care about the ABI?
+  //TODO: f128 i128?
+  CCAssignToStack<8,8>
 ]>;
 
 //===----------------------------------------------------------------------===//
@@ -70,6 +77,7 @@ def RetCC_RISCV64 : CallingConv<[
      //ReturnType().getStructNumElements() > 2) CCAssignToStack<8, 8>>
 
   CCIfType<[i8,i16,i32], CCPromoteToType<i64>>,
+
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
   // call-clobbered argument registers available for code that doesn't
   // care about the ABI.  (R6 is an argument register too, but is
@@ -80,15 +88,22 @@ def RetCC_RISCV64 : CallingConv<[
   // other floating-point argument registers available for code that
   // doesn't care about the ABI.  All floating-point argument registers
   // are call-clobbered, so we can use all of them here.
-  CCIfType<[f64], CCAssignToReg<[fv0_64, fv1_64]>>
+  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
+  CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
+
+  CCIfType<[f32], CCPromoteToType<f64>>,
+  CCIfType<[f64], CCAssignToReg<[v0_64, v1_64]>>,
 
   // ABI-compliant code returns long double by reference, but that conversion
   // is left to higher-level code.  Perhaps we could add an f128 definition
   // here for code that doesn't care about the ABI?
+  //TODO: f128 i128?
+  CCAssignToStack<8,8>
 ]>;
 
 //===----------------------------------------------------------------------===//
-// SVR4 argument calling conventions
+// RISCV64 argument calling conventions
 //===----------------------------------------------------------------------===//
 //TODO:this is a very simple version of the RISCV calling convention just to start with
 def CC_RISCV64 : CallingConv<[
