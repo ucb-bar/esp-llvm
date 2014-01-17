@@ -341,6 +341,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::SINT_TO_FP, MVT::i32, Legal);
     setOperationAction(ISD::FP_TO_UINT, MVT::i32, Legal);
     setOperationAction(ISD::FP_TO_SINT, MVT::i32, Legal);
+    if(Subtarget.isRV64()) {
+      setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
+      setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
+      setOperationAction(ISD::FP_TO_UINT, MVT::i64, Legal);
+      setOperationAction(ISD::FP_TO_SINT, MVT::i64, Legal);
+    }
   }
   else{
     setOperationAction(ISD::FMA, MVT::f32,  Expand);
@@ -351,25 +357,27 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::SINT_TO_FP, MVT::i32, Expand);
     setOperationAction(ISD::FP_TO_UINT, MVT::i32, Expand);
     setOperationAction(ISD::FP_TO_SINT, MVT::i32, Expand);
+    setOperationAction(ISD::UINT_TO_FP, MVT::i64, Expand);
+    setOperationAction(ISD::SINT_TO_FP, MVT::i64, Expand);
+    setOperationAction(ISD::FP_TO_UINT, MVT::i64, Expand);
+    setOperationAction(ISD::FP_TO_SINT, MVT::i64, Expand);
   }
   if(Subtarget.hasD()){
     setOperationAction(ISD::FMA, MVT::f64,  Legal);
     setOperationAction(ISD::BITCAST, MVT::i64, Legal);
     setOperationAction(ISD::BITCAST, MVT::f64, Legal);
-    setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
-    setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
-    setOperationAction(ISD::FP_TO_UINT, MVT::i64, Legal);
-    setOperationAction(ISD::FP_TO_SINT, MVT::i64, Legal);
+    if(Subtarget.isRV64()){
+      setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
+      setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
+      setOperationAction(ISD::FP_TO_UINT, MVT::i64, Legal);
+      setOperationAction(ISD::FP_TO_SINT, MVT::i64, Legal);
+    }
   }
   else {
     setOperationAction(ISD::FMA, MVT::f64,  Expand);
     setOperationAction(ISD::SETCC, MVT::f64, Expand);
     setOperationAction(ISD::BITCAST, MVT::i64, Expand);
     setOperationAction(ISD::BITCAST, MVT::f64, Expand);
-    setOperationAction(ISD::UINT_TO_FP, MVT::i64, Expand);
-    setOperationAction(ISD::SINT_TO_FP, MVT::i64, Expand);
-    setOperationAction(ISD::FP_TO_UINT, MVT::i64, Expand);
-    setOperationAction(ISD::FP_TO_SINT, MVT::i64, Expand);
   }
   setOperationAction(ISD::FMA, MVT::f128, Expand);
 

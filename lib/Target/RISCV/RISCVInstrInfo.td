@@ -101,7 +101,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
           [(br bb:$target)]>;
 }
 let isCall = 1 in {
-  let Defs = [ra, v0, v1, gp] in { //after call return addr and values are defined
+  let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
           [(z_call pcrel32call:$target)]>;
   }
@@ -109,6 +109,7 @@ let isCall = 1 in {
 let isCall = 1 in {
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
+  let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
     def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "jalr\t$target", 
           //[(set GR32:$ra, (z_call addr:$target))]>{
           []>{
@@ -124,6 +125,7 @@ let isCall = 1 in {
             let Inst{16-10} = IMM{6 -0};
             let Inst{9 - 7} = 0b000;
             let Inst{6 - 0} = 0b1101011;
+          }
           }
 }
  
