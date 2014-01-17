@@ -21,6 +21,8 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
   let Pattern = pattern;
   let AsmString = asmstr;
 
+  let AddedComplexity = 1;
+
   // Used to identify a group of related instructions, such as ST and STY.
   string Function = "";
 

@@ -18,14 +18,14 @@ let mayStore = 1 in {
 }
 
 multiclass  FPBinOps<string name, SDPatternOperator op1, bits<5> funct5, bits<2> fmt> {
-  let AddedComplexity = 1000 in { //only use the dynamic version during instruction selection
-    def _RNE : InstR<name#"rne", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
-    def _RTZ : InstR<name#"rtz", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,1,fmt{1},fmt{0}}, op1, FP32, FP32>;
-    def _RDN : InstR<name#"rdn", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
-    def _RUP : InstR<name#"rup", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,1,fmt{1},fmt{0}}, op1, FP32, FP32>;
-    def _RMM : InstR<name#"rmm", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},1,0,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
-  }
   def _RDY : InstR<name, 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},1,1,1,fmt{1},fmt{0}}, op1, FP32, FP32>;
+  let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
+    def _RNE : InstR<name#".rne", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
+    def _RTZ : InstR<name#".rtz", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,1,fmt{1},fmt{0}}, op1, FP32, FP32>;
+    def _RDN : InstR<name#".rdn", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
+    def _RUP : InstR<name#".rup", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,1,fmt{1},fmt{0}}, op1, FP32, FP32>;
+    def _RMM : InstR<name#".rmm", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},1,0,0,fmt{1},fmt{0}}, op1, FP32, FP32>;
+  }
 }
 //Single precision arithmetic
 defm FADD_S : FPBinOps<"fadd.s", fadd, 0b00000, 0b00>, Requires<[HasF]>;
@@ -63,14 +63,14 @@ class InstConv<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3>
 }
 
 multiclass  FPConvOps<string name, SDPatternOperator op1, RegisterOperand outCls, RegisterOperand inCls, bits<5> funct5, bits<2> fmt> {
-  let AddedComplexity = 1000 in { //only use the dynamic version during instruction selection
-    def _RNE : InstConv<name#"rne", 0b1010011, funct5, fmt, 0b000, op1, outCls, inCls>;
-    def _RTZ : InstConv<name#"rtz", 0b1010011, funct5, fmt, 0b001, op1, outCls, inCls>;
-    def _RDN : InstConv<name#"rdn", 0b1010011, funct5, fmt, 0b010, op1, outCls, inCls>;
-    def _RUP : InstConv<name#"rup", 0b1010011, funct5, fmt, 0b011, op1, outCls, inCls>;
-    def _RMM : InstConv<name#"rmm", 0b1010011, funct5, fmt, 0b100, op1, outCls, inCls>;
-  }
   def _RDY : InstConv<name, 0b1010011, funct5, fmt, 0b111, op1, outCls, inCls>;
+  let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
+    def _RNE : InstConv<name#".rne", 0b1010011, funct5, fmt, 0b000, op1, outCls, inCls>;
+    def _RTZ : InstConv<name#".rtz", 0b1010011, funct5, fmt, 0b001, op1, outCls, inCls>;
+    def _RDN : InstConv<name#".rdn", 0b1010011, funct5, fmt, 0b010, op1, outCls, inCls>;
+    def _RUP : InstConv<name#".rup", 0b1010011, funct5, fmt, 0b011, op1, outCls, inCls>;
+    def _RMM : InstConv<name#".rmm", 0b1010011, funct5, fmt, 0b100, op1, outCls, inCls>;
+  }
 }
 
 defm FCVT_W_S  : FPConvOps<"fcvt.w.s",  fp_to_sint, GR32, FP32, 0b01010, 0b00>, Requires<[HasF]>;
