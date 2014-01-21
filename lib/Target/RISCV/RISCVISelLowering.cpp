@@ -70,6 +70,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   }else
     addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
   if(Subtarget.hasD()){
+    //TODO: do we need to add an f32 regclass that shadows the f64 regclass?
     addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
   }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
@@ -259,34 +260,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i64, Expand);
   }
 
-  // We have instructions for signed but not unsigned FP conversion.
-  // Handle unsigned 32-bit types as signed 64-bit types.
-
-  // We have native support for a 64-bit CTLZ, via FLOGR.
-  //setOperationAction(ISD::CTLZ, MVT::i32, Promote);
-  //setOperationAction(ISD::CTLZ, MVT::i64, Legal);
-
-  // Give LowerOperation the chance to replace 64-bit ORs with subregs.
-  //setOperationAction(ISD::OR, MVT::i64, Custom);
-
-  // The architecture has 32-bit SMUL_LOHI and UMUL_LOHI (MR and MLR),
-  // but they aren't really worth using.  There is no 64-bit SMUL_LOHI,
-  // but there is a 64-bit UMUL_LOHI: MLGR.
-  //setOperationAction(ISD::SDIVREM, MVT::i32, Expand);
-  //setOperationAction(ISD::UDIVREM, MVT::i32, Expand);
-  //setOperationAction(ISD::SDIVREM, MVT::i64, Expand);
-  //setOperationAction(ISD::UDIVREM, MVT::i64, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i64, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
 
-  // FIXME: Can we support these natively?
-  //setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
-  //setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
-  //setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
-
-  // We have native instructions for i8, i16 and i32 extensions, but not i1.
+  // No sign extend instructions
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
   setLoadExtAction(ISD::ZEXTLOAD, MVT::i1, Promote);
   setLoadExtAction(ISD::EXTLOAD,  MVT::i1, Promote);
@@ -302,12 +281,12 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::BlockAddress,     PtrVT, Custom);
   setOperationAction(ISD::JumpTable,        PtrVT, Custom);
 
-  // We need to handle dynamic allocations specially because of the
-  // 160-byte area at the bottom of the stack.
+  //Expand stack allocations
   setOperationAction(ISD::DYNAMIC_STACKALLOC, PtrVT, Expand);
 
   // Use custom expanders so that we can force the function to use
   // a frame pointer.
+  // TODO: real comment
   setOperationAction(ISD::STACKSAVE,    MVT::Other, Custom);
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Custom);
 
@@ -323,7 +302,13 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
       // We can use FI for FRINT.
-      setOperationAction(ISD::FRINT, VT, Legal);
+      //setOperationAction(ISD::FRINT, VT, Legal);
+      setOperationAction(ISD::FADD, VT, Legal);
+      setOperationAction(ISD::FSUB, VT, Legal);
+      setOperationAction(ISD::FMUL, VT, Legal);
+      setOperationAction(ISD::FDIV, VT, Legal);
+      //TODO: once implemented in InstrInfo uncomment
+      //setOperationAction(ISD::FSQRT, VT, Legal);
 
       // No special instructions for these.
       setOperationAction(ISD::FSIN, VT, Expand);
@@ -332,7 +317,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     }
   }
 
-  // We have fused multiply-addition for f32 and f64 but not f128.
+  // Handle floating-point types.
   if(Subtarget.hasF() || Subtarget.hasD()){
     setOperationAction(ISD::FMA, MVT::f32,  Legal);
     setOperationAction(ISD::BITCAST, MVT::i32, Legal);
@@ -341,6 +326,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::SINT_TO_FP, MVT::i32, Legal);
     setOperationAction(ISD::FP_TO_UINT, MVT::i32, Legal);
     setOperationAction(ISD::FP_TO_SINT, MVT::i32, Legal);
+    setOperationAction(ISD::FCOPYSIGN, MVT::f32, Legal);
     if(Subtarget.isRV64()) {
       setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
       setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
@@ -366,12 +352,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::FMA, MVT::f64,  Legal);
     setOperationAction(ISD::BITCAST, MVT::i64, Legal);
     setOperationAction(ISD::BITCAST, MVT::f64, Legal);
-    if(Subtarget.isRV64()){
-      setOperationAction(ISD::UINT_TO_FP, MVT::i64, Legal);
-      setOperationAction(ISD::SINT_TO_FP, MVT::i64, Legal);
-      setOperationAction(ISD::FP_TO_UINT, MVT::i64, Legal);
-      setOperationAction(ISD::FP_TO_SINT, MVT::i64, Legal);
-    }
+    setOperationAction(ISD::FCOPYSIGN, MVT::f64, Legal);
+    setOperationAction(ISD::FP_ROUND, MVT::f64, Legal);
+    setOperationAction(ISD::FP_EXTEND, MVT::f64, Legal);
   }
   else {
     setOperationAction(ISD::FMA, MVT::f64,  Expand);
@@ -1831,6 +1814,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
 
   // Use LARL to load the address of the constant pool entry.
   return DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
+  //return Result;
 }
 
 SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,

@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 let mayLoad = 1 in {
-  def FLW : InstLoad <"flw" , 0b0000111, 0b010, load,  FP32, mem>, Requires<[HasF,IsRV32]>; 
-  def FLW64 : InstLoad <"flw" , 0b0000111, 0b010, load,  FP32, mem64>, Requires<[HasF,IsRV64]>; 
+  def FLW : InstLoad <"flw" , 0b0000111, 0b010, loadf32,  FP32, mem>, Requires<[HasF,IsRV32]>; 
+  def FLW64 : InstLoad <"flw" , 0b0000111, 0b010, loadf32,  FP32, mem64>, Requires<[HasF,IsRV64]>; 
 }
 
 let mayStore = 1 in {
@@ -112,3 +112,15 @@ def FSGNJN_S : InstSign<"fsgnj.s", 0b1010011, 0b00101, 0b00, 0b000,
                           [(set FP32:$dst, (fcopysign FP32:$src1, (fneg FP32:$src2)))];
                         }
 
+//TODO: implement FSGNJX using pattern (maybe ask andrew what he thinks a good sequence would be)
+
+//Move instruction (bitcasts)
+def FMV_X_S : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR32, FP32>, Requires<[HasF]>;
+def FMV_S_X : InstConv<"fmv.s.x", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR32>, Requires<[HasF]>;
+def FMV_X_S64 : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR64, FP32>, Requires<[HasF, IsRV64]>;
+def FMV_S_X64 : InstConv<"fmv.s.x", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR64>, Requires<[HasF, IsRV64]>;
+
+//Floating point comparisons
+def FEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, seteq, GR32, FP32>, Requires<[HasF]>;
+def FLT_S : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setlt, GR32, FP32>, Requires<[HasF]>;
+def FLE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setle, GR32, FP32>, Requires<[HasF]>;
