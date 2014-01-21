@@ -82,7 +82,11 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // TODO: not all of these exist in RISCV
   setExceptionPointerRegister(RISCV::epc);
   setExceptionSelectorRegister(RISCV::evec);
-  setStackPointerRegisterToSaveRestore(RISCV::sp);
+  if(Subtarget.isRV64()) {
+    setStackPointerRegisterToSaveRestore(RISCV::sp_64);
+  }else {
+    setStackPointerRegisterToSaveRestore(RISCV::sp);
+  }
 
   // TODO: It may be better to default to latency-oriented scheduling, however
   // LLVM's current latency-oriented scheduler can't handle physreg definitions
