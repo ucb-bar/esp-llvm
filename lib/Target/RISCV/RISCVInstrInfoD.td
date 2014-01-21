@@ -78,10 +78,27 @@ def FLE_D : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setle, GR32, FP64
 def FEQ_D64 : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setoeq, GR64, FP64>, Requires<[HasD,IsRV64]>;
 def FLT_D64 : InstSign<"flt.d", 0b1010011, 0b10110, 0b01, 0b000, setolt, GR64, FP64>, Requires<[HasD,IsRV64]>;
 def FLE_D64 : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setole, GR64, FP64>, Requires<[HasD,IsRV64]>;
+def FUEQ_D64 : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setueq, GR64, FP64>, Requires<[HasD,IsRV64]>;
+def FULT_D64 : InstSign<"flt.d", 0b1010011, 0b10110, 0b01, 0b000, setult, GR64, FP64>, Requires<[HasD,IsRV64]>;
+def FULE_D64 : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setule, GR64, FP64>, Requires<[HasD,IsRV64]>;
 //synthesized set operators
+multiclass FPCmpPats<RegisterOperand RC, Instruction FLTOp, Instruction FLTUOp,
+                     Instruction FLEOp, Instruction FLEUOp> {
+  //lhs > rhs ==> rhs < lhs
+  def : Pat<(setogt RC:$lhs, RC:$rhs), (FLTOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setugt RC:$lhs, RC:$rhs), (FLTUOp RC:$rhs, RC:$lhs)>;
+  //lhs >= rhs ==> rhs =< lhs
+  def : Pat<(setoge RC:$lhs, RC:$rhs), (FLEOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setuge RC:$lhs, RC:$rhs), (FLEUOp RC:$rhs, RC:$lhs)>;
+  //lhs != rhs ==> !(lhs == rhs)
+}
 
-
+defm : FPCmpPats<FP64, FLT_D, FLT_D, FLE_D, FLE_D>;
+defm : FPCmpPats<FP64, FLT_D64, FULT_D64, FLE_D64, FULE_D64>;
 
 //extloads
 def : Pat<(extloadf32 addr:$addr), (FCVT_D_S_RDY (FLW addr:$addr))>, Requires<[HasD,IsRV32]>;
 def : Pat<(extloadf32 addr:$addr), (FCVT_D_S_RDY (FLW64 addr:$addr))>, Requires<[HasD,IsRV64]>;
+
+//fp imm
+def :Pat<(fpimm0), (FCVT_D_W_RDY zero)>;

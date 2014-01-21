@@ -1081,19 +1081,19 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
           RC = &RISCV::GR64BitRegClass;
         }
       } else if (RegVT == MVT::f32) {
-          if(Subtarget.hasF())
-            RC = &RISCV::FP32BitRegClass;
-          else if(Subtarget.hasD())
+          if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
+          else if(Subtarget.hasF())
+            RC = &RISCV::FP32BitRegClass;
           else if(Subtarget.isRV64())
             RC = &RISCV::GR64BitRegClass;
           else 
             RC = &RISCV::GR32BitRegClass;
       } else if (RegVT == MVT::f64) {
-          if(Subtarget.hasF())
-            RC = &RISCV::PairFP64BitRegClass;
-          else if(Subtarget.hasD())
+          if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
+          else if(Subtarget.hasF())
+            RC = &RISCV::PairFP64BitRegClass;
           else if(Subtarget.isRV64())
             RC = &RISCV::GR64BitRegClass;
           else

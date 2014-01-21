@@ -36,7 +36,7 @@ let Namespace = "RISCV" in {
 // Define a register class that contains values of type TYPE and an
 // associated operand called NAME.  SIZE is the size and alignment
 // of the registers and REGLIST is the list of individual registers.
-multiclass RISCVRegClass<string name, ValueType type, int size, dag regList> {
+multiclass RISCVRegClass<string name, ValueType type, int size, dag regList, bit allocatable> {
   def AsmOperand : AsmOperandClass {
     let Name = name;
     let ParserMethod = "parse"##name;
@@ -44,6 +44,7 @@ multiclass RISCVRegClass<string name, ValueType type, int size, dag regList> {
   }
   def Bit : RegisterClass<"RISCV", [type], size, regList> {
     let Size = size;
+    let isAllocatable = allocatable;
   }
   def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
     let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");
@@ -110,17 +111,18 @@ defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
   v0, v1,
   a0, a1, a2, a3, a4, a5, a6, a7, 
   t0, t1, t2, t3, t4, 
-  gp)>;
+  gp), 1>;
 
 // Base and index registers.  Everything except R0, which in an address
 // context evaluates as 0.
-defm ADDR32 : RISCVRegClass<"ADDR32", i32, 32, (sub GR32Bit, zero)>;
+defm ADDR32 : RISCVRegClass<"ADDR32", i32, 32, (sub GR32Bit, zero), 1>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairGPR64<bits<16> num, string n, list<Register> subregs>
   : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
   let SubRegIndices = [sub_32even, sub_32odd];
+  let CoveredBySubRegs = 1;
 }
 
 def a0_p64 : PairGPR64<0, "x18", [a0, a1]>;
@@ -129,7 +131,7 @@ def a2_p64 : PairGPR64<2, "x22", [a4, a5]>;
 def a3_p64 : PairGPR64<3, "x24", [a6, a7]>;
 
 defm PairGR64 : RISCVRegClass<"PairGR64", i64, 64, (add
-  a0_p64, a1_p64, a2_p64, a3_p64)>;
+  a0_p64, a1_p64, a2_p64, a3_p64), 1>;
 
 //RV64 general purpose regs
 class GPR64<bits<16> num, string n> : RISCVReg<n> {
@@ -187,13 +189,14 @@ defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
   v0_64, v1_64,
   a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64, 
   t0_64, t1_64, t2_64, t3_64, t4_64, 
-  gp_64)>;
+  gp_64), 1>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairGPR128<bits<16> num, string n, list<Register> subregs>
   : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
   let SubRegIndices = [sub_64even, sub_64odd];
+  let CoveredBySubRegs = 1;
 }
 
 def a0_p128 : PairGPR64<0, "x18", [a0_64, a1_64]>;
@@ -202,7 +205,7 @@ def a2_p128 : PairGPR64<2, "x22", [a4_64, a5_64]>;
 def a3_p128 : PairGPR64<3, "x24", [a6_64, a7_64]>;
 
 defm PairGR128 : RISCVRegClass<"PairGR128", i128, 128, (add
-  a0_p128, a1_p128, a2_p128, a3_p128)>;
+  a0_p128, a1_p128, a2_p128, a3_p128), 1>;
 
 //===----------------------------------------------------------------------===//
 // Floating-point registers
@@ -258,13 +261,14 @@ defm FP32  : RISCVRegClass<"FP32", f32, 32, (add
   fs0, fs1, fs2, fs3, fs4, fs5, fs6, fs7, fs8, fs9, fs10, fs11, fs12, fs13, fs14, fs15,
   fv0, fv1,
   fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7,
-  ft0, ft1, ft2, ft3, ft4, ft5)>;
+  ft0, ft1, ft2, ft3, ft4, ft5), 1>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairFPR64<bits<16> num, string n, list<Register> subregs>
   : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
   let SubRegIndices = [sub_fp32even, sub_fp32odd];
+  let CoveredBySubRegs = 1;
 }
 
 def fa0_p64 : PairFPR64<0, "f18", [fa0, fa1]>;
@@ -274,7 +278,7 @@ def fa3_p64 : PairFPR64<3, "f24", [fa6, fa7]>;
 def fv0_p64 : PairFPR64<4, "f16", [fv0, fv1]>;
 
 defm PairFP64 : RISCVRegClass<"PairFP64", f64, 64, (add
-  fa0_p64, fa1_p64, fa2_p64, fa3_p64, fv0_p64)>;
+  fa0_p64, fa1_p64, fa2_p64, fa3_p64, fv0_p64), 1>;
 
 // Lower 32 bits of one of the 16 64-bit floating-point registers
 class FPR64<bits<16> num, string n> : RISCVReg<n> {
@@ -326,13 +330,14 @@ defm FP64  : RISCVRegClass<"FP64", f64, 64, (add
   fs0_64, fs1_64, fs2_64, fs3_64, fs4_64, fs5_64, fs6_64, fs7_64, fs8_64, fs9_64, fs10_64, fs11_64, fs12_64, fs13_64, fs14_64, fs15_64,
   fv0_64, fv1_64,
   fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64,
-  ft0_64, ft1_64, ft2_64, ft3_64, ft4_64, ft5_64)>;
+  ft0_64, ft1_64, ft2_64, ft3_64, ft4_64, ft5_64), 1>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairFPR128<bits<16> num, string n, list<Register> subregs>
   : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
   let SubRegIndices = [sub_fp64even, sub_fp64odd];
+  let CoveredBySubRegs = 1;
 }
 
 def fa0_p128 : PairFPR128<0, "f18", [fa0_64, fa1_64]>;
@@ -341,7 +346,7 @@ def fa2_p128 : PairFPR128<2, "f22", [fa4_64, fa5_64]>;
 def fa3_p128 : PairFPR128<3, "f24", [fa6_64, fa7_64]>;
 
 defm PairFP128 : RISCVRegClass<"PairFP128", f128, 128, (add
-  fa0_p128, fa1_p128, fa2_p128, fa3_p128)>;
+  fa0_p128, fa1_p128, fa2_p128, fa3_p128), 1>;
 
 //===----------------------------------------------------------------------===//
 // PCR registers (supervisor)
@@ -408,7 +413,7 @@ defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
   //read only
   badvaddr, cause, hartid, impl, 
   //write only
-  fatc,  send_ipi, clear_ipi)>;
+  fatc,  send_ipi, clear_ipi), 0>;
 
 
 //===----------------------------------------------------------------------===//
@@ -417,6 +422,6 @@ defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
 
 // PC register
 def PC : RISCVReg<"pc">;
-defm PCReg : RISCVRegClass<"PCReg", i32, 32,(add PC)>;
+defm PCReg : RISCVRegClass<"PCReg", i32, 32,(add PC), 0>;
 //FP status register
 def FCSR : RISCVReg<"fcsr">;
