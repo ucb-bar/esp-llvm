@@ -246,6 +246,8 @@ def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas fo
 //call
 def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
+//constpool
+def : Pat<(z_pcrel_wrapper tconstpool:$in), (LI64 tconstpool:$in)>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;

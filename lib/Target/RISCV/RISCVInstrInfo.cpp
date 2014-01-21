@@ -254,11 +254,67 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 			      bool KillSrc) const {
 
   unsigned Opcode;
+  //TODO: when we are copying a phys reg do we want the value or bits for fp?
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::ORI;
   else if (RISCV::GR64BitRegClass.contains(DestReg, SrcReg))
     Opcode = RISCV::ORI64;
-  else 
+  else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg)){
+    Opcode = RISCV::FSGNJ_S;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if (RISCV::FP64BitRegClass.contains(DestReg, SrcReg)) {
+    Opcode = RISCV::FSGNJ_D;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::FP32BitRegClass.contains(SrcReg) &&
+           RISCV::GR32BitRegClass.contains(DestReg)){
+    Opcode = RISCV::FCVT_W_S_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP64BitRegClass.contains(SrcReg) &&
+           RISCV::GR32BitRegClass.contains(DestReg)){
+    Opcode = RISCV::FCVT_W_D_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP32BitRegClass.contains(SrcReg) &&
+           RISCV::GR64BitRegClass.contains(DestReg)){
+    Opcode = RISCV::FCVT_L_S_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP64BitRegClass.contains(SrcReg) &&
+           RISCV::GR64BitRegClass.contains(DestReg)){
+    Opcode = RISCV::FCVT_L_D_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP32BitRegClass.contains(DestReg) &&
+           RISCV::GR32BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_S_W_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP64BitRegClass.contains(DestReg) &&
+           RISCV::GR32BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_D_W_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP32BitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_S_L_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else if(RISCV::FP64BitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_D_L_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+  }else
+
+
+
     llvm_unreachable("Impossible reg-to-reg copy");
 
   BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
