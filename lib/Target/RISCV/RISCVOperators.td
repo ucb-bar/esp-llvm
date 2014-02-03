@@ -82,8 +82,6 @@ def z_ucmp              : SDNode<"RISCVISD::UCMP", SDT_ZCmp, [SDNPOutGlue]>;
 def z_select_cc         : SDNode<"RISCVISD::SELECT_CC", SDT_ZSelectCC,
     		                 [SDNPInGlue]>;
 def z_adjdynalloc       : SDNode<"RISCVISD::ADJDYNALLOC", SDT_ZAdjDynAlloc>;
-def z_extract_access    : SDNode<"RISCVISD::EXTRACT_ACCESS",
-                                 SDT_ZExtractAccess>;
 def z_umul_lohi64       : SDNode<"RISCVISD::UMUL_LOHI64", SDT_ZGR128Binary64>;
 def z_sdivrem64         : SDNode<"RISCVISD::SDIVREM64", SDT_ZGR128Binary64>;
 def z_udivrem32         : SDNode<"RISCVISD::UDIVREM32", SDT_ZGR128Binary32>;

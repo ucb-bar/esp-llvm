@@ -121,6 +121,32 @@ def FMV_X_S64 : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert,
 def FMV_S_X64 : InstConv<"fmv.s.x", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR64>, Requires<[HasF, IsRV64]>;
 
 //Floating point comparisons
-def FEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, seteq, GR32, FP32>, Requires<[HasF]>;
-def FLT_S : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setlt, GR32, FP32>, Requires<[HasF]>;
-def FLE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setle, GR32, FP32>, Requires<[HasF]>;
+def FEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setoeq, GR32, FP32>, Requires<[HasF]>;
+def FLT_S : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setolt, GR32, FP32>, Requires<[HasF]>;
+def FLE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setole, GR32, FP32>, Requires<[HasF]>;
+def FUEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setueq, GR32, FP32>, Requires<[HasF]>;
+def FULT_S : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setult, GR32, FP32>, Requires<[HasF]>;
+def FULE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setule, GR32, FP32>, Requires<[HasF]>;
+//RV64F
+def FEQ_S64 : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setoeq, GR64, FP32>, Requires<[HasF,IsRV64]>;
+def FLT_S64 : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setolt, GR64, FP32>, Requires<[HasF,IsRV64]>;
+def FLE_S64 : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setole, GR64, FP32>, Requires<[HasF,IsRV64]>;
+def FUEQ_S64 : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setueq, GR64, FP32>, Requires<[HasF,IsRV64]>;
+def FULT_S64 : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setult, GR64, FP32>, Requires<[HasF,IsRV64]>;
+def FULE_S64 : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setule, GR64, FP32>, Requires<[HasF,IsRV64]>;
+//synthesized set operators
+multiclass FPCmpPats<RegisterOperand RC, Instruction FLTOp, Instruction FLTUOp,
+                     Instruction FLEOp, Instruction FLEUOp> {
+  //lhs > rhs ==> rhs < lhs
+  def : Pat<(setogt RC:$lhs, RC:$rhs), (FLTOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setugt RC:$lhs, RC:$rhs), (FLTUOp RC:$rhs, RC:$lhs)>;
+  //lhs >= rhs ==> rhs =< lhs
+  def : Pat<(setoge RC:$lhs, RC:$rhs), (FLEOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setuge RC:$lhs, RC:$rhs), (FLEUOp RC:$rhs, RC:$lhs)>;
+  //lhs != rhs ==> !(lhs == rhs)
+}
+defm : FPCmpPats<FP32, FLT_S, FULT_S, FLE_S, FULE_S>;
+defm : FPCmpPats<FP32, FLT_S64, FULT_S64, FLE_S64, FULE_S64>;
+
+//fp imm
+def :Pat<(fpimm0), (FCVT_S_W_RDY zero)>;

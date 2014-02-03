@@ -488,6 +488,6 @@ void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
        ++MFI)
     for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
-      replaceUsesWithZeroReg(MRI, *I);
+      //replaceUsesWithZeroReg(MRI, *I);
     }
 }

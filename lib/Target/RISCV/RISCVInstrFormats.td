@@ -72,6 +72,26 @@ class InstR<string mnemonic, bits<7> op, bits<10> funct10,
   let Inst{6 - 0} = op;
 }
 
+//R-Type
+class InstR64<string mnemonic, bits<7> op, bits<10> funct10, 
+            SDPatternOperator operator, RegisterOperand cls1, 
+            RegisterOperand cls2>
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2, cls2:$src1), 
+                mnemonic#"\t$dst, $src1, $src2", 
+                [(set cls1:$dst, (sext (operator cls2:$src1, cls2:$src2)))]> {
+  field bits<32> Inst;
+
+  bits<5> RD;
+  bits<5> RS1;
+  bits<5> RS2;
+
+  let Inst{31-27} = RD;
+  let Inst{26-22} = RS1;
+  let Inst{21-17} = RS2;
+  let Inst{16- 7} = funct10;
+  let Inst{6 - 0} = op;
+}
+
 //LR/SC
 class InstLR<string mnemonic, bits<3> funct3,
              RegisterOperand cls1, Operand cls2>
@@ -203,11 +223,11 @@ class InstStore<string mnemonic, bits<7> op, bits<3> funct3,
 
 //I-Type
 class InstI<string mnemonic, bits<7> op, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, 
+            SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
             Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1, imm:$src2), 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2), 
                 mnemonic#"\t$dst, $src1, $src2", 
-                [(set cls1:$dst, (operator cls1:$src1, imm:$src2))]> {
+                [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
   field bits<32> Inst;
 
   bits<5> RD;
