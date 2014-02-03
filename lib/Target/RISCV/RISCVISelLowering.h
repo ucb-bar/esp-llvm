@@ -73,10 +73,6 @@ namespace RISCVISD {
     // base of the dynamically-allocatable area.
     ADJDYNALLOC,
 
-    // Extracts the value of a 32-bit access register.  Operand 0 is
-    // the number of the register.
-    EXTRACT_ACCESS,
-
     // Wrappers around the ISD opcodes of the same name.  The output and
     // first input operands are GR128s.  The trailing numbers are the
     // widths of the second operand in bits.
@@ -131,10 +127,13 @@ public:
 
   // Override TargetLowering.
   virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
-    return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
+    //return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
+    return LHSTy.getSimpleVT();
   }
   virtual EVT getSetCCResultType(EVT VT) const {
-    return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
+    //return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
+    //return (VT.getSimpleVT() == MVT::i64)  ? MVT::i64 : MVT::i32;
+    return MVT::i32;
   }
   virtual bool isFMAFasterThanMulAndAdd(EVT) const LLVM_OVERRIDE {
     return true;
@@ -305,6 +304,7 @@ private:
   SDValue lowerATOMIC_CMP_SWAP(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSTACKSAVE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSTACKRESTORE(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
 
   // Implement EmitInstrWithCustomInserter for individual operation types.
   MachineBasicBlock *emitSelectCC(MachineInstr *MI,

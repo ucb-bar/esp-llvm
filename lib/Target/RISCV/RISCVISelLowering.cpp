@@ -65,18 +65,16 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   MVT PtrVT = getPointerTy();
 
   // Set up the register classes.
-  if(Subtarget.isRV64()) {
+  addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
+  if(Subtarget.isRV64())
     addRegisterClass(MVT::i64,  &RISCV::GR64BitRegClass);
-  }else
-    addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
   if(Subtarget.hasD()){
     //TODO: do we need to add an f32 regclass that shadows the f64 regclass?
     addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
+    addRegisterClass(MVT::f32,  &RISCV::FP64BitRegClass);
   }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
 
-  // Compute derived properties from the register classes
-  computeRegisterProperties();
 
   // Set up special registers.
   // TODO: not all of these exist in RISCV
@@ -98,6 +96,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setBooleanContents(ZeroOrOneBooleanContent);
   setBooleanVectorContents(ZeroOrOneBooleanContent); //vectors of i1s are the same
 
+  // Used by legalize types to correctly generate the setcc result.
+  AddPromotedToType(ISD::SETCC, MVT::i1, MVT::i32);
+
   // Instructions are strings of 2-byte aligned 2-byte values.
   // align by log2(2) bytes?
   setMinFunctionAlignment(2);
@@ -108,18 +109,24 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
        ++I) {
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
-      // Expand SETCC(X, Y, COND) into SELECT_CC(X, Y, 1, 0, COND).
-      setOperationAction(ISD::SETCC, VT, Legal);//folds into brcond
-
-      // Expand SELECT(C, A, B) into SELECT_CC(X, 0, A, B, NE).
-      //setOperationAction(ISD::SELECT, VT, Expand);
-
       // Lower SELECT_CC and BR_CC into separate comparisons and branches.
       setOperationAction(ISD::SELECT_CC, VT, Expand);
       setOperationAction(ISD::BR_CC,     VT, Expand);
 
     }
   }
+  if(Subtarget.isRV64()){
+    setOperationAction(ISD::SETCC, MVT::i32, Legal);//only use 64bit setcc
+    //setOperationAction(ISD::SETCC, MVT::i64, Legal);//folds into brcond
+    setOperationAction(ISD::Constant, MVT::i32, Legal);//only use 64bit const
+    setOperationAction(ISD::Constant, MVT::i64, Legal);
+  }else {
+    setOperationAction(ISD::SETCC, MVT::i32, Legal);//folds into brcond
+    setOperationAction(ISD::SETCC, MVT::i64, Expand);//only use 32bit
+    setOperationAction(ISD::Constant, MVT::i32, Legal);//only use 64bit const
+    setOperationAction(ISD::Constant, MVT::i64, Legal);
+  }
+
 
   // Expand jump table branches as address arithmetic followed by an
   // indirect jump.
@@ -133,14 +140,23 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   //make BRCOND legal, its actually only legal for a subset of conds
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
 
+  //Custom Lower Overflow operators
+
   // Handle integer types.
+  if(Subtarget.isRV64()){
+    setOperationAction(ISD::MUL  , MVT::i64, Legal);
+    setOperationAction(ISD::MUL  , MVT::i32, Promote);
+  }else {
+    setOperationAction(ISD::MUL  , MVT::i64, Expand);
+    setOperationAction(ISD::MUL  , MVT::i32, Legal);
+  }
   for (unsigned I = MVT::FIRST_INTEGER_VALUETYPE;
        I <= MVT::LAST_INTEGER_VALUETYPE;
        ++I) {
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
       if(Subtarget.hasM()) {
-        setOperationAction(ISD::MUL  , VT, Legal);
+        //setOperationAction(ISD::MUL  , VT, Legal);
         setOperationAction(ISD::MULHS, VT, Legal);
         setOperationAction(ISD::MULHU, VT, Legal);
         setOperationAction(ISD::SDIV , VT, Legal);
@@ -148,7 +164,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
         setOperationAction(ISD::SREM , VT, Legal);
         setOperationAction(ISD::UREM , VT, Legal);
       }else{
-        setOperationAction(ISD::MUL  , VT, Expand);
+        //setOperationAction(ISD::MUL  , VT, Expand);
         setOperationAction(ISD::MULHS, VT, Expand);
         setOperationAction(ISD::MULHU, VT, Expand);
         setOperationAction(ISD::SDIV , VT, Expand);
@@ -156,6 +172,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
         setOperationAction(ISD::SREM , VT, Expand);
         setOperationAction(ISD::UREM , VT, Expand);
       }
+      //No support at all
+      setOperationAction(ISD::SDIVREM, VT, Expand);
+      setOperationAction(ISD::UDIVREM, VT, Expand);
 
       // Expand ATOMIC_LOAD and ATOMIC_STORE using ATOMIC_CMP_SWAP.
       // FIXME: probably much too conservative.
@@ -293,6 +312,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // TODO: real comment
   setOperationAction(ISD::STACKSAVE,    MVT::Other, Custom);
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Custom);
+  setOperationAction(ISD::FRAMEADDR,    MVT::Other, Custom);
 
   // Expand these using getExceptionSelectorRegister() and
   // getExceptionPointerRegister().
@@ -391,6 +411,10 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::VAEND  , MVT::Other, Expand);
   //setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
   //setOperationAction(ISD::VAEND,   MVT::Other, Expand);
+
+
+  // Compute derived properties from the register classes
+  computeRegisterProperties();
 }
 
 
@@ -512,8 +536,9 @@ getRegForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
         return std::make_pair(0U, &RISCV::GR64BitRegClass);
       return std::make_pair(0U, &RISCV::GR32BitRegClass);
 
-    case 'a': // Address register
+    /*case 'a': // Address register
       return std::make_pair(0U, &RISCV::ADDR32BitRegClass);
+      */
 
     case 'f': // Floating-point register
       if(Subtarget.hasD())
@@ -1073,10 +1098,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
       const TargetRegisterClass *RC;
 
       if (RegVT == MVT::i32 || RegVT.getSizeInBits() < 32)//All word and subword values stored in GR32
-        if(Subtarget.isRV64())
-          RC = &RISCV::GR64BitRegClass;
-        else
-          RC = &RISCV::GR32BitRegClass;
+        RC = &RISCV::GR32BitRegClass;
       else if (RegVT == MVT::i64){
         if(Subtarget.isRV32()){
           //for RV32 store in pair of two GR32
@@ -1089,8 +1111,6 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
             RC = &RISCV::FP64BitRegClass;
           else if(Subtarget.hasF())
             RC = &RISCV::FP32BitRegClass;
-          else if(Subtarget.isRV64())
-            RC = &RISCV::GR64BitRegClass;
           else 
             RC = &RISCV::GR32BitRegClass;
       } else if (RegVT == MVT::f64) {
@@ -1262,8 +1282,9 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       if (!StackPtr.getNode())
         StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
       unsigned Offset = /*RISCVMC::CallFrameSize +*/ VA.getLocMemOffset();
-      if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
+      /*if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
         Offset += 4;
+        */
       SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
                                     DAG.getIntPtrConstant(Offset));
 
@@ -1750,8 +1771,10 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
   TLSModel::Model model = TM.getTLSModel(GV);
 
   if (model != TLSModel::LocalExec)
-    llvm_unreachable("only local-exec TLS mode supported");
+  {}
+  llvm_unreachable("only local-exec TLS mode supported");
 
+  /*
   // The high part of the thread pointer is in access register 0.
   SDValue TPHi = DAG.getNode(RISCVISD::EXTRACT_ACCESS, DL, MVT::i32,
                              DAG.getConstant(0, MVT::i32));
@@ -1779,6 +1802,7 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
 
   // Add the base and offset together.
   return DAG.getNode(ISD::ADD, DL, PtrVT, TP, Offset);
+  */
 }
 
 SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
@@ -2074,6 +2098,21 @@ SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
                           sp, Op.getOperand(1));
 }
 
+SDValue RISCVTargetLowering::
+lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
+  // check the depth
+  assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
+         "Frame address can only be determined for current frame.");
+
+  MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI->setFrameAddressIsTaken(true);
+  EVT VT = Op.getValueType();
+  DebugLoc DL = Op.getDebugLoc();
+  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL,
+                                         Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp, VT);
+  return FrameAddr;
+}
+
 SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
                                               SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
@@ -2103,6 +2142,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerSTACKSAVE(Op, DAG);
   case ISD::STACKRESTORE:
     return lowerSTACKRESTORE(Op, DAG);
+  case ISD::FRAMEADDR:
+    return lowerFRAMEADDR(Op, DAG);
   default:
     llvm_unreachable("Unexpected node to lower");
   }
@@ -2121,7 +2162,6 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(UCMP);
     OPCODE(SELECT_CC);
     OPCODE(ADJDYNALLOC);
-    OPCODE(EXTRACT_ACCESS);
     OPCODE(SDIVREM64);
     OPCODE(UDIVREM32);
     OPCODE(UDIVREM64);

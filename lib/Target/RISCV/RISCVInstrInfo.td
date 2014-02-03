@@ -28,36 +28,36 @@
 *RISCV Instructions
 ********************/
 //Integer arithmetic register-register
-def ADD : InstR<"add" , 0b0110011, 0b0000000000, add   , GR32, GR32>;
-def SUB : InstR<"sub" , 0b0110011, 0b1000000000, sub   , GR32, GR32>;
-def SLL : InstR<"sll" , 0b0110011, 0b1000000001, shl   , GR32, GR32>;
+def ADD : InstR<"add" , 0b0110011, 0b0000000000, add   , GR32, GR32>, Requires<[IsRV32]>;
+def SUB : InstR<"sub" , 0b0110011, 0b1000000000, sub   , GR32, GR32>, Requires<[IsRV32]>;
+def SLL : InstR<"sll" , 0b0110011, 0b1000000001, shl   , GR32, GR32>, Requires<[IsRV32]>;
 def SLT : InstR<"slt" , 0b0110011, 0b0000000010, setlt , GR32, GR32>;
 def SLTU: InstR<"sltu", 0b0110011, 0b0000000011, setult, GR32, GR32>;
 def XOR : InstR<"xor" , 0b0110011, 0b0000000100, xor   , GR32, GR32>;
-def SRL : InstR<"srl" , 0b0110011, 0b0000000101, srl   , GR32, GR32>;
-def SRA : InstR<"sra" , 0b0110011, 0b1000000101, sra   , GR32, GR32>;
+def SRL : InstR<"srl" , 0b0110011, 0b0000000101, srl   , GR32, GR32>, Requires<[IsRV32]>;
+def SRA : InstR<"sra" , 0b0110011, 0b1000000101, sra   , GR32, GR32>, Requires<[IsRV32]>;
 def OR  : InstR<"or"  , 0b0110011, 0b0000000110, or    , GR32, GR32>;
 def AND : InstR<"and" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
 //Integer arithmetic register-immediate
-def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, imm32sx12>;
-def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, imm32sx12>;
-def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, imm32sx12>;
-def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, imm32sx12>;
+def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>;
+def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
+def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, GR32, imm32sx12>;
+def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, GR32, imm32sx12>;
 //TODO: enforce constraints here or up on level?
-def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, imm32sx12> {
+def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
   let IMM{11-6} = 0b000000; 
   //trap if $imm{5}!=0 TODO:how to do this?
 }
-def SRLI: InstI<"srli", 0b0010011, 0b101       , srl, GR32, imm32sx12> {
+def SRLI: InstI<"srli", 0b0010011, 0b101       , srl, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
   let IMM{11-6} = 0b000000; 
   //trap if $src{5}!=0 TODO:how to do this?
 }
-def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, imm32sx12> {
+def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
   let IMM{11-6} = 0b000001; 
   //trap if $src{5}!=0 TODO:how to do this?
 }
-def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, imm32sx12>;
-def SLTIU: InstI<"sltiu",0b0010011, 0b011, setult,GR32, imm32sx12>;
+def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR32, imm32sx12>;
+def SLTIU: InstI<"sltiu",0b0010011, 0b011, setult,GR32, GR32, imm32sx12>;
 
 //Synthesized set operators
 //patterns to be used for 32 and 64bit
@@ -69,11 +69,11 @@ multiclass SeteqPats<RegisterOperand RC, Instruction SLTiuOp, Instruction XOROp,
             (SLTuOp (XOROp RC:$lhs, RC:$rhs), ZEROReg)>;
 }
 
-multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
+multiclass SetlePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
   def : Pat<(setle RC:$lhs, RC:$rhs),
-            (XORIOp (SLTOp RC:$lhs, RC:$rhs), 1)>;
+            (XORI (SLTOp RC:$lhs, RC:$rhs), 1)>;
   def : Pat<(setule RC:$lhs, RC:$rhs),
-            (XORIOp (SLTuOp RC:$lhs, RC:$rhs), 1)>;
+            (XORI (SLTuOp RC:$lhs, RC:$rhs), 1)>;
 }
 
 multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
@@ -83,17 +83,17 @@ multiclass SetgtPats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> 
             (SLTuOp RC:$lhs, RC:$rhs)>;
 }
 
-multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp, Instruction XORIOp> {
+multiclass SetgePats<RegisterOperand RC, Instruction SLTOp, Instruction SLTuOp> {
   def : Pat<(setge RC:$lhs, RC:$rhs),
-            (XORIOp (SLTOp RC:$rhs, RC:$lhs), 1)>;
+            (XORI (SLTOp RC:$rhs, RC:$lhs), 1)>;
   def : Pat<(setuge RC:$lhs, RC:$rhs),
-            (XORIOp (SLTuOp RC:$rhs, RC:$lhs), 1)>;
+            (XORI (SLTuOp RC:$rhs, RC:$lhs), 1)>;
 }
 
 defm : SeteqPats<GR32, SLTIU, XOR, SLTU, zero>;
-defm : SetlePats<GR32, SLT, SLTU, XORI>;
+defm : SetlePats<GR32, SLT, SLTU>;
 defm : SetgtPats<GR32, SLT, SLTU>;
-defm : SetgePats<GR32, SLT, SLTU, XORI>;
+defm : SetgePats<GR32, SLT, SLTU>;
 
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
@@ -134,47 +134,47 @@ let isCall = 1 in {
 //TODO:refactor to class
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def BEQ : InstB<0b1100011, 0b000, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "beq\t$src1, $src2, $target", 
-            [(brcond (i32 (seteq GR32:$src1,  GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "beq\t$src1, $src2, $target", 
+              [(brcond (i32 (seteq GR32:$src1,  GR32:$src2)), bb:$target)]>;
   def BNE : InstB<0b1100011, 0b001, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bne\t$src1, $src2, $target", 
-            [(brcond (i32 (setne GR32:$src1, GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bne\t$src1, $src2, $target", 
+              [(brcond (i32 (setne GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLT : InstB<0b1100011, 0b100, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "blt\t$src1, $src2, $target", 
-            [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "blt\t$src1, $src2, $target", 
+              [(brcond (i32 (setlt GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGE : InstB<0b1100011, 0b101, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bge\t$src1, $src2, $target", 
-            [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bge\t$src1, $src2, $target", 
+              [(brcond (i32 (setge GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLTU: InstB<0b1100011, 0b110, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bltu\t$src1, $src2, $target", 
-            [(brcond (i32 (setult GR32:$src1, GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bltu\t$src1, $src2, $target", 
+              [(brcond (i32 (setult GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGEU: InstB<0b1100011, 0b111, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bgeu\t$src1, $src2, $target", 
-            [(brcond (i32 (setuge GR32:$src1, GR32:$src2)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bgeu\t$src1, $src2, $target", 
+              [(brcond (i32 (setuge GR32:$src1, GR32:$src2)), bb:$target)]>;
 
 //Synthesize remaining condition codes by reverseing operands
   def BGT : InstB<0b1100011, 0b100, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "blt\t$src2, $src1, $target", 
-            [(brcond (i32 (setgt GR32:$src2, GR32:$src1)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "blt\t$src2, $src1, $target", 
+              [(brcond (i32 (setgt GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BGTU: InstB<0b1100011, 0b110, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bltu\t$src2, $src1, $target", 
-            [(brcond (i32 (setugt GR32:$src2, GR32:$src1)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bltu\t$src2, $src1, $target", 
+              [(brcond (i32 (setugt GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLE : InstB<0b1100011, 0b101, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bge\t$src2, $src1, $target", 
-            [(brcond (i32 (setle GR32:$src2, GR32:$src1)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bge\t$src2, $src1, $target", 
+              [(brcond (i32 (setle GR32:$src1, GR32:$src2)), bb:$target)]>;
   def BLEU: InstB<0b1100011, 0b111, (outs), 
-            (ins brtarget:$target, GR32:$src2, GR32:$src1), 
-            "bgeu\t$src2, $src1, $target", 
-            [(brcond (i32 (setule GR32:$src2, GR32:$src1)), bb:$target)]>;
+              (ins brtarget:$target, GR32:$src1, GR32:$src2), 
+              "bgeu\t$src2, $src1, $target", 
+              [(brcond (i32 (setule GR32:$src1, GR32:$src2)), bb:$target)]>;
 }
 //constant branches (e.g. br 1 $label or br 0 $label)
 def : Pat<(brcond GR32Bit:$cond, bb:$target),
@@ -196,21 +196,21 @@ def : Pat<(select (i32 (seteq GR32:$lhs, 0)), GR32:$T, GR32:$F),
 
 //Load/Store Instructions
 let mayLoad = 1 in {
-  def LW : InstLoad <"lw" , 0b0000011, 0b010, load, GR32, mem>; 
-  def LH : InstLoad <"lh" , 0b0000011, 0b001, sextloadi16, GR32, mem>; 
-  def LHU: InstLoad <"lhu", 0b0000011, 0b101, zextloadi16, GR32, mem>; 
-  def LB : InstLoad <"lb" , 0b0000011, 0b000, sextloadi8, GR32, mem>; 
-  def LBU: InstLoad <"lbu", 0b0000011, 0b100, zextloadi8, GR32, mem>; 
+  def LW : InstLoad <"lw" , 0b0000011, 0b010, load, GR32, mem>, Requires<[IsRV32]>; 
+  def LH : InstLoad <"lh" , 0b0000011, 0b001, sextloadi16, GR32, mem>, Requires<[IsRV32]>; 
+  def LHU: InstLoad <"lhu", 0b0000011, 0b101, zextloadi16, GR32, mem>, Requires<[IsRV32]>; 
+  def LB : InstLoad <"lb" , 0b0000011, 0b000, sextloadi8, GR32, mem>, Requires<[IsRV32]>; 
+  def LBU: InstLoad <"lbu", 0b0000011, 0b100, zextloadi8, GR32, mem>, Requires<[IsRV32]>; 
 }
 //extended loads
-def : Pat<(i32 (extloadi1  addr:$addr)), (LBU addr:$addr)>;
-def : Pat<(i32 (extloadi8  addr:$addr)), (LBU addr:$addr)>;
-def : Pat<(i32 (extloadi16 addr:$addr)), (LHU addr:$addr)>;
+def : Pat<(i32 (extloadi1  addr:$addr)), (LBU addr:$addr)>, Requires<[IsRV32]>;
+def : Pat<(i32 (extloadi8  addr:$addr)), (LBU addr:$addr)>, Requires<[IsRV32]>;
+def : Pat<(i32 (extloadi16 addr:$addr)), (LHU addr:$addr)>, Requires<[IsRV32]>;
 
 let mayStore = 1 in {
-  def SW : InstStore<"sw" , 0b0100011, 0b010, store        , GR32, mem>;
-  def SH : InstStore<"sh" , 0b0100011, 0b001, truncstorei16, GR32, mem>; 
-  def SB : InstStore<"sb" , 0b0100011, 0b000, truncstorei8 , GR32, mem>; 
+  def SW : InstStore<"sw" , 0b0100011, 0b010, store        , GR32, mem>, Requires<[IsRV32]>;
+  def SH : InstStore<"sh" , 0b0100011, 0b001, truncstorei16, GR32, mem>, Requires<[IsRV32]>; 
+  def SB : InstStore<"sb" , 0b0100011, 0b000, truncstorei8 , GR32, mem>, Requires<[IsRV32]>; 
 }
 
 //Upper Immediate
@@ -223,7 +223,6 @@ def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
                [(set GR32:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
 
 //simple immediate loading
-def : Pat<(i32 imm32sx12:$imm), (ORI zero, imm32sx12:$imm)>; 
 // Transformation Function - get the lower 12 bits.
 def LO12 : SDNodeXForm<imm, [{
     return getImm(N, N->getZExtValue() & 0xFFF);
@@ -238,12 +237,13 @@ def HI20 : SDNodeXForm<imm, [{
 }]>;
 
 //psuedo load low imm instruction to print operands better
-def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, imm32sxu12>;
+def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sxu12>, Requires<[IsRV32]>;
 //def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
 def LI : InstRISCV<4, (outs GR32:$dst), (ins imm32:$imm), "li\t$dst, $imm",
-  []> {
+  []>, Requires<[IsRV32]>{
     let isPseudo = 1;
 }
+def : Pat<(i32 imm32sx12:$imm), (LI imm32sx12:$imm)>, Requires<[IsRV32]>; 
 def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
 def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>;

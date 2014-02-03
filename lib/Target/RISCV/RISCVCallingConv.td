@@ -76,12 +76,13 @@ def RetCC_RISCV64 : CallingConv<[
   //if(State.getMachineFunction().getFunction().getReturnType().isStructTy() &&
      //ReturnType().getStructNumElements() > 2) CCAssignToStack<8, 8>>
 
-  CCIfType<[i8,i16,i32], CCPromoteToType<i64>>,
+  CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
   // call-clobbered argument registers available for code that doesn't
   // care about the ABI.  (R6 is an argument register too, but is
   // call-saved and therefore not suitable for return values.)
+  CCIfType<[i32], CCAssignToReg<[v0, v1]>>,
   CCIfType<[i64], CCAssignToReg<[v0_64, v1_64]>>,
 
   // ABI-complaint code returns float and double in F0.  Make the
@@ -110,9 +111,10 @@ def CC_RISCV64 : CallingConv<[
   //Always assign the sret pointer to the first arg reg
   CCIfSRet<CCAssignToReg<[a0_64]>>,
   //Promote small int types to i64
-  CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
+  CCIfType<[i8, i16], CCPromoteToType<i32>>,
 
   // The first 14 integer arguments are passed in a0-a13. 
+  CCIfType<[i32], CCAssignToReg<[a0, a1, a2, a3, a4, a5, a6, a7]>>,
   CCIfType<[i64], CCAssignToReg<[a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64]>>,
 
   //Single precision floating point
@@ -121,7 +123,7 @@ def CC_RISCV64 : CallingConv<[
   CCIfType<[f32, f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64]>>>,
 
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
-  CCIfType<[i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i32, i64, f64], CCAssignToStack<8, 8>>
 ]>;
 
 //===----------------------------------------------------------------------===//

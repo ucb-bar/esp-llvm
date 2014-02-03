@@ -22,6 +22,7 @@ class RISCVRegWithSubRegs<string n, list<Register> subregs>
 
 //Subreg defs
 let Namespace = "RISCV" in {
+  def sub_32       : SubRegIndex;
   def sub_32even   : SubRegIndex;
   def sub_32odd    : SubRegIndex;
   def sub_64even   : SubRegIndex;
@@ -115,7 +116,7 @@ defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
 
 // Base and index registers.  Everything except R0, which in an address
 // context evaluates as 0.
-defm ADDR32 : RISCVRegClass<"ADDR32", i32, 32, (sub GR32Bit, zero), 1>;
+//defm ADDR32 : RISCVRegClass<"ADDR32", i32, 32, (sub GR32Bit, zero), 1>;
 
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairGPR64<bits<16> num, string n, list<Register> subregs>
@@ -134,52 +135,53 @@ defm PairGR64 : RISCVRegClass<"PairGR64", i64, 64, (add
   a0_p64, a1_p64, a2_p64, a3_p64), 1>;
 
 //RV64 general purpose regs
-class GPR64<bits<16> num, string n> : RISCVReg<n> {
+class GPR64<bits<16> num, string n, list<Register> subregs> : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
+  let SubRegIndices = [sub_32];
 }
 
 // General-purpose registers
 //ABI Names
-def zero_64 : GPR64<0, "x0">, DwarfRegNum<[0]>;
-def ra_64   : GPR64<1, "x1">, DwarfRegNum<[1]>;
-def fp_64   : GPR64<2, "x2">, DwarfRegNum<[2]>;
+def zero_64 : GPR64<0, "x0", [zero]>, DwarfRegNum<[0]>;
+def ra_64   : GPR64<1, "x1", [ra]>, DwarfRegNum<[1]>;
+def fp_64   : GPR64<2, "x2", [ra]>, DwarfRegNum<[2]>;
 //saved registers note:s0 is alias for fp
-def s0_64   : GPR64<2, "x2">, DwarfRegNum<[2]>{
+def s0_64   : GPR64<2, "x2", [s0]>, DwarfRegNum<[2]>{
   let Aliases = [fp_64];
 }
-def s1_64   : GPR64<3, "x3">, DwarfRegNum<[3]>;
-def s2_64   : GPR64<4, "x4">, DwarfRegNum<[4]>;
-def s3_64   : GPR64<5, "x5">, DwarfRegNum<[5]>;
-def s4_64   : GPR64<6, "x6">, DwarfRegNum<[6]>;
-def s5_64   : GPR64<7, "x7">, DwarfRegNum<[7]>;
-def s6_64   : GPR64<8, "x8">, DwarfRegNum<[8]>;
-def s7_64   : GPR64<9, "x9">, DwarfRegNum<[9]>;
-def s8_64   : GPR64<10,"x10">, DwarfRegNum<[10]>;
-def s9_64   : GPR64<11,"x11">, DwarfRegNum<[11]>;
-def s10_64  : GPR64<12,"x12">, DwarfRegNum<[12]>;
-def s11_64  : GPR64<13,"x13">, DwarfRegNum<[13]>;
+def s1_64   : GPR64<3, "x3", [s1]>, DwarfRegNum<[3]>;
+def s2_64   : GPR64<4, "x4", [s2]>, DwarfRegNum<[4]>;
+def s3_64   : GPR64<5, "x5", [s3]>, DwarfRegNum<[5]>;
+def s4_64   : GPR64<6, "x6", [s4]>, DwarfRegNum<[6]>;
+def s5_64   : GPR64<7, "x7", [s5]>, DwarfRegNum<[7]>;
+def s6_64   : GPR64<8, "x8", [s6]>, DwarfRegNum<[8]>;
+def s7_64   : GPR64<9, "x9", [s7]>, DwarfRegNum<[9]>;
+def s8_64   : GPR64<10,"x10", [s8]>, DwarfRegNum<[10]>;
+def s9_64   : GPR64<11,"x11", [s9]>, DwarfRegNum<[11]>;
+def s10_64  : GPR64<12,"x12", [s10]>, DwarfRegNum<[12]>;
+def s11_64  : GPR64<13,"x13", [s11]>, DwarfRegNum<[13]>;
 
-def sp_64   : GPR64<14,"x14">, DwarfRegNum<[14]>;
-def tp_64   : GPR64<15,"x15">, DwarfRegNum<[15]>;
+def sp_64   : GPR64<14,"x14", [sp]>, DwarfRegNum<[14]>;
+def tp_64   : GPR64<15,"x15", [tp]>, DwarfRegNum<[15]>;
 //return value
-def v0_64   : GPR64<16,"x16">, DwarfRegNum<[16]>;
-def v1_64   : GPR64<17,"x17">, DwarfRegNum<[17]>;
+def v0_64   : GPR64<16,"x16", [v0]>, DwarfRegNum<[16]>;
+def v1_64   : GPR64<17,"x17", [v1]>, DwarfRegNum<[17]>;
 //function arguments
-def a0_64   : GPR64<18,"x18">, DwarfRegNum<[18]>;
-def a1_64   : GPR64<19,"x19">, DwarfRegNum<[19]>;
-def a2_64   : GPR64<20,"x20">, DwarfRegNum<[20]>;
-def a3_64   : GPR64<21,"x21">, DwarfRegNum<[21]>;
-def a4_64   : GPR64<22,"x22">, DwarfRegNum<[22]>;
-def a5_64   : GPR64<23,"x23">, DwarfRegNum<[23]>;
-def a6_64   : GPR64<24,"x24">, DwarfRegNum<[24]>;
-def a7_64   : GPR64<25,"x25">, DwarfRegNum<[25]>;
+def a0_64   : GPR64<18,"x18", [a0]>, DwarfRegNum<[18]>;
+def a1_64   : GPR64<19,"x19", [a1]>, DwarfRegNum<[19]>;
+def a2_64   : GPR64<20,"x20", [a2]>, DwarfRegNum<[20]>;
+def a3_64   : GPR64<21,"x21", [a3]>, DwarfRegNum<[21]>;
+def a4_64   : GPR64<22,"x22", [a4]>, DwarfRegNum<[22]>;
+def a5_64   : GPR64<23,"x23", [a5]>, DwarfRegNum<[23]>;
+def a6_64   : GPR64<24,"x24", [a6]>, DwarfRegNum<[24]>;
+def a7_64   : GPR64<25,"x25", [a7]>, DwarfRegNum<[25]>;
 //temp registers
-def t0_64   : GPR64<26,"x26">, DwarfRegNum<[26]>;
-def t1_64   : GPR64<27,"x27">, DwarfRegNum<[27]>;
-def t2_64   : GPR64<28,"x28">, DwarfRegNum<[28]>;
-def t3_64   : GPR64<29,"x29">, DwarfRegNum<[29]>;
-def t4_64   : GPR64<30,"x30">, DwarfRegNum<[30]>;
-def gp_64   : GPR64<31,"x31">, DwarfRegNum<[31]>;
+def t0_64   : GPR64<26,"x26", [t0]>, DwarfRegNum<[26]>;
+def t1_64   : GPR64<27,"x27", [t1]>, DwarfRegNum<[27]>;
+def t2_64   : GPR64<28,"x28", [t2]>, DwarfRegNum<[28]>;
+def t3_64   : GPR64<29,"x29", [t3]>, DwarfRegNum<[29]>;
+def t4_64   : GPR64<30,"x30", [t4]>, DwarfRegNum<[30]>;
+def gp_64   : GPR64<31,"x31", [gp]>, DwarfRegNum<[31]>;
 
 //All regs are 32bit
 defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
@@ -281,49 +283,50 @@ defm PairFP64 : RISCVRegClass<"PairFP64", f64, 64, (add
   fa0_p64, fa1_p64, fa2_p64, fa3_p64, fv0_p64), 1>;
 
 // Lower 32 bits of one of the 16 64-bit floating-point registers
-class FPR64<bits<16> num, string n> : RISCVReg<n> {
+class FPR64<bits<16> num, string n, list<Register> subregs> : RISCVRegWithSubRegs<n, subregs> {
   let HWEncoding = num;
+  let SubRegIndices = [sub_32];
 }
 
 
 // Floating-point registers
 //ABI Names
 //FP saved registers
-def fs0_64 : FPR64<0, "f0">, DwarfRegNum<[0]>;
-def fs1_64 : FPR64<1, "f1">, DwarfRegNum<[1]>;
-def fs2_64 : FPR64<2, "f2">, DwarfRegNum<[2]>;
-def fs3_64 : FPR64<3, "f3">, DwarfRegNum<[3]>;
-def fs4_64 : FPR64<4, "f4">, DwarfRegNum<[4]>;
-def fs5_64 : FPR64<5, "f5">, DwarfRegNum<[5]>;
-def fs6_64 : FPR64<6, "f6">, DwarfRegNum<[6]>;
-def fs7_64 : FPR64<7, "f7">, DwarfRegNum<[7]>;
-def fs8_64 : FPR64<8, "f8">, DwarfRegNum<[8]>;
-def fs9_64 : FPR64<9, "f9">, DwarfRegNum<[9]>;
-def fs10_64: FPR64<10,"f10">, DwarfRegNum<[10]>;
-def fs11_64: FPR64<11,"f11">, DwarfRegNum<[11]>;
-def fs12_64: FPR64<12,"f12">, DwarfRegNum<[11]>;
-def fs13_64: FPR64<13,"f13">, DwarfRegNum<[12]>;
-def fs14_64: FPR64<14,"f14">, DwarfRegNum<[13]>;
-def fs15_64: FPR64<15,"f15">, DwarfRegNum<[15]>;
+def fs0_64 : FPR64<0, "f0", [fs0]>, DwarfRegNum<[0]>;
+def fs1_64 : FPR64<1, "f1", [fs1]>, DwarfRegNum<[1]>;
+def fs2_64 : FPR64<2, "f2", [fs2]>, DwarfRegNum<[2]>;
+def fs3_64 : FPR64<3, "f3", [fs3]>, DwarfRegNum<[3]>;
+def fs4_64 : FPR64<4, "f4", [fs4]>, DwarfRegNum<[4]>;
+def fs5_64 : FPR64<5, "f5", [fs5]>, DwarfRegNum<[5]>;
+def fs6_64 : FPR64<6, "f6", [fs6]>, DwarfRegNum<[6]>;
+def fs7_64 : FPR64<7, "f7", [fs7]>, DwarfRegNum<[7]>;
+def fs8_64 : FPR64<8, "f8", [fs8]>, DwarfRegNum<[8]>;
+def fs9_64 : FPR64<9, "f9", [fs9]>, DwarfRegNum<[9]>;
+def fs10_64: FPR64<10,"f10", [fs10]>, DwarfRegNum<[10]>;
+def fs11_64: FPR64<11,"f11", [fs11]>, DwarfRegNum<[11]>;
+def fs12_64: FPR64<12,"f12", [fs12]>, DwarfRegNum<[11]>;
+def fs13_64: FPR64<13,"f13", [fs13]>, DwarfRegNum<[12]>;
+def fs14_64: FPR64<14,"f14", [fs14]>, DwarfRegNum<[13]>;
+def fs15_64: FPR64<15,"f15", [fs15]>, DwarfRegNum<[15]>;
 //FP return values
-def fv0_64 : FPR64<16,"f16">, DwarfRegNum<[16]>;
-def fv1_64 : FPR64<17,"f17">, DwarfRegNum<[17]>;
+def fv0_64 : FPR64<16,"f16", [fv0]>, DwarfRegNum<[16]>;
+def fv1_64 : FPR64<17,"f17", [fv1]>, DwarfRegNum<[17]>;
 //FP arguments
-def fa0_64 : FPR64<18,"f18">, DwarfRegNum<[18]>;
-def fa1_64 : FPR64<19,"f19">, DwarfRegNum<[19]>;
-def fa2_64 : FPR64<20,"f20">, DwarfRegNum<[20]>;
-def fa3_64 : FPR64<21,"f21">, DwarfRegNum<[21]>;
-def fa4_64 : FPR64<22,"f22">, DwarfRegNum<[22]>;
-def fa5_64 : FPR64<23,"f23">, DwarfRegNum<[23]>;
-def fa6_64 : FPR64<24,"f24">, DwarfRegNum<[24]>;
-def fa7_64 : FPR64<25,"f25">, DwarfRegNum<[25]>;
+def fa0_64 : FPR64<18,"f18", [fa0]>, DwarfRegNum<[18]>;
+def fa1_64 : FPR64<19,"f19", [fa1]>, DwarfRegNum<[19]>;
+def fa2_64 : FPR64<20,"f20", [fa2]>, DwarfRegNum<[20]>;
+def fa3_64 : FPR64<21,"f21", [fa3]>, DwarfRegNum<[21]>;
+def fa4_64 : FPR64<22,"f22", [fa4]>, DwarfRegNum<[22]>;
+def fa5_64 : FPR64<23,"f23", [fa5]>, DwarfRegNum<[23]>;
+def fa6_64 : FPR64<24,"f24", [fa6]>, DwarfRegNum<[24]>;
+def fa7_64 : FPR64<25,"f25", [fa7]>, DwarfRegNum<[25]>;
 //FP temp registers
-def ft0_64 : FPR64<26,"f26">, DwarfRegNum<[26]>;
-def ft1_64 : FPR64<27,"f27">, DwarfRegNum<[27]>;
-def ft2_64 : FPR64<28,"f28">, DwarfRegNum<[28]>;
-def ft3_64 : FPR64<29,"f29">, DwarfRegNum<[29]>;
-def ft4_64 : FPR64<30,"f30">, DwarfRegNum<[30]>;
-def ft5_64 : FPR64<31,"f31">, DwarfRegNum<[31]>;
+def ft0_64 : FPR64<26,"f26", [ft0]>, DwarfRegNum<[26]>;
+def ft1_64 : FPR64<27,"f27", [ft1]>, DwarfRegNum<[27]>;
+def ft2_64 : FPR64<28,"f28", [ft2]>, DwarfRegNum<[28]>;
+def ft3_64 : FPR64<29,"f29", [ft3]>, DwarfRegNum<[29]>;
+def ft4_64 : FPR64<30,"f30", [ft4]>, DwarfRegNum<[30]>;
+def ft5_64 : FPR64<31,"f31", [ft5]>, DwarfRegNum<[31]>;
 
 //all fp regs are 32bit
 defm FP64  : RISCVRegClass<"FP64", f64, 64, (add
