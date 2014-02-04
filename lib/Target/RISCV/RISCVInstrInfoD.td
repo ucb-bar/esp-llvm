@@ -58,13 +58,27 @@ defm FCVT_D_S  : FPConvOps<"fcvt.d.s",  fextend, FP64, FP32, 0b10000, 0b01>, Req
 //Sign injection
 def FSGNJ_D : InstSign<"fsgnj.d", 0b1010011, 0b00101, 0b01, 0b000,
                         fcopysign, FP64, FP64>, Requires<[HasD]>;
-def FSGNJN_D : InstSign<"fsgnj.d", 0b1010011, 0b00101, 0b01, 0b000,
+def FSGNJN_D : InstSign<"fsgnjn.d", 0b1010011, 0b00110, 0b01, 0b000,
                         fcopysign, FP64, FP64>, Requires<[HasD]> {
                           let Pattern =
                           [(set FP64:$dst, (fcopysign FP64:$src1, (fneg FP64:$src2)))];
                         }
+//pattern is
+//if signs are equal copysign from abs(src2)
+//otherwise copysign from fabs( fneg (src2))
+def FSGNJX_D : InstSign<"fsgnjx.d", 0b1010011, 0b00111, 0b01, 0b000,
+    fcopysign, FP64, FP64>, Requires<[HasD]> {
+      let Pattern =
+      [(set FP64:$dst, (select 
+      (i32 (seteq (i32 (fgetsign FP64:$src1)), (i32 (fgetsign FP64:$src2)))),
+        (fcopysign FP64:$src1, (fabs FP64:$src2)),
+        (fcopysign FP64:$src1, (fneg (fabs FP64:$src2)))
+      ))];
+      }
 
-//TODO: implement FSGNJX using pattern (maybe ask andrew what he thinks a good sequence would be)
+//llvm cant select fneq itsels so help it out
+def : Pat<(fneg FP64:$src), (FSGNJN_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
+def : Pat<(fabs FP64:$src), (FSGNJX_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
 
 //Move instruction (bitcasts)
 def FMV_X_D : InstConv<"fmv.x.d", 0b1010011, 0b11100, 0b01, 0b000, bitconvert, GR64, FP64>, Requires<[HasD, IsRV64]>;
@@ -77,17 +91,9 @@ def FLE_D : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setole, GR32, FP6
 def FUEQ_D : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setueq, GR32, FP64>, Requires<[HasD]>;
 def FULT_D : InstSign<"flt.d", 0b1010011, 0b10110, 0b01, 0b000, setult, GR32, FP64>, Requires<[HasD]>;
 def FULE_D : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setule, GR32, FP64>, Requires<[HasD]>;
-//RV64D
-def FEQ_D64 : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setoeq, GR64, FP64>, Requires<[HasD,IsRV64]>;
-def FLT_D64 : InstSign<"flt.d", 0b1010011, 0b10110, 0b01, 0b000, setolt, GR64, FP64>, Requires<[HasD,IsRV64]>;
-def FLE_D64 : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setole, GR64, FP64>, Requires<[HasD,IsRV64]>;
-def FUEQ_D64 : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setueq, GR64, FP64>, Requires<[HasD,IsRV64]>;
-def FULT_D64 : InstSign<"flt.d", 0b1010011, 0b10110, 0b01, 0b000, setult, GR64, FP64>, Requires<[HasD,IsRV64]>;
-def FULE_D64 : InstSign<"fle.d", 0b1010011, 0b10111, 0b01, 0b000, setule, GR64, FP64>, Requires<[HasD,IsRV64]>;
 //synthesized set operators
 
-defm : FPCmpPats<FP64, FLT_D, FULT_D, FLE_D, FULE_D>;
-defm : FPCmpPats<FP64, FLT_D64, FULT_D64, FLE_D64, FULE_D64>;
+defm : FPCmpPats<FP64, FEQ_D, FUEQ_D, FLT_D, FULT_D, FLE_D, FULE_D>;
 
 //extloads
 def : Pat<(extloadf32 addr:$addr), (FCVT_D_S_RDY (FLW addr:$addr))>, Requires<[HasD,IsRV32]>;
@@ -95,3 +101,11 @@ def : Pat<(extloadf32 addr:$addr), (FCVT_D_S_RDY (FLW64 addr:$addr))>, Requires<
 
 //fp imm
 def :Pat<(fpimm0), (FCVT_D_W_RDY zero)>;
+
+//fp select
+let usesCustomInserter = 1 in {
+  def FSELECT_CC_D : Pseudo<(outs FP64:$dst),
+                              (ins GR32:$cond, FP64:$T, FP64:$F),
+                              [(set FP64:$dst,
+                                 (select GR32:$cond, FP64:$T, FP64:$F))]>, Requires<[HasD]>;
+}

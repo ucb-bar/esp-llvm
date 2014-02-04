@@ -106,13 +106,27 @@ class InstSign<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3>
 }
 def FSGNJ_S : InstSign<"fsgnj.s", 0b1010011, 0b00101, 0b00, 0b000,
                         fcopysign, FP32, FP32>, Requires<[HasF]>;
-def FSGNJN_S : InstSign<"fsgnj.s", 0b1010011, 0b00101, 0b00, 0b000,
+def FSGNJN_S : InstSign<"fsgnj.s", 0b1010011, 0b00110, 0b00, 0b000,
                         fcopysign, FP32, FP32>, Requires<[HasF]> {
                           let Pattern =
                           [(set FP32:$dst, (fcopysign FP32:$src1, (fneg FP32:$src2)))];
                         }
+//pattern is
+//if signs are equal copysign from abs(src2)
+//otherwise copysign from fabs( fneg (src2))
+def FSGNJX_S : InstSign<"fsgnjx.s", 0b1010011, 0b00111, 0b00, 0b000,
+    fcopysign, FP32, FP32>, Requires<[HasF]> {
+      let Pattern =
+      [(set FP32:$dst, (select 
+      (i32 (seteq (i32 (fgetsign FP32:$src1)), (i32 (fgetsign FP32:$src2)))),
+        (fcopysign FP32:$src1, (fabs FP32:$src2)),
+        (fcopysign FP32:$src1, (fneg (fabs FP32:$src2)))
+      ))];
+      }
 
-//TODO: implement FSGNJX using pattern (maybe ask andrew what he thinks a good sequence would be)
+//llvm cant select fneq itsels so help it out
+def : Pat<(fneg FP32:$src), (FSGNJN_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
+def : Pat<(fabs FP32:$src), (FSGNJX_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
 
 //Move instruction (bitcasts)
 def FMV_X_S : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR32, FP32>, Requires<[HasF]>;
@@ -127,15 +141,9 @@ def FLE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setole, GR32, FP3
 def FUEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setueq, GR32, FP32>, Requires<[HasF]>;
 def FULT_S : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setult, GR32, FP32>, Requires<[HasF]>;
 def FULE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setule, GR32, FP32>, Requires<[HasF]>;
-//RV64F
-def FEQ_S64 : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setoeq, GR64, FP32>, Requires<[HasF,IsRV64]>;
-def FLT_S64 : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setolt, GR64, FP32>, Requires<[HasF,IsRV64]>;
-def FLE_S64 : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setole, GR64, FP32>, Requires<[HasF,IsRV64]>;
-def FUEQ_S64 : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setueq, GR64, FP32>, Requires<[HasF,IsRV64]>;
-def FULT_S64 : InstSign<"flt.s", 0b1010011, 0b10110, 0b00, 0b000, setult, GR64, FP32>, Requires<[HasF,IsRV64]>;
-def FULE_S64 : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setule, GR64, FP32>, Requires<[HasF,IsRV64]>;
 //synthesized set operators
-multiclass FPCmpPats<RegisterOperand RC, Instruction FLTOp, Instruction FLTUOp,
+multiclass FPCmpPats<RegisterOperand RC, Instruction FEQOp, Instruction FEQUOp,
+                     Instruction FLTOp, Instruction FLTUOp,
                      Instruction FLEOp, Instruction FLEUOp> {
   //lhs > rhs ==> rhs < lhs
   def : Pat<(setogt RC:$lhs, RC:$rhs), (FLTOp RC:$rhs, RC:$lhs)>;
@@ -143,10 +151,19 @@ multiclass FPCmpPats<RegisterOperand RC, Instruction FLTOp, Instruction FLTUOp,
   //lhs >= rhs ==> rhs =< lhs
   def : Pat<(setoge RC:$lhs, RC:$rhs), (FLEOp RC:$rhs, RC:$lhs)>;
   def : Pat<(setuge RC:$lhs, RC:$rhs), (FLEUOp RC:$rhs, RC:$lhs)>;
-  //lhs != rhs ==> !(lhs == rhs)
+  //lhs != rhs ==> !(lhs == rhs) using seqz 
+  def : Pat<(setone RC:$lhs, RC:$rhs), (SLTIU (FEQOp RC:$rhs, RC:$lhs), 1)>;
+  def : Pat<(setune RC:$lhs, RC:$rhs), (SLTIU (FEQUOp RC:$rhs, RC:$lhs), 1)>;
 }
-defm : FPCmpPats<FP32, FLT_S, FULT_S, FLE_S, FULE_S>;
-defm : FPCmpPats<FP32, FLT_S64, FULT_S64, FLE_S64, FULE_S64>;
+defm : FPCmpPats<FP32, FEQ_S, FUEQ_S, FLT_S, FULT_S, FLE_S, FULE_S>;
 
 //fp imm
 def :Pat<(fpimm0), (FCVT_S_W_RDY zero)>;
+
+//fp select
+let usesCustomInserter = 1 in {
+  def FSELECT_CC_F : Pseudo<(outs FP32:$dst),
+                              (ins GR32:$cond, FP32:$T, FP32:$F),
+                              [(set FP32:$dst,
+                                 (select GR32:$cond, FP32:$T, FP32:$F))]>, Requires<[HasF]>;
+}

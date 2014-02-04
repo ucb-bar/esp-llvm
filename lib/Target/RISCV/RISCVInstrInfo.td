@@ -237,7 +237,7 @@ def HI20 : SDNodeXForm<imm, [{
 }]>;
 
 //psuedo load low imm instruction to print operands better
-def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sxu12>, Requires<[IsRV32]>;
+def LLI : InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>;
 //def : Pat<(i32 imm32:$imm), (LLI (LUI (HI20 imm32:$imm)), (LO12 imm32:$imm))>;
 def LI : InstRISCV<4, (outs GR32:$dst), (ins imm32:$imm), "li\t$dst, $imm",
   []>, Requires<[IsRV32]>{

@@ -189,13 +189,6 @@ let usesCustomInserter = 1 in {
                               [(set GR64:$dst,
                                  (select GR32:$cond, GR64:$T, GR64:$F))]>, Requires<[IsRV64]>;
 }
-/*
-def : Pat<(select (i64 (setne GR64:$lhs, 0)), GR64:$T, GR64:$F),
-        (SELECT_CC64 GR64:$lhs, GR64:$T, GR64:$F)>;
-
-def : Pat<(select (i64 (seteq GR64:$lhs, 0)), GR64:$T, GR64:$F),
-        (SELECT_CC64 GR64:$lhs, GR64:$F, GR64:$T)>;
-        */
 
 //Load/Store Instructions
 let mayLoad = 1 in {
@@ -246,7 +239,7 @@ def AUIPC64: InstU<0b0110111, (outs GR64:$dst), (ins pcimm64:$target),
 
 
 //psuedo load low imm instruction to print operands better
-def LLI64 : InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sxu12>;
+def LLI64 : InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>;
 //def L32I : Pat<(i64 imm64sxu32:$imm), (LLI64 (LUI64 (HI20 imm64:$imm)), (LO12 imm64:$imm))>;
 
 ///64 bit immediate loading
@@ -290,7 +283,7 @@ def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas fo
 def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
 //constpool
-def : Pat<(z_pcrel_wrapper tconstpool:$in), (LI64 tconstpool:$in)>;
+//def : Pat<(z_pcrel_wrapper tconstpool:$in), (ADDI64 (LUI64 (RISCVHi tconstpool:$in)), (RISCVLo tconstpool:$in))>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;

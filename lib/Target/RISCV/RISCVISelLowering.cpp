@@ -338,6 +338,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::FSIN, VT, Expand);
       setOperationAction(ISD::FCOS, VT, Expand);
       setOperationAction(ISD::FREM, VT, Expand);
+      setOperationAction(ISD::FABS, VT, Expand);
     }
   }
 
@@ -1774,35 +1775,6 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
   {}
   llvm_unreachable("only local-exec TLS mode supported");
 
-  /*
-  // The high part of the thread pointer is in access register 0.
-  SDValue TPHi = DAG.getNode(RISCVISD::EXTRACT_ACCESS, DL, MVT::i32,
-                             DAG.getConstant(0, MVT::i32));
-  TPHi = DAG.getNode(ISD::ANY_EXTEND, DL, PtrVT, TPHi);
-
-  // The low part of the thread pointer is in access register 1.
-  SDValue TPLo = DAG.getNode(RISCVISD::EXTRACT_ACCESS, DL, MVT::i32,
-                             DAG.getConstant(1, MVT::i32));
-  TPLo = DAG.getNode(ISD::ZERO_EXTEND, DL, PtrVT, TPLo);
-
-  // Merge them into a single 64-bit address.
-  SDValue TPHiShifted = DAG.getNode(ISD::SHL, DL, PtrVT, TPHi,
-				    DAG.getConstant(32, PtrVT));
-  SDValue TP = DAG.getNode(ISD::OR, DL, PtrVT, TPHiShifted, TPLo);
-
-  // Get the offset of GA from the thread pointer.
-  RISCVConstantPoolValue *CPV =
-    RISCVConstantPoolValue::Create(GV, RISCVCP::NTPOFF);
-
-  // Force the offset into the constant pool and load it from there.
-  SDValue CPAddr = DAG.getConstantPool(CPV, PtrVT, 8);
-  SDValue Offset = DAG.getLoad(PtrVT, DL, DAG.getEntryNode(),
-			       CPAddr, MachinePointerInfo::getConstantPool(),
-			       false, false, false, 0);
-
-  // Add the base and offset together.
-  return DAG.getNode(ISD::ADD, DL, PtrVT, TP, Offset);
-  */
 }
 
 SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
@@ -1841,8 +1813,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
 				       CP->getAlignment(), CP->getOffset());
 
   // Use LARL to load the address of the constant pool entry.
-  return DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
-  //return Result;
+  return getAddrNonPIC(Result, DAG);
 }
 
 SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
@@ -2343,6 +2314,8 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   switch (MI->getOpcode()) {
   case RISCV::SELECT_CC:
   case RISCV::SELECT_CC64:
+  case RISCV::FSELECT_CC_F:
+  case RISCV::FSELECT_CC_D:
       return emitSelectCC(MI, MBB);
   case RISCV::ATOMIC_CMP_SWAP_8:
     return emitAtomicCmpSwap(MI, MBB, 8);

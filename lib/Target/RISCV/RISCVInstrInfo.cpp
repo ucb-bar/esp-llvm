@@ -505,7 +505,6 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
 unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
                                               int64_t Offset) const {
   const MCInstrDesc &MCID = get(Opcode);
-  //int64_t Offset2 = (MCID.TSFlags & RISCVII::Is128Bit ? Offset + 8 : Offset);
   int64_t Offset2 = Offset;
   if (isInt<12>(Offset) && isInt<12>(Offset2)) {
     return Opcode;
@@ -533,18 +532,7 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
     Opcode = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(Value);
   } else {
-  /*
-    assert(isInt<32>(Value) && "Huge values not handled yet");
-    uint64_t upper20 = (Value & 0x0000000000000800) ? 
-        0x00000000000FFFFF & (Value >> 12)
-      : 0x00000000000FFFFF & ((Value >> 12) +1);
-    uint64_t lower12 = 0x0000000000000FFF & (Value);
-    Opcode = STI.isRV64() ? RISCV::LUI64 : RISCV::LUI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addImm(upper20);
-    Opcode = STI.isRV64() ? RISCV::LLI64 : RISCV::LLI;
-    BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(lower12);
-*/
-  //cheat with li
+  //use LI to let assembler load immediate best
   BuildMI(MBB, MBBI, DL, get(RISCV::LI), *Reg).addImm(Value);
   }
 }
