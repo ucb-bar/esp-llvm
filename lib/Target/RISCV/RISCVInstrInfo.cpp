@@ -254,11 +254,12 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 			      bool KillSrc) const {
 
   unsigned Opcode;
+  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   //TODO: when we are copying a phys reg do we want the value or bits for fp?
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
-    Opcode = RISCV::ORI;
+    Opcode = STI.isRV64() ? RISCV::ADDIW : RISCV::ADDI;
   else if (RISCV::GR64BitRegClass.contains(DestReg, SrcReg))
-    Opcode = RISCV::ORI64;
+    Opcode = RISCV::ADDI64;
   else if (RISCV::FP32BitRegClass.contains(DestReg, SrcReg)){
     Opcode = RISCV::FSGNJ_S;
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
