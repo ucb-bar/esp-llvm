@@ -145,12 +145,13 @@ def FULE_S : InstSign<"fle.s", 0b1010011, 0b10111, 0b00, 0b000, setule, GR32, FP
 multiclass FPCmpPats<RegisterOperand RC, Instruction FEQOp, Instruction FEQUOp,
                      Instruction FLTOp, Instruction FLTUOp,
                      Instruction FLEOp, Instruction FLEUOp> {
+                //RISC-V operands go in reverse order
   //lhs > rhs ==> rhs < lhs
-  def : Pat<(setogt RC:$lhs, RC:$rhs), (FLTOp RC:$rhs, RC:$lhs)>;
-  def : Pat<(setugt RC:$lhs, RC:$rhs), (FLTUOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setogt RC:$lhs, RC:$rhs), (FLTOp RC:$lhs, RC:$rhs)>;
+  def : Pat<(setugt RC:$lhs, RC:$rhs), (FLTUOp RC:$lhs, RC:$rhs)>;
   //lhs >= rhs ==> rhs =< lhs
-  def : Pat<(setoge RC:$lhs, RC:$rhs), (FLEOp RC:$rhs, RC:$lhs)>;
-  def : Pat<(setuge RC:$lhs, RC:$rhs), (FLEUOp RC:$rhs, RC:$lhs)>;
+  def : Pat<(setoge RC:$lhs, RC:$rhs), (FLEOp RC:$lhs, RC:$rhs)>;
+  def : Pat<(setuge RC:$lhs, RC:$rhs), (FLEUOp RC:$lhs, RC:$rhs)>;
   //lhs != rhs ==> !(lhs == rhs) using seqz 
   def : Pat<(setone RC:$lhs, RC:$rhs), (SLTIU (FEQOp RC:$rhs, RC:$lhs), 1)>;
   def : Pat<(setune RC:$lhs, RC:$rhs), (SLTIU (FEQUOp RC:$rhs, RC:$lhs), 1)>;
