@@ -2011,46 +2011,6 @@ SDValue RISCVTargetLowering::lowerATOMIC_LOAD(SDValue Op,
   return DAG.getMergeValues(RetOps, 2, DL);
 }
 
-// Node is an 8- or 16-bit ATOMIC_CMP_SWAP operation.  Lower the first two
-// into a fullword ATOMIC_CMP_SWAPW operation.
-/*
-SDValue RISCVTargetLowering::lowerATOMIC_CMP_SWAP(SDValue Op,
-                                                    SelectionDAG &DAG) const {
-  AtomicSDNode *Node = cast<AtomicSDNode>(Op.getNode());
-
-  int64_t BitSize = NarrowVT.getSizeInBits();
-  SDValue ChainIn = Node->getOperand(0);
-  SDValue Addr = Node->getOperand(1);
-  SDValue CmpVal = Node->getOperand(2);
-  SDValue SwapVal = Node->getOperand(3);
-  MachineMemOperand *MMO = Node->getMemOperand();
-  DebugLoc DL = Node->getDebugLoc();
-  EVT PtrVT = Addr.getValueType();
-
-  //loop:
-  //lr v1, 0(a0)
-  SDValue lr = DAG.getNode(LR, DL, EVT, Addr, DAG.getConstant(0,EVT));
-  //bne v1, a1, return
-  SDValue bne = DAG.getNode(BNE, DL, EVT, lr, CmpVal, end);
-  //sc v0, 0(a0), a2
-  SDValue sc = DAG.getNode(SC, DL, EVT, Addr, DAG.getConstant(0,EVT), SwapVal);
-  //bnez v0, loop
-  SDValue bnez = DAG.getNode(BNE, DL, EVT, sc, zero, loop);
-  //end:
-  
-
-
-  // Construct the ATOMIC_CMP_SWAPW node.
-  SDVTList VTList = DAG.getVTList(WideVT, MVT::Other);
-  SDValue Ops[] = { ChainIn, AlignedAddr, CmpVal, SwapVal, BitShift,
-                    NegBitShift, DAG.getConstant(BitSize, WideVT) };
-  SDValue AtomicOp = DAG.getMemIntrinsicNode(RISCVISD::ATOMIC_CMP_SWAPW, DL,
-                                             VTList, Ops, array_lengthof(Ops),
-                                             NarrowVT, MMO);
-  return AtomicOp;
-}
-*/
-
 SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
                                               SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
