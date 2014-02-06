@@ -319,6 +319,18 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
+  }else if(RISCV::FP64BitRegClass.contains(DestReg) &&
+           RISCV::FP32BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_D_S_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::FP32BitRegClass.contains(DestReg) &&
+           RISCV::FP64BitRegClass.contains(SrcReg)){
+    Opcode = RISCV::FCVT_S_D_RDY;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
   }else
     llvm_unreachable("Impossible reg-to-reg copy");
 
