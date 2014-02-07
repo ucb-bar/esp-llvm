@@ -71,7 +71,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   if(Subtarget.hasD()){
     //TODO: do we need to add an f32 regclass that shadows the f64 regclass?
     addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
-    addRegisterClass(MVT::f32,  &RISCV::FP64BitRegClass);
+    addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
   }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
 
@@ -1067,21 +1067,6 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     ISD::ArgFlagsTy Flags = Ins[i].Flags;
     bool IsRegLoc = VA.isRegLoc();
 
-    //handle SRet
-    /* Now handled in callingconv?
-    if(i == 0 && Flags.isSRet()) {
-      //the first argument is a pointer to the memory to place the struct
-      const TargetRegisterClass *RC = Subtarget.isRV64() ? 
-                     &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
-      EVT RegVT = getPointerTy();
-      unsigned ArgReg = Subtarget.isRV64() ? RISCV::a0_64 : RISCV::a0;
-      unsigned Reg = addLiveIn(DAG.getMachineFunction(), ArgReg, RC);
-      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
-      InVals.push_back(ArgValue);
-      continue;
-    }
-   */
-
     if (Flags.isByVal()) {
       assert(Flags.getByValSize() &&
              "ByVal args of size 0 should have been ignored by front-end.");
@@ -1145,24 +1130,6 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                                  DAG.getValueType(ValVT));
         ArgValue = DAG.getNode(ISD::TRUNCATE, DL, ValVT, ArgValue);
       }
-
-      /* This was handled in the previous assignment to Pairs
-      // Handle floating point arguments passed in integer registers and
-      // long double arguments passed in floating point registers.
-      if ((RegVT == MVT::i32 && ValVT == MVT::f32) ||
-          (RegVT == MVT::i64 && ValVT == MVT::f64) ||
-          (RegVT == MVT::f64 && ValVT == MVT::i64))
-        ArgValue = DAG.getNode(ISD::BITCAST, DL, ValVT, ArgValue);
-      else if (IsO32 && RegVT == MVT::i32 && ValVT == MVT::f64) {
-        unsigned Reg2 = addLiveIn(DAG.getMachineFunction(),
-                                  getNextIntArgReg(ArgReg), RC);
-        SDValue ArgValue2 = DAG.getCopyFromReg(Chain, DL, Reg2, RegVT);
-        if (!Subtarget->isLittle())
-          std::swap(ArgValue, ArgValue2);
-        ArgValue = DAG.getNode(RISCVISD::BuildPairF64, DL, MVT::f64,
-                               ArgValue, ArgValue2);
-      }
-      */
 
       InVals.push_back(ArgValue);
     } else { // VA.isRegLoc()
@@ -1261,15 +1228,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       continue;
     }
 
-    /*if (VA.getLocInfo() == CCValAssign::Indirect) {
-      // Store the argument in a stack slot and pass its address.
-      SDValue SpillSlot = DAG.CreateStackTemporary(VA.getValVT());
-      int FI = cast<FrameIndexSDNode>(SpillSlot)->getIndex();
-      MemOpChains.push_back(DAG.getStore(Chain, DL, ArgValue, SpillSlot,
-                                         MachinePointerInfo::getFixedStack(FI),
-                                         false, false, 0));
-      ArgValue = SpillSlot;
-    } else */
       ArgValue = convertValVTToLocVT(DAG, DL, VA, ArgValue);
 
     if (VA.isRegLoc())
@@ -1368,31 +1326,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     assert(CLI.Args[0].Ty->isPointerTy() && "SRet is always a pointer to a struct");
     Type *structType = CLI.Args[0].Ty->getContainedType(0);
     
-/*
-    if(structType->getStructNumElements() == 2){
-      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
-      SDValue Address = OutVals[0];
-      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
-                                   MachinePointerInfo(), false, false, 0);
-      Chain = Store;
-      Glue = Chain.getValue(1);
-  
-      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
-      SDValue offset = DAG.getConstant(structType->getStructElementType(0)->getScalarSizeInBits()/8, MVT::i64);
-      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, OutVals[0], offset);
-      SDValue Store2 = DAG.getStore(Chain, DL, ArgValue2, Address2,
-                                 MachinePointerInfo(), false, false, 0);
-      Chain = Store2;
-      Glue = Chain.getValue(1);
-    }else if(structType->getStructNumElements() == 1){
-      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
-      SDValue Address = OutVals[0];
-      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
-                                   MachinePointerInfo(), false, false, 0);
-      Chain = Store;
-      Glue = Chain.getValue(1);
-    }
-*/
   }
 
   // Copy all of the result registers out of their specified physreg.
