@@ -303,58 +303,6 @@ static bool isValidOffset(RISCVAddressingMode::OffRange OffR, int64_t Val) {
   llvm_unreachable("Unhandled displacement range");
 }
 
-// Return true if Base + Disp + Index should be performed by LA(Y).
-static bool shouldUseLA(SDNode *Base, int64_t Disp, SDNode *Index) {
-  // Don't use LA(Y) for constants.
-  if (!Base)
-    return false;
-
-  // Always use LA(Y) for frame addresses, since we know that the destination
-  // register is almost always (perhaps always) going to be different from
-  // the frame register.
-  if (Base->getOpcode() == ISD::FrameIndex)
-    return true;
-
-  if (Disp) {
-    // Always use LA(Y) if there is a base, displacement and index.
-    if (Index)
-      return true;
-
-    // Always use LA if the displacement is small enough.  It should always
-    // be no worse than AGHI (and better if it avoids a move).
-    if (isInt<12>(Disp))
-      return true;
-
-    // For similar reasons, always use LAY if the constant is too big for AGHI.
-    // LAY should be no worse than AGFI.
-    if (!isInt<12>(Disp))
-      return true;
-  } else {
-    // Don't use LA for plain registers.
-    if (!Index)
-      return false;
-
-    // Don't use LA for plain addition if the index operand is only used
-    // once.  It should be a natural two-operand addition in that case.
-    if (Index->hasOneUse())
-      return false;
-
-    // Prefer addition if the second operation is sign-extended, in the
-    // hope of using AGF.
-    unsigned IndexOpcode = Index->getOpcode();
-    if (IndexOpcode == ISD::SIGN_EXTEND ||
-        IndexOpcode == ISD::SIGN_EXTEND_INREG)
-      return false;
-  }
-
-  // Don't use LA for two-operand addition if either operand is only
-  // used once.  The addition instructions are better in that case.
-  if (Base->hasOneUse())
-    return false;
-
-  return true;
-}
-
 // Return true if Addr is suitable for AM, updating AM if so.
 bool RISCVDAGToDAGISel::selectAddress(SDValue Addr,
                                         RISCVAddressingMode &AM) {
@@ -482,8 +430,6 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
 }
 
 void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
-
-  MachineRegisterInfo *MRI = &MF.getRegInfo();
 
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
        ++MFI)

@@ -127,12 +127,9 @@ public:
 
   // Override TargetLowering.
   virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
-    //return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
     return LHSTy.getSimpleVT();
   }
   virtual EVT getSetCCResultType(EVT VT) const {
-    //return Subtarget.isRV64() ? MVT::i64 : MVT::i32;
-    //return (VT.getSimpleVT() == MVT::i64)  ? MVT::i64 : MVT::i32;
     return MVT::i32;
   }
   virtual bool isFMAFasterThanMulAndAdd(EVT) const LLVM_OVERRIDE {
@@ -195,7 +192,7 @@ public:
     /// arguments and inquire about calling convention information.
     class RISCVCC {
     public:
-      RISCVCC(CallingConv::ID CallConv, bool IsRV32, CCState &Info);
+      RISCVCC(CallingConv::ID CallConv, bool IsRV32, CCState &Info, const RISCVSubtarget &Subtarget);
 
       void analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Outs,
                                bool IsVarArg, bool IsSoftFloat,
@@ -220,8 +217,16 @@ public:
       /// regSize - Size (in number of bytes) of integer registers.
       unsigned regSize() const { return IsRV32 ? 4 : 8; }
 
+      /// regSize - Size (in number of bytes) of fp registers.
+      unsigned fpRegSize() const { return Subtarget.hasD() ? 8 : 
+                                        Subtarget.hasF() ? 4 :
+                                        regSize(); }
+
       /// numIntArgRegs - Number of integer registers available for calls.
       unsigned numIntArgRegs() const;
+
+      /// numFPArgRegs - Number of fp registers available for calls.
+      unsigned numFPArgRegs() const;
 
       /// reservedArgArea - The size of the area the caller reserves for
       /// register arguments. This is 16-byte if ABI is O32.
@@ -229,6 +234,9 @@ public:
 
       /// Return pointer to array of integer argument registers.
       const uint16_t *intArgRegs() const;
+
+      /// Return pointer to array of fp argument registers.
+      const uint16_t *fpArgRegs() const;
 
       typedef SmallVector<ByValArgInfo, 2>::const_iterator byval_iterator;
       byval_iterator byval_begin() const { return ByValArgs.begin(); }
@@ -252,7 +260,7 @@ public:
       const uint16_t *shadowRegs() const;
 
       void allocateRegs(ByValArgInfo &ByVal, unsigned ByValSize,
-                        unsigned Align);
+                        unsigned Align, MVT ValVT);
 
       /// Return the type of the register which is used to pass an argument or
       /// return a value. This function returns f64 if the argument is an i64
@@ -268,6 +276,7 @@ public:
       CCState &CCInfo;
       CallingConv::ID CallConv;
       bool IsRV32;
+      const RISCVSubtarget &Subtarget;
       SmallVector<ByValArgInfo, 2> ByValArgs;
     };
 
