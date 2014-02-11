@@ -50,13 +50,15 @@ static const uint16_t RV64IntRegs[8] = {
   RISCV::a4_64, RISCV::a5_64, RISCV::a6_64, RISCV::a7_64
 };
 
-// Return a version of MachineOperand that can be safely used before the
-// final use.
-static MachineOperand earlyUseOperand(MachineOperand Op) {
-  if (Op.isReg())
-    Op.setIsKill(false);
-  return Op;
-}
+static const uint16_t FPFRegs[8] = {
+  RISCV::fa0, RISCV::fa1, RISCV::fa2, RISCV::fa3,
+  RISCV::fa4, RISCV::fa5, RISCV::fa6, RISCV::fa7
+};
+
+static const uint16_t FPDRegs[8] = {
+  RISCV::fa0_64, RISCV::fa1_64, RISCV::fa2_64, RISCV::fa3_64,
+  RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64
+};
 
 RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   : TargetLowering(tm, new TargetLoweringObjectFileELF()),
@@ -716,8 +718,8 @@ static bool originalTypeIsF128(const Type *Ty, const SDNode *CallNode) {
 
 //RISCVCC Implementation
 RISCVTargetLowering::RISCVCC::RISCVCC(CallingConv::ID CC, bool IsRV32_,
-                                   CCState &Info)
-  : CCInfo(Info), CallConv(CC), IsRV32(IsRV32_) {
+                                   CCState &Info, const RISCVSubtarget &Subtarget)
+  : CCInfo(Info), CallConv(CC), IsRV32(IsRV32_), Subtarget(Subtarget) {
   // Pre-allocate reserved argument area.
   //TODO: is this entirely unused in RISCV
   CCInfo.AllocateStack(reservedArgArea(), 1);
@@ -969,7 +971,7 @@ RISCVTargetLowering::RISCVCC::handleByValArg(unsigned ValNo, MVT ValVT,
                             RegSize * 2);
 
   if (useRegsForByval())
-    allocateRegs(ByVal, ByValSize, Align);
+    allocateRegs(ByVal, ByValSize, Align, ValVT);
 
   // Allocate space on caller's stack.
   ByVal.Address = CCInfo.AllocateStack(ByValSize - RegSize * ByVal.NumRegs,
@@ -983,6 +985,10 @@ unsigned RISCVTargetLowering::RISCVCC::numIntArgRegs() const {
   return llvm::RISCV::NumArgGPRs;
 }
 
+unsigned RISCVTargetLowering::RISCVCC::numFPArgRegs() const {
+  return llvm::RISCV::NumArgFPRs;
+}
+
 unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
   return 0;
 }
@@ -990,6 +996,13 @@ unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
 const uint16_t *RISCVTargetLowering::RISCVCC::intArgRegs() const {
   return IsRV32 ? RV32IntRegs : RV64IntRegs;
 }
+
+const uint16_t *RISCVTargetLowering::RISCVCC::fpArgRegs() const {
+  return Subtarget.hasD() ? FPDRegs : 
+         Subtarget.hasF() ? FPFRegs :
+         intArgRegs();
+}
+
 
 llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::fixedArgFn() const {
   return IsRV32 ? CC_RISCV32 : CC_RISCV64;
@@ -999,34 +1012,54 @@ llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::varArgFn() const {
   return IsRV32 ? CC_RISCV32 : CC_RISCV64;
 }
 
-/*
-const uint16_t *RISCVTargetLowering::RISCVCC::shadowRegs() const {
-  return IsRV32 ? RV32IntRegs :Regs;
-}*/
-
 void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
                                               unsigned ByValSize,
-                                              unsigned Align) {
-  unsigned RegSize = regSize(), NumIntArgRegs = numIntArgRegs();
-  const uint16_t *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
-  assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
-         "Byval argument's size and alignment should be a multiple of"
-         "RegSize.");
-
-  ByVal.FirstIdx = CCInfo.getFirstUnallocated(IntArgRegs, NumIntArgRegs);
-
-  // If Align > RegSize, the first arg register must be even.
-  if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
-    CCInfo.AllocateReg(IntArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
-    ++ByVal.FirstIdx;
+                                              unsigned Align,
+                                              MVT ValVT) {
+  unsigned RegSize = regSize(); 
+  if(ValVT.isInteger()) {
+    unsigned NumIntArgRegs = numIntArgRegs();
+    const uint16_t *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
+    assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
+           "Byval argument's size and alignment should be a multiple of"
+           "RegSize.");
+  
+    ByVal.FirstIdx = CCInfo.getFirstUnallocated(IntArgRegs, NumIntArgRegs);
+  
+    // If Align > RegSize, the first arg register must be even.
+    if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
+      CCInfo.AllocateReg(IntArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
+      ++ByVal.FirstIdx;
+    }
+  
+    // Mark the registers allocated.
+    for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumIntArgRegs);
+         ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
+      CCInfo.AllocateReg(IntArgRegs[I]);//, ShadowRegs[I]);
+  }else if(ValVT.isFloatingPoint()){
+    RegSize = fpRegSize();
+    unsigned NumFPArgRegs = numFPArgRegs();
+    const uint16_t *FPArgRegs = fpArgRegs();//, *ShadowRegs = shadowRegs();
+    assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
+           "Byval argument's size and alignment should be a multiple of"
+           "RegSize.");
+  
+    ByVal.FirstIdx = CCInfo.getFirstUnallocated(FPArgRegs, NumFPArgRegs);
+  
+    // If Align > RegSize, the first arg register must be even.
+    if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
+      CCInfo.AllocateReg(FPArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
+      ++ByVal.FirstIdx;
+    }
+  
+    // Mark the registers allocated.
+    for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumFPArgRegs);
+         ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
+      CCInfo.AllocateReg(FPArgRegs[I]);//, ShadowRegs[I]);
+  }else
+    llvm_unreachable("Cannot pass this type by value");
   }
-
-  // Mark the registers allocated.
-  for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumIntArgRegs);
-       ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
-    CCInfo.AllocateReg(IntArgRegs[I]);//, ShadowRegs[I]);
-}
-//End RISCVCC Implementation
+  //End RISCVCC Implementation
 
 SDValue RISCVTargetLowering::
 LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
@@ -1047,7 +1080,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(),
                  getTargetMachine(), ArgLocs, *DAG.getContext());
   
-  RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo);
+  RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo, Subtarget);
   Function::const_arg_iterator FuncArg =
     DAG.getMachineFunction().getFunction()->arg_begin();
   bool UseSoftFloat = getTargetMachine().Options.UseSoftFloat;
@@ -1176,7 +1209,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   bool &isTailCall = CLI.IsTailCall;
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
-  bool isStructRet    = (Outs.empty()) ? false : Outs[0].Flags.isSRet();
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   EVT PtrVT = getPointerTy();
@@ -1187,15 +1219,9 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, TM, ArgLocs, *DAG.getContext());
-  RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo);
+  RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo, Subtarget);
   RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, getTargetMachine().Options.UseSoftFloat,
                                    Callee.getNode(), CLI.Args);
-/*
-  if(Subtarget.isRV64())
-    ArgCCInfo.AnalyzeCallOperands(Outs, CC_RISCV64);
-  else
-    ArgCCInfo.AnalyzeCallOperands(Outs, CC_RISCV32);
-*/
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = ArgCCInfo.getNextStackOffset();
@@ -1223,7 +1249,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       assert(!isTailCall &&
              "Do not tail-call optimize if there is a byval argument.");
       passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, ArgValue,
-                   RISCVCCInfo, *ByValArg, Flags, true);// Subtarget is little endian so we have false
+                   RISCVCCInfo, *ByValArg, Flags, true);// Subtarget is little endian so we have true
       ++ByValArg;
       continue;
     }
@@ -1312,26 +1338,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   else
     RetCCInfo.AnalyzeCallResult(Ins, RetCC_RISCV32);
 
-  //Look for SRet 
-  if (isStructRet) {
-    //TODO: we need to differeniate whether LLVM is going to store into the struct pointer
-    //itself
-
-    //Accoriding to the ABI, if the struct fits in registers it will be returned in them
-    //For now we will save this back to the struct and hope that if this struct is
-    //passed by val in the future, the save and loads will be optimized out
-    ISD::ArgFlagsTy Flags = Outs[0].Flags;
-    assert(Flags.isSRet());
-    //We check how many values are in the struct
-    assert(CLI.Args[0].Ty->isPointerTy() && "SRet is always a pointer to a struct");
-    Type *structType = CLI.Args[0].Ty->getContainedType(0);
-    
-  }
-
   // Copy all of the result registers out of their specified physreg.
   for (unsigned I = 0, E = RetLocs.size(); I != E; ++I) {
-    ISD::ArgFlagsTy Flags = Ins[I].Flags;
-
     CCValAssign &VA = RetLocs[I];
 
     // Copy the value out, gluing the copy to the end of the call sequence.
@@ -1605,25 +1613,6 @@ static bool preferUnsignedComparison(SelectionDAG &DAG, SDValue CmpOp0,
   }
 
   return false;
-}
-
-// Return a target node that compares CmpOp0 and CmpOp1.  Set CCMask to the
-// 4-bit condition-code mask for CC.
-static SDValue emitCmp(SelectionDAG &DAG, SDValue CmpOp0, SDValue CmpOp1,
-                       ISD::CondCode CC, unsigned &CCMask) {
-  bool IsUnsigned = false;
-  CCMask = CCMaskForCondCode(CC);
-  if (!CmpOp0.getValueType().isFloatingPoint()) {
-    IsUnsigned = CCMask & RISCV::CCMASK_CMP_UO;
-    CCMask &= ~RISCV::CCMASK_CMP_UO;
-    adjustSubwordCmp(DAG, IsUnsigned, CmpOp0, CmpOp1, CCMask);
-    if (preferUnsignedComparison(DAG, CmpOp0, CmpOp1, CCMask))
-      IsUnsigned = true;
-  }
-
-  DebugLoc DL = CmpOp0.getDebugLoc();
-  return DAG.getNode((IsUnsigned ? RISCVISD::UCMP : RISCVISD::CMP),
-                     DL, MVT::Glue, CmpOp0, CmpOp1);
 }
 
 SDValue RISCVTargetLowering::
@@ -2044,18 +2033,6 @@ static MachineBasicBlock *emitBlockAfter(MachineBasicBlock *MBB) {
   MachineFunction &MF = *MBB->getParent();
   MachineBasicBlock *NewMBB = MF.CreateMachineBasicBlock(MBB->getBasicBlock());
   MF.insert(llvm::next(MachineFunction::iterator(MBB)), NewMBB);
-  return NewMBB;
-}
-
-// Split MBB after MI and return the new block (the one that contains
-// instructions after MI).
-static MachineBasicBlock *splitBlockAfter(MachineInstr *MI,
-                                          MachineBasicBlock *MBB) {
-  MachineBasicBlock *NewMBB = emitBlockAfter(MBB);
-  NewMBB->splice(NewMBB->begin(), MBB,
-                 llvm::next(MachineBasicBlock::iterator(MI)),
-                 MBB->end());
-  NewMBB->transferSuccessorsAndUpdatePHIs(MBB);
   return NewMBB;
 }
 

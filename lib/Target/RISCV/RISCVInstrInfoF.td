@@ -106,7 +106,7 @@ class InstSign<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3>
 }
 def FSGNJ_S : InstSign<"fsgnj.s", 0b1010011, 0b00101, 0b00, 0b000,
                         fcopysign, FP32, FP32>, Requires<[HasF]>;
-def FSGNJN_S : InstSign<"fsgnj.s", 0b1010011, 0b00110, 0b00, 0b000,
+def FSGNJN_S : InstSign<"fsgnjn.s", 0b1010011, 0b00110, 0b00, 0b000,
                         fcopysign, FP32, FP32>, Requires<[HasF]> {
                           let Pattern =
                           [(set FP32:$dst, (fcopysign FP32:$src1, (fneg FP32:$src2)))];
@@ -124,7 +124,7 @@ def FSGNJX_S : InstSign<"fsgnjx.s", 0b1010011, 0b00111, 0b00, 0b000,
       ))];
       }
 
-//llvm cant select fneq itsels so help it out
+//llvm cant select fneg itsels so help it out
 def : Pat<(fneg FP32:$src), (FSGNJN_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
 def : Pat<(fabs FP32:$src), (FSGNJX_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
 
