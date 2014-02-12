@@ -669,6 +669,8 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, DebugLoc DL,
     return DAG.getNode(ISD::ZERO_EXTEND, DL, VA.getLocVT(), Value);
   case CCValAssign::AExt:
     return DAG.getNode(ISD::ANY_EXTEND, DL, VA.getLocVT(), Value);
+  case CCValAssign::BCvt:
+    return DAG.getNode(ISD::BITCAST, DL, VA.getLocVT(), Value);
   case CCValAssign::Full:
     return Value;
   default:
@@ -746,7 +748,10 @@ analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Args,
     }
 
     if (IsVarArg && !Args[I].IsFixed)
-      R = VarFn(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
+      if(ArgVT.isFloatingPoint()) //Bitconvert floats
+        R = VarFn(I, ArgVT, ArgVT, CCValAssign::BCvt, ArgFlags, CCInfo);
+      else 
+        R = VarFn(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
     else {
       MVT RegVT = getRegVT(ArgVT, FuncArgs[Args[I].OrigArgIndex].Ty, CallNode,
                            IsSoftFloat);
@@ -1009,7 +1014,7 @@ llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::fixedArgFn() const {
 }
 
 llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::varArgFn() const {
-  return IsRV32 ? CC_RISCV32 : CC_RISCV64;
+  return IsRV32 ? CC_RISCV32_VAR : CC_RISCV64_VAR;
 }
 
 void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
@@ -1317,7 +1322,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (Glue.getNode())
     Ops.push_back(Glue);
 
-  //TODO:THIS MIGHT BE BROKEN WHY DO WE OVERWRITE CHAIN
   // Emit the call.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
   Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, &Ops[0], Ops.size());

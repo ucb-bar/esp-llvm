@@ -74,6 +74,21 @@ def CC_RISCV32 : CallingConv<[
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
   CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
 ]>;
+//Var args are all passed in integer regs
+def CC_RISCV32_VAR : CallingConv<[
+  //Always assign the sret pointer to the first arg reg
+  CCIfSRet<CCAssignToReg<[a0]>>,
+  //Promote small int types to i32
+  CCIfType<[i8,i16], CCPromoteToType<i32>>,
+
+  // The first 8 arguments are passed in a0-a7.
+  CCIfType<[i32,f32], CCAssignToRegWithShadow<
+                   [a0,   a1,  a2,  a3,  a4,  a5,  a6,  a7],
+                   [fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7]>>,
+
+  // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
+  CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
+]>;
 
 def RetCC_RISCV64 : CallingConv<[
   CCIf<"State.getMachineFunction().getFunction()->getReturnType()->isStructTy() && State.getMachineFunction().getFunction()->getReturnType()->getStructNumElements() > 2"
@@ -135,6 +150,24 @@ def CC_RISCV64 : CallingConv<[
   CCIfType<[f32, f64], CCIfSubtarget<"hasD()", CCAssignToRegWithShadow<
       [fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64],
       [ a0_64,  a1_64,  a2_64,  a3_64,  a4_64,  a5_64,  a6_64,  a7_64]>>>,
+
+  // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
+  CCIfType<[i32, i64, f64], CCAssignToStack<8, 8>>
+]>;
+
+def CC_RISCV64_VAR : CallingConv<[
+  //Always assign the sret pointer to the first arg reg
+  CCIfSRet<CCAssignToReg<[a0_64]>>,
+  //Promote small int types to i64
+  CCIfType<[i8, i16], CCPromoteToType<i32>>,
+
+  // The first 14 integer arguments are passed in a0-a13. 
+  CCIfType<[i32,f32], CCAssignToRegWithShadow<
+      [ a0, a1, a2, a3, a4, a5, a6, a7],
+      [fa0,fa1,fa2,fa3,fa4,fa5,fa6,fa7]>>,
+  CCIfType<[i64,f64], CCAssignToRegWithShadow<
+      [ a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64],
+      [fa0_64,fa1_64,fa2_64,fa3_64,fa4_64,fa5_64,fa6_64,fa7_64]>>,
 
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
   CCIfType<[i32, i64, f64], CCAssignToStack<8, 8>>
