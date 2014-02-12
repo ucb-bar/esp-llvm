@@ -42,11 +42,11 @@ defm FDIV_S : FPBinOps<"fdiv.s", fdiv, 0b00011, 0b00>, Requires<[HasF]>;
 //TODO: implement fma
 
 //Move and Conversions
-class InstConv<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3> rm,
+class InstConv<string mnemonic, string rmstr, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3> rm,
                SDPatternOperator operator, RegisterOperand cls1, 
                RegisterOperand cls2>
   : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1), 
-                mnemonic#"\t$dst, $src1", 
+                mnemonic#"\t$dst, $src1"#rmstr, 
                 [(set cls1:$dst, (operator cls2:$src1))]> {
   field bits<32> Inst;
 
@@ -63,25 +63,32 @@ class InstConv<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3>
 }
 
 multiclass  FPConvOps<string name, SDPatternOperator op1, RegisterOperand outCls, RegisterOperand inCls, bits<5> funct5, bits<2> fmt> {
-  def _RDY : InstConv<name, 0b1010011, funct5, fmt, 0b111, op1, outCls, inCls>;
+  def _RDY : InstConv<name,"", 0b1010011, funct5, fmt, 0b111, op1, outCls, inCls>;
   let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
-    def _RNE : InstConv<name#".rne", 0b1010011, funct5, fmt, 0b000, op1, outCls, inCls>;
-    def _RTZ : InstConv<name#".rtz", 0b1010011, funct5, fmt, 0b001, op1, outCls, inCls>;
-    def _RDN : InstConv<name#".rdn", 0b1010011, funct5, fmt, 0b010, op1, outCls, inCls>;
-    def _RUP : InstConv<name#".rup", 0b1010011, funct5, fmt, 0b011, op1, outCls, inCls>;
-    def _RMM : InstConv<name#".rmm", 0b1010011, funct5, fmt, 0b100, op1, outCls, inCls>;
+    def _RNE : InstConv<name,",rne", 0b1010011, funct5, fmt, 0b000, op1, outCls, inCls>;
+    def _RTZ : InstConv<name,",rtz", 0b1010011, funct5, fmt, 0b001, op1, outCls, inCls>;
+    def _RDN : InstConv<name,",rdn", 0b1010011, funct5, fmt, 0b010, op1, outCls, inCls>;
+    def _RUP : InstConv<name,",rup", 0b1010011, funct5, fmt, 0b011, op1, outCls, inCls>;
+    def _RMM : InstConv<name,",rmm", 0b1010011, funct5, fmt, 0b100, op1, outCls, inCls>;
   }
 }
 
-defm FCVT_W_S  : FPConvOps<"fcvt.w.s",  fp_to_sint, GR32, FP32, 0b01010, 0b00>, Requires<[HasF]>;
-defm FCVT_WU_S : FPConvOps<"fcvt.wu.s", fp_to_uint, GR32, FP32, 0b01011, 0b00>, Requires<[HasF]>;
+defm FCVT_W_S  : FPConvOps<"fcvt.w.s",  null_frag, GR32, FP32, 0b01010, 0b00>, Requires<[HasF]>;
+defm FCVT_WU_S : FPConvOps<"fcvt.wu.s", null_frag, GR32, FP32, 0b01011, 0b00>, Requires<[HasF]>;
 defm FCVT_S_W  : FPConvOps<"fcvt.s.w",  sint_to_fp, FP32, GR32, 0b01110, 0b00>, Requires<[HasF]>;
 defm FCVT_S_WU : FPConvOps<"fcvt.s.wu", uint_to_fp, FP32, GR32, 0b01111, 0b00>, Requires<[HasF]>;
+//make sure we get the right rounding mode
+def :Pat<(i32 (fp_to_uint FP32:$src)), (FCVT_WU_S_RTZ FP32:$src)>;
+def :Pat<(i32 (fp_to_sint FP32:$src)), (FCVT_W_S_RTZ FP32:$src)>;
+
 //RV64F
-defm FCVT_L_S  : FPConvOps<"fcvt.l.s",  fp_to_sint, GR64, FP32, 0b01000, 0b00>, Requires<[HasF,IsRV64]>;
-defm FCVT_LU_S : FPConvOps<"fcvt.lu.s", fp_to_uint, GR64, FP32, 0b01001, 0b00>, Requires<[HasF,IsRV64]>;
+defm FCVT_L_S  : FPConvOps<"fcvt.l.s",  null_frag, GR64, FP32, 0b01000, 0b00>, Requires<[HasF,IsRV64]>;
+defm FCVT_LU_S : FPConvOps<"fcvt.lu.s", null_frag, GR64, FP32, 0b01001, 0b00>, Requires<[HasF,IsRV64]>;
 defm FCVT_S_L  : FPConvOps<"fcvt.s.l",  sint_to_fp, FP32, GR64, 0b01100, 0b00>, Requires<[HasF,IsRV64]>;
 defm FCVT_S_LU : FPConvOps<"fcvt.s.lu", uint_to_fp, FP32, GR64, 0b01101, 0b00>, Requires<[HasF,IsRV64]>;
+//make sure we get the right rounding mode
+def :Pat<(i64 (fp_to_uint FP32:$src)), (FCVT_LU_S_RTZ FP32:$src)>;
+def :Pat<(i64 (fp_to_sint FP32:$src)), (FCVT_L_S_RTZ FP32:$src)>;
 
 //Sign injection
 class InstSign<string mnemonic, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3> rm,
@@ -129,10 +136,10 @@ def : Pat<(fneg FP32:$src), (FSGNJN_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
 def : Pat<(fabs FP32:$src), (FSGNJX_S FP32:$src, FP32:$src)>, Requires<[HasF]>;
 
 //Move instruction (bitcasts)
-def FMV_X_S : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR32, FP32>, Requires<[HasF]>;
-def FMV_S_X : InstConv<"fmv.s.x", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR32>, Requires<[HasF]>;
-def FMV_X_S64 : InstConv<"fmv.x.s", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR64, FP32>, Requires<[HasF, IsRV64]>;
-def FMV_S_X64 : InstConv<"fmv.s.x", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR64>, Requires<[HasF, IsRV64]>;
+def FMV_X_S : InstConv<"fmv.x.s", "", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR32, FP32>, Requires<[HasF]>;
+def FMV_S_X : InstConv<"fmv.s.x", "", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR32>, Requires<[HasF]>;
+def FMV_X_S64 : InstConv<"fmv.x.s", "", 0b1010011, 0b11100, 0b00, 0b000, bitconvert, GR64, FP32>, Requires<[HasF, IsRV64]>;
+def FMV_S_X64 : InstConv<"fmv.s.x", "", 0b1010011, 0b11110, 0b00, 0b000, bitconvert, FP32, GR64>, Requires<[HasF, IsRV64]>;
 
 //Floating point comparisons
 def FEQ_S : InstSign<"feq.s", 0b1010011, 0b10101, 0b00, 0b000, setoeq, GR32, FP32>, Requires<[HasF]>;

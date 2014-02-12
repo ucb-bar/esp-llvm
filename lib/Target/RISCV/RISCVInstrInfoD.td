@@ -42,15 +42,22 @@ defm FDIV_D : FPBinOps64<"fdiv.d", fdiv, 0b00011, 0b01>, Requires<[HasD]>;
 //TODO: implement fma
 
 //Move and Conversions
-defm FCVT_W_D  : FPConvOps<"fcvt.w.d",  fp_to_sint, GR32, FP64, 0b01010, 0b01>, Requires<[HasD]>;
-defm FCVT_WU_D : FPConvOps<"fcvt.wu.d", fp_to_uint, GR32, FP64, 0b01011, 0b01>, Requires<[HasD]>;
+//The float to int conversions do nothing because fp_to_uint means RTZ specifically
+defm FCVT_W_D  : FPConvOps<"fcvt.w.d",  null_frag, GR32, FP64, 0b01010, 0b01>, Requires<[HasD]>;
+defm FCVT_WU_D : FPConvOps<"fcvt.wu.d", null_frag, GR32, FP64, 0b01011, 0b01>, Requires<[HasD]>;
 defm FCVT_D_W  : FPConvOps<"fcvt.d.w",  sint_to_fp, FP64, GR32, 0b01110, 0b01>, Requires<[HasD]>;
 defm FCVT_D_WU : FPConvOps<"fcvt.d.wu", uint_to_fp, FP64, GR32, 0b01111, 0b01>, Requires<[HasD]>;
+//make sure we get the right rounding mode
+def :Pat<(i32 (fp_to_uint FP64:$src)), (FCVT_WU_D_RTZ FP64:$src)>;
+def :Pat<(i32 (fp_to_sint FP64:$src)), (FCVT_W_D_RTZ FP64:$src)>;
 //RV64F
-defm FCVT_L_D  : FPConvOps<"fcvt.l.d",  fp_to_sint, GR64, FP64, 0b01000, 0b01>, Requires<[HasD,IsRV64]>;
-defm FCVT_LU_D : FPConvOps<"fcvt.lu.d", fp_to_uint, GR64, FP64, 0b01001, 0b01>, Requires<[HasD,IsRV64]>;
+defm FCVT_L_D  : FPConvOps<"fcvt.l.d",  null_frag, GR64, FP64, 0b01000, 0b01>, Requires<[HasD,IsRV64]>;
+defm FCVT_LU_D : FPConvOps<"fcvt.lu.d", null_frag, GR64, FP64, 0b01001, 0b01>, Requires<[HasD,IsRV64]>;
 defm FCVT_D_L  : FPConvOps<"fcvt.d.l",  sint_to_fp, FP64, GR64, 0b01100, 0b01>, Requires<[HasD,IsRV64]>;
 defm FCVT_D_LU : FPConvOps<"fcvt.d.lu", uint_to_fp, FP64, GR64, 0b01101, 0b01>, Requires<[HasD,IsRV64]>;
+//make sure we get the right rounding mode
+def :Pat<(i64 (fp_to_uint FP64:$src)), (FCVT_LU_D_RTZ FP64:$src)>;
+def :Pat<(i64 (fp_to_sint FP64:$src)), (FCVT_L_D_RTZ FP64:$src)>;
 //Single <-> Double
 defm FCVT_S_D  : FPConvOps<"fcvt.s.d",  fround , FP32, FP64, 0b10001, 0b00>, Requires<[HasD]>;
 defm FCVT_D_S  : FPConvOps<"fcvt.d.s",  fextend, FP64, FP32, 0b10000, 0b01>, Requires<[HasD]>;
@@ -81,8 +88,8 @@ def : Pat<(fneg FP64:$src), (FSGNJN_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
 def : Pat<(fabs FP64:$src), (FSGNJX_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
 
 //Move instruction (bitcasts)
-def FMV_X_D : InstConv<"fmv.x.d", 0b1010011, 0b11100, 0b01, 0b000, bitconvert, GR64, FP64>, Requires<[HasD, IsRV64]>;
-def FMV_D_X : InstConv<"fmv.d.x", 0b1010011, 0b11110, 0b01, 0b000, bitconvert, FP64, GR64>, Requires<[HasD, IsRV64]>;
+def FMV_X_D : InstConv<"fmv.x.d", "", 0b1010011, 0b11100, 0b01, 0b000, bitconvert, GR64, FP64>, Requires<[HasD, IsRV64]>;
+def FMV_D_X : InstConv<"fmv.d.x", "", 0b1010011, 0b11110, 0b01, 0b000, bitconvert, FP64, GR64>, Requires<[HasD, IsRV64]>;
 
 //Floating point comparisons
 def FEQ_D : InstSign<"feq.d", 0b1010011, 0b10101, 0b01, 0b000, setoeq, GR32, FP64>, Requires<[HasD]>;
