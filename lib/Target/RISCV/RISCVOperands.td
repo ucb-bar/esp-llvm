@@ -177,7 +177,7 @@ def fenceImm64 : Immediate<i64, [{
 def fpimm0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+0.0); }]>;
 
 // Floating point negative zero.
-def fpimmneg0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(-0.0); }]>;
+//def fpimmneg0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(-0.0); }]>;
 
 //===----------------------------------------------------------------------===//
 // Memory address operands
