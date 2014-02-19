@@ -118,14 +118,13 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     }
   }
   if(Subtarget.isRV64()){
-    setOperationAction(ISD::SETCC, MVT::i32, Legal);//only use 64bit setcc
-    //setOperationAction(ISD::SETCC, MVT::i64, Legal);//folds into brcond
-    setOperationAction(ISD::Constant, MVT::i32, Legal);//only use 64bit const
+    setOperationAction(ISD::SETCC, MVT::i32, Legal);//only use 32bit setcc
+    setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
   }else {
     setOperationAction(ISD::SETCC, MVT::i32, Legal);//folds into brcond
     setOperationAction(ISD::SETCC, MVT::i64, Expand);//only use 32bit
-    setOperationAction(ISD::Constant, MVT::i32, Legal);//only use 64bit const
+    setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
   }
 
@@ -152,6 +151,22 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::MUL  , MVT::i64, Expand);
     setOperationAction(ISD::MUL  , MVT::i32, Legal);
   }
+  //RISCV doesn't support  [ADD,SUB][E,C]
+  setOperationAction(ISD::ADDE, MVT::i32, Expand);
+  setOperationAction(ISD::ADDE, MVT::i64, Expand);
+  setOperationAction(ISD::SUBE, MVT::i32, Expand);
+  setOperationAction(ISD::SUBE, MVT::i64, Expand);
+  setOperationAction(ISD::ADDC, MVT::i32, Expand);
+  setOperationAction(ISD::ADDC, MVT::i64, Expand);
+  setOperationAction(ISD::SUBC, MVT::i32, Expand);
+  setOperationAction(ISD::SUBC, MVT::i64, Expand);
+  //RISCV doesn't support s[hl,rl,ra]_parts
+  setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
+  setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
+  setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
+  setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
   for (unsigned I = MVT::FIRST_INTEGER_VALUETYPE;
        I <= MVT::LAST_INTEGER_VALUETYPE;
        ++I) {
@@ -2193,6 +2208,8 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
       return emitSelectCC(MI, MBB);
   case RISCV::ATOMIC_CMP_SWAP_8:
     return emitAtomicCmpSwap(MI, MBB, 8);
+  case RISCV::ATOMIC_CMP_SWAP_4:
+    return emitAtomicCmpSwap(MI, MBB, 4);
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }

@@ -278,15 +278,6 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
-    /*
-  }else if(RISCV::FP64BitRegClass.contains(SrcReg) &&
-           RISCV::GR32BitRegClass.contains(DestReg)){
-    Opcode = RISCV::FCVT_W_D_RDY;
-    Opcode = STI.isRV64() ? RISCV::FMV_X_S64 : RISCV::FMV_X_S;
-    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
-    return;
-    */
   }else if(RISCV::FP32BitRegClass.contains(SrcReg) &&
            RISCV::GR64BitRegClass.contains(DestReg)){
     Opcode = RISCV::FMV_X_S64;
@@ -305,22 +296,6 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
-    /*
-  }else if(RISCV::FP64BitRegClass.contains(DestReg) &&
-           RISCV::GR32BitRegClass.contains(SrcReg)){
-    Opcode = RISCV::FCVT_D_W_RDY;
-    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
-    return;
-    */
-    /*
-  }else if(RISCV::FP32BitRegClass.contains(DestReg) &&
-           RISCV::GR64BitRegClass.contains(SrcReg)){
-    Opcode = RISCV::FCVT_S_L_RDY;
-    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
-      .addReg(SrcReg, getKillRegState(KillSrc));
-    return;
-    */
   }else if(RISCV::FP64BitRegClass.contains(DestReg) &&
            RISCV::GR64BitRegClass.contains(SrcReg)){
     Opcode = RISCV::FMV_D_X;
