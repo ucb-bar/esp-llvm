@@ -31,7 +31,8 @@ private:
 
 protected:
   enum RISCVArchEnum {
-    RV32, RV64
+    RV32,
+    RV64
   };
 
   RISCVArchEnum RISCVArchVersion;

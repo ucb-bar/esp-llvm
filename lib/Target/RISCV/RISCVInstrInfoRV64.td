@@ -349,15 +349,3 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
           }
    }
   def : Pat<(z_retflag), (RET)>, Requires<[IsRV64]>;
-
-
-
-//===----------------------------------------------------------------------===//
-// Subtarget features
-//===----------------------------------------------------------------------===//
-
-//include "RISCVInstrInfoRV64M.td"
-//include "RISCVInstrInfoRV64F.td"
-//include "RISCVInstrInfoRV64A.td"
-//include "RISCVInstrInfoRV64D.td"
-

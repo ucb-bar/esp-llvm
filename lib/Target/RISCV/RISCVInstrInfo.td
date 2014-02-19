@@ -98,28 +98,27 @@ defm : SetgePats<GR32, SLT, SLTU>;
 //Unconditional Jumps
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "j\t$target", 
-          [(br bb:$target)]>;
+          [(br bb:$target)]>, Requires<[IsRV32]>;
 }
 let isCall = 1 in {
   let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
-          [(z_call pcrel32call:$target)]>;
+          [(z_call pcrel32call:$target)]>, Requires<[IsRV32]>;
   }
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
   let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
-    def JALR: InstRISCV<4, (outs GR32:$ra), (ins mem:$target), "jalr\t$target", 
-          //[(set GR32:$ra, (z_call addr:$target))]>{
-          []>{
+    def JALR: InstRISCV<4, (outs), (ins jalrmem:$target), "jalr\t$target", 
+          [(z_call addr:$target)]>, Requires<[IsRV32]>{//, (z_call addr:$target))]>{
+          //[]>{
             field bits<32> Inst;
 
-            bits<5> RD;
             bits<5> RS1;
             bits<12> IMM;
 
-            let Inst{31-27} = RD;
+            let Inst{31-27} = 0b00001;
             let Inst{26-22} = RS1;
             let Inst{21-17} = IMM{11-7};
             let Inst{16-10} = IMM{6 -0};
@@ -246,7 +245,36 @@ def LI : InstRISCV<4, (outs GR32:$dst), (ins imm32:$imm), "li\t$dst, $imm",
 def : Pat<(i32 imm32sx12:$imm), (LI imm32sx12:$imm)>, Requires<[IsRV32]>; 
 def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
-def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>;
+def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>, Requires<[IsRV32]>;
+//call
+def : Pat<(z_call (i32 texternalsym:$in)), (JAL texternalsym:$in)>, Requires<[IsRV32]>;
+def : Pat<(z_call (i32 tglobaladdr:$in)), (JAL tglobaladdr:$in)>, Requires<[IsRV32]>;
+//global addr loading
+def : Pat<(RISCVHi tglobaladdr:$in), (LUI tglobaladdr:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVHi tblockaddress:$in), (LUI tblockaddress:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVHi tjumptable:$in), (LUI tjumptable:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVHi tconstpool:$in), (LUI tconstpool:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVHi tglobaltlsaddr:$in), (LUI tglobaltlsaddr:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVHi texternalsym:$in), (LUI texternalsym:$in)>, Requires<[IsRV32]>;
+
+def : Pat<(RISCVLo tglobaladdr:$in), (ADDI zero, tglobaladdr:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVLo tblockaddress:$in), (ADDI zero, tblockaddress:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVLo tjumptable:$in), (ADDI zero, tjumptable:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVLo tconstpool:$in), (ADDI zero, tconstpool:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVLo tglobaltlsaddr:$in),
+          (ADDI zero, tglobaltlsaddr:$in)>, Requires<[IsRV32]>;
+def : Pat<(RISCVLo texternalsym:$in), (ADDI zero, texternalsym:$in)>, Requires<[IsRV32]>;
+
+def : Pat<(add GR32:$hi, (RISCVLo tglobaladdr:$lo)),
+          (ADDI GR32:$hi, tglobaladdr:$lo)>, Requires<[IsRV32]>;
+def : Pat<(add GR32:$hi, (RISCVLo tblockaddress:$lo)),
+          (ADDI GR32:$hi, tblockaddress:$lo)>, Requires<[IsRV32]>;
+def : Pat<(add GR32:$hi, (RISCVLo tjumptable:$lo)),
+          (ADDI GR32:$hi, tjumptable:$lo)>, Requires<[IsRV32]>;
+def : Pat<(add GR32:$hi, (RISCVLo tconstpool:$lo)),
+          (ADDI GR32:$hi, tconstpool:$lo)>, Requires<[IsRV32]>;
+def : Pat<(add GR32:$hi, (RISCVLo tglobaltlsaddr:$lo)),
+          (ADDI GR32:$hi, tglobaltlsaddr:$lo)>, Requires<[IsRV32]>;
 
 //===----------------------------------------------------------------------===//
 // Stack allocation
