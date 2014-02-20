@@ -151,22 +151,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::MUL  , MVT::i64, Expand);
     setOperationAction(ISD::MUL  , MVT::i32, Legal);
   }
-  //RISCV doesn't support  [ADD,SUB][E,C]
-  setOperationAction(ISD::ADDE, MVT::i32, Expand);
-  setOperationAction(ISD::ADDE, MVT::i64, Expand);
-  setOperationAction(ISD::SUBE, MVT::i32, Expand);
-  setOperationAction(ISD::SUBE, MVT::i64, Expand);
-  setOperationAction(ISD::ADDC, MVT::i32, Expand);
-  setOperationAction(ISD::ADDC, MVT::i64, Expand);
-  setOperationAction(ISD::SUBC, MVT::i32, Expand);
-  setOperationAction(ISD::SUBC, MVT::i64, Expand);
-  //RISCV doesn't support s[hl,rl,ra]_parts
-  setOperationAction(ISD::SHL_PARTS, MVT::i32, Expand);
-  setOperationAction(ISD::SHL_PARTS, MVT::i64, Expand);
-  setOperationAction(ISD::SRL_PARTS, MVT::i32, Expand);
-  setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
-  setOperationAction(ISD::SRA_PARTS, MVT::i32, Expand);
-  setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
   for (unsigned I = MVT::FIRST_INTEGER_VALUETYPE;
        I <= MVT::LAST_INTEGER_VALUETYPE;
        ++I) {
@@ -192,6 +176,18 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       //No support at all
       setOperationAction(ISD::SDIVREM, VT, Expand);
       setOperationAction(ISD::UDIVREM, VT, Expand);
+      //RISCV doesn't support  [ADD,SUB][E,C]
+      setOperationAction(ISD::ADDE, VT, Expand);
+      setOperationAction(ISD::SUBE, VT, Expand);
+      setOperationAction(ISD::ADDC, VT, Expand);
+      setOperationAction(ISD::SUBC, VT, Expand);
+      //RISCV doesn't support s[hl,rl,ra]_parts
+      setOperationAction(ISD::SHL_PARTS, VT, Expand);
+      setOperationAction(ISD::SRL_PARTS, VT, Expand);
+      setOperationAction(ISD::SRA_PARTS, VT, Expand);
+      //RISCV doesn't support rotl
+      setOperationAction(ISD::ROTL, VT, Expand);
+      setOperationAction(ISD::ROTR, VT, Expand);
 
       // Expand ATOMIC_LOAD and ATOMIC_STORE using ATOMIC_CMP_SWAP.
       // FIXME: probably much too conservative.
@@ -201,9 +197,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       // No special instructions for these.
       setOperationAction(ISD::CTPOP,           VT, Expand);
       setOperationAction(ISD::CTTZ,            VT, Expand);
+      setOperationAction(ISD::CTLZ,            VT, Expand);
       setOperationAction(ISD::CTTZ_ZERO_UNDEF, VT, Expand);
       setOperationAction(ISD::CTLZ_ZERO_UNDEF, VT, Expand);
-      setOperationAction(ISD::ROTR,            VT, Expand);
 
     }
   }
