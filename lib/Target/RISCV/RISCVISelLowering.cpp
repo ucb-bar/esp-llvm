@@ -1268,6 +1268,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       assert(ByValArg != RISCVCCInfo.byval_end());
       assert(!isTailCall &&
              "Do not tail-call optimize if there is a byval argument.");
+      if (!StackPtr.getNode())
+        StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
       passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, ArgValue,
                    RISCVCCInfo, *ByValArg, Flags, true);// Subtarget is little endian so we have true
       ++ByValArg;
