@@ -443,7 +443,7 @@ bool RISCVTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) co
 
 bool RISCVTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
   // We can load zero using LZ?R and negative zero using LZ?R;LC?BR.
-  return Imm.isZero();
+  return Imm.isPosZero();
 }
 
 //===----------------------------------------------------------------------===//
