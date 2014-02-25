@@ -50,6 +50,8 @@ static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
   case MCSymbolRefExpr::VK_None:           break;
   case MCSymbolRefExpr::VK_Mips_ABS_HI:    OS << "%hi(";     break;
   case MCSymbolRefExpr::VK_Mips_ABS_LO:    OS << "%lo(";     break;
+  case MCSymbolRefExpr::VK_Mips_TPREL_HI:    OS << "%tprel_hi(";     break;
+  case MCSymbolRefExpr::VK_Mips_TPREL_LO:    OS << "%tprel_lo(";     break;
   }
 
   OS << SRE->getSymbol();

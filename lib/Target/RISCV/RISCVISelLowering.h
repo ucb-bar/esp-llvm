@@ -49,6 +49,10 @@ namespace RISCVISD {
     // No relation with Mips Lo register
     Lo,
 
+    // TprelHi and TprelLo nodes are used to handle Local Exec TLS
+    TprelHi,
+    TprelLo,
+
     // Signed integer and floating-point comparisons.  The operands are the
     // two values to compare.
     CMP,

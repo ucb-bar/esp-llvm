@@ -86,6 +86,9 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // sp is the stack pointer.  Reserve all aliases.
   Reserved.set(RISCV::sp);
   Reserved.set(RISCV::sp_64);
+  // tp is the thread pointer.  Reserve all aliases.
+  Reserved.set(RISCV::tp);
+  Reserved.set(RISCV::tp_64);
   // gp shouldn't be used eitehr
   Reserved.set(RISCV::gp);
   Reserved.set(RISCV::gp_64);
