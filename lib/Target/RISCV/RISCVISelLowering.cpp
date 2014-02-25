@@ -229,10 +229,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Legal);
       setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Legal);
       setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Legal);
-      //custom emit but still legal at DAG level
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
       //These are not native instructions
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
@@ -258,10 +257,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
-      //custom emit but still legal at DAG level
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
-      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
       //These are not native instructions
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+      setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
       setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
@@ -287,9 +285,8 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setOperationAction(ISD::ATOMIC_LOAD_MAX,  MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_UMIN, MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_UMAX, MVT::i64, Expand);
-    //custom emit but still legal at DAG level
-    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Legal);
-    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Legal);
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i32, Expand);
+    setOperationAction(ISD::ATOMIC_CMP_SWAP,  MVT::i64, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i32, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_SUB,  MVT::i32, Expand);
     setOperationAction(ISD::ATOMIC_LOAD_NAND, MVT::i64, Expand);
@@ -2093,86 +2090,6 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   return BB;
 }
 
-MachineBasicBlock *
-RISCVTargetLowering::emitAtomicCmpSwap(MachineInstr *MI,
-                                      MachineBasicBlock *BB,
-                                      unsigned Size) const {
-  assert((Size == 4 || Size == 8) && "Unsupported size for EmitAtomicCmpSwap.");
-
-  MachineFunction *MF = BB->getParent();
-  MachineRegisterInfo &RegInfo = MF->getRegInfo();
-  const TargetRegisterClass *RC = getRegClassFor(MVT::getIntegerVT(Size * 8));
-  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
-  DebugLoc DL = MI->getDebugLoc();
-  unsigned LR, SC, ZERO, BNE, BEQ;
-
-  if (Size == 4) {
-    LR = Subtarget.isRV64() ? RISCV::LR_W64 : RISCV::LR_W;
-    SC = Subtarget.isRV64() ? RISCV::SC_W64 : RISCV::SC_W;
-  }
-  else {
-    LR = RISCV::LR_D;
-    SC = RISCV::SC_D;
-  }
-  BNE = Subtarget.isRV64() ? RISCV::BNE64 : RISCV::BNE;
-  BEQ = Subtarget.isRV64() ? RISCV::BEQ64 : RISCV::BEQ;
-  ZERO = Subtarget.isRV64() ? RISCV::zero_64 : RISCV::zero;
-
-  unsigned Dest    = MI->getOperand(0).getReg();
-  unsigned Ptr     = MI->getOperand(1).getReg();
-  unsigned OldVal  = MI->getOperand(2).getReg();
-  unsigned NewVal  = MI->getOperand(3).getReg();
-
-  unsigned Success = RegInfo.createVirtualRegister(RC);
-
-  // insert new blocks after the current block
-  const BasicBlock *LLVM_BB = BB->getBasicBlock();
-  MachineBasicBlock *loop1MBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *loop2MBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineBasicBlock *exitMBB = MF->CreateMachineBasicBlock(LLVM_BB);
-  MachineFunction::iterator It = BB;
-  ++It;
-  MF->insert(It, loop1MBB);
-  MF->insert(It, loop2MBB);
-  MF->insert(It, exitMBB);
-
-  // Transfer the remainder of BB and its successor edges to exitMBB.
-  exitMBB->splice(exitMBB->begin(), BB,
-                  llvm::next(MachineBasicBlock::iterator(MI)), BB->end());
-  exitMBB->transferSuccessorsAndUpdatePHIs(BB);
-
-  //  thisMBB:
-  //    ...
-  //    fallthrough --> loop1MBB
-  BB->addSuccessor(loop1MBB);
-  loop1MBB->addSuccessor(exitMBB);
-  loop1MBB->addSuccessor(loop2MBB);
-  loop2MBB->addSuccessor(loop1MBB);
-  loop2MBB->addSuccessor(exitMBB);
-
-  // loop1MBB:
-  //   lr dest, 0(ptr)
-  //   bne dest, oldval, exitMBB
-  BB = loop1MBB;
-  BuildMI(BB, DL, TII->get(LR), Dest).addReg(Ptr);
-  BuildMI(BB, DL, TII->get(BNE)).addMBB(exitMBB)
-    .addReg(Dest).addReg(OldVal);
-
-  // loop2MBB:
-  //   sc success, newval, 0(ptr)
-  //   bNE success, $0, loop1MBB
-  BB = loop2MBB;
-  BuildMI(BB, DL, TII->get(SC), Success)
-    .addReg(NewVal).addReg(Ptr);
-  BuildMI(BB, DL, TII->get(BNE)).addMBB(loop1MBB)
-    .addReg(Success).addReg(ZERO);
-
-  MI->eraseFromParent();   // The instruction is gone now.
-
-  return exitMBB;
-}
-
-
 MachineBasicBlock *RISCVTargetLowering::
 EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   switch (MI->getOpcode()) {
@@ -2181,10 +2098,6 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   case RISCV::FSELECT_CC_F:
   case RISCV::FSELECT_CC_D:
       return emitSelectCC(MI, MBB);
-  case RISCV::ATOMIC_CMP_SWAP_8:
-    return emitAtomicCmpSwap(MI, MBB, 8);
-  case RISCV::ATOMIC_CMP_SWAP_4:
-    return emitAtomicCmpSwap(MI, MBB, 4);
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }
