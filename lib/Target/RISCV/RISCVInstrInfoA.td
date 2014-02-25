@@ -23,14 +23,6 @@ def AMOMAXU_W : InstA<"amomaxu.w" , 0b0101111, 0b11100, 0b010, atomic_load_umax,
 def LR_W : InstLR<"lr.w", 0b010, GR32, memreg>, Requires<[HasA]>;
 def SC_W : InstSC<"sc.w", 0b010, GR32, memreg>, Requires<[HasA]>;
 
-
-let usesCustomInserter = 1 in {
-  def ATOMIC_CMP_SWAP_4 : PsuedoInst<
-      (outs GR32:$dst), (ins GR32:$ptr, GR32:$old, GR32:$new),
-      [(set GR32:$dst, (atomic_cmp_swap_32 GR32:$ptr, GR32:$old, GR32:$new))]>,
-        Requires<[HasA]>;
-}
-
 //RV64A
 //TODO: add LR/SC and acq/rel
 
@@ -58,11 +50,3 @@ def LR_W64 : InstLR<"lr.w", 0b010, GR32, memreg64>, Requires<[IsRV64, HasA]>;
 def SC_W64 : InstSC<"sc.w", 0b010, GR32, memreg64>, Requires<[IsRV64, HasA]>;
 def LR_D   : InstLR<"lr.d", 0b011, GR64, memreg64>, Requires<[IsRV64, HasA]>;
 def SC_D   : InstSC<"sc.d", 0b011, GR64, memreg64>, Requires<[IsRV64, HasA]>;
-
-
-let usesCustomInserter = 1 in {
-  def ATOMIC_CMP_SWAP_8 : PsuedoInst<
-      (outs GR64:$dst), (ins GR64:$ptr, GR64:$old, GR64:$new),
-      [(set GR64:$dst, (atomic_cmp_swap_64 GR64:$ptr, GR64:$old, GR64:$new))]>,
-        Requires<[IsRV64, HasA]>;
-}
