@@ -403,6 +403,7 @@ AC_CACHE_CHECK([target architecture],[llvm_cv_target_arch],
   mblaze-*)               llvm_cv_target_arch="MBlaze" ;;
   nvptx-*)                llvm_cv_target_arch="NVPTX" ;;
   s390x-*)                llvm_cv_target_arch="SystemZ" ;;
+  riscv-*)                llvm_cv_target_arch="RISCV" ;;
   *)                      llvm_cv_target_arch="Unknown" ;;
 esac])
 
@@ -437,6 +438,7 @@ case $host in
   hexagon-*)              host_arch="Hexagon" ;;
   mblaze-*)               host_arch="MBlaze" ;;
   s390x-*)                host_arch="SystemZ" ;;
+  riscv-*)                host_arch="RISCV" ;;
   *)                      host_arch="Unknown" ;;
 esac
 
@@ -657,6 +659,7 @@ else
     MBlaze)      AC_SUBST(TARGET_HAS_JIT,0) ;;
     NVPTX)       AC_SUBST(TARGET_HAS_JIT,0) ;;
     SystemZ)     AC_SUBST(TARGET_HAS_JIT,1) ;;
+    RISCV)       AC_SUBST(TARGET_HAS_JIT,0) ;;
     *)           AC_SUBST(TARGET_HAS_JIT,0) ;;
   esac
 fi
