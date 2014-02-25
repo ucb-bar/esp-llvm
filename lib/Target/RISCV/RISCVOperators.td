@@ -94,6 +94,10 @@ def z_fence64           : SDNode<"RISCVISD::FENCE", SDT_ZFence64, [SDNPHasChain,
 def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;
 def RISCVLo    : SDNode<"RISCVISD::Lo", SDTIntUnaryOp>;
 
+// TprelHi and TprelLo nodes are used to handle Local Exec TLS
+def RISCVTprelHi    : SDNode<"RISCVISD::TprelHi", SDTIntUnaryOp>;
+def RISCVTprelLo    : SDNode<"RISCVISD::TprelLo", SDTIntUnaryOp>;
+
 //===----------------------------------------------------------------------===//
 // Pattern fragments
 //===----------------------------------------------------------------------===//

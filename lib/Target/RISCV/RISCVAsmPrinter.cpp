@@ -62,6 +62,8 @@ void RISCVAsmPrinter::printOperand(const MachineInstr *MI, int OpNo, raw_ostream
   switch(MO.getTargetFlags()){
     case RISCVII::MO_ABS_HI: O << "%hi("; break;
     case RISCVII::MO_ABS_LO: O << "%lo("; break;
+    case RISCVII::MO_TPREL_HI: O << "%tprel_hi("; break;
+    case RISCVII::MO_TPREL_LO: O << "%tprel_lo("; break;
   }
  switch (MO.getType()) {
     case MachineOperand::MO_Register:

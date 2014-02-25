@@ -1389,67 +1389,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
   else
     RetCCInfo.AnalyzeReturn(Outs, RetCC_RISCV32);
 
-  //Look for SRet 
   SDValue Glue;
-  if (MF.getFunction()->hasStructRetAttr()) {
-    //Accoriding to the ABI, if the struct fits in registers (less than 2 words)
-    //then it is put in v0,v1. Otherwise we must write the sruct to the sret pointer
-    //which is always passed in a0
-    
-    //For now we will always write to the sret pointer since it is passed to us
-    //that write is done after the function call so we will also write the first two
-    //struct fields to v0 and v1 for that code to use
-    
-    //CopyToReg(OutVals[0] to v0)
-    //SDValue RetValue0 = OutVals[0];
-    //We check how many values are in the struct
-    //assert(CLI.Args[0].Ty->isPointerTy() && "SRet is always a pointer to a struct");
-    //Type *structType = CLI.Args[0].Ty->getContainedType(0);
-    
-    //if(structType->getStructNumElements() == 2){
-    //DEAD CODE
-    /*
-      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
-      SDValue Address = DAG.getRegister(RISCV::a0_64, getPointerTy());
-      SDValue Load = DAG.getLoad(MVT::i64, DL, Chain, Address,
-                                    MachinePointerInfo(), false, false, false,
-                                    0);
-      //copy the loaded value to the v0
-      Chain = DAG.getCopyToReg(Chain, DL, RISCV::v0_64, Load);
-
-      //SDValue LoadVal = DAG.getLoad(Chain, DL, ArgValue, Address,
-                                   //MachinePointerInfo(), false, false, 0);
-      Glue = Chain.getValue(1);
-  
-      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
-      SDValue offset = DAG.getConstant(8, MVT::i64);
-      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, Address, offset);
-      SDValue Load2 = DAG.getLoad(MVT::i64, DL, Chain, Address2,
-                                    MachinePointerInfo(), false, false, false,
-                                    0);
-      //copy the loaded value to the v1
-      Chain = DAG.getCopyToReg(Chain, DL, RISCV::v1_64, Load2);
-      Glue = Chain.getValue(1);
-    */
-    /*}else if(structType->getStructNumElements() == 1){
-      SDValue ArgValue = DAG.getRegister(RISCV::v0_64, MVT::i64);
-      SDValue Address = OutVals[0];
-      SDValue Store = DAG.getStore(Chain, DL, ArgValue, Address,
-                                   MachinePointerInfo(), false, false, 0);
-      Chain = Store;
-      Glue = Chain.getValue(1);
-  
-      SDValue ArgValue2 = DAG.getRegister(RISCV::v1_64, MVT::i64);
-      SDValue offset = DAG.getConstant(structType->getStructElementType(0)->getScalarSizeInBits()/8, MVT::i64);
-      SDValue Address2 = DAG.getNode(ISD::ADD, DL, MVT::i64, OutVals[0], offset);
-      SDValue Store2 = DAG.getStore(Chain, DL, ArgValue2, Address2,
-                                 MachinePointerInfo(), false, false, 0);
-      Chain = Store2;
-      Glue = Chain.getValue(1);
-    }
-*/
-  }
-
   // Quick exit for void returns
   if (RetLocs.empty())
     return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, Chain);
@@ -1703,16 +1643,39 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   llvm_unreachable("Can not handle PIC global addresses yet");
 }
 
-SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *Node,
+SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
 						     SelectionDAG &DAG) const {
-  DebugLoc DL = Node->getDebugLoc();
-  const GlobalValue *GV = Node->getGlobal();
-  EVT PtrVT = getPointerTy();
-  TLSModel::Model model = TM.getTLSModel(GV);
+  // If the relocation model is PIC, use the General Dynamic TLS Model or
+  // Local Dynamic TLS model, otherwise use the Initial Exec or
+  // Local Exec TLS Model.
 
-  if (model != TLSModel::LocalExec)
-  {}
-  llvm_unreachable("only local-exec TLS mode supported");
+  DebugLoc DL = GA->getDebugLoc();
+  const GlobalValue *GV = GA->getGlobal();
+  EVT PtrVT = getPointerTy();
+
+  TLSModel::Model model = getTargetMachine().getTLSModel(GV);
+
+  SDValue Offset;
+  if (model == TLSModel::LocalExec) {
+    // Local Exec TLS Model
+    assert(model == TLSModel::LocalExec);
+    SDValue TGAHi = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0,
+                                               RISCVII::MO_TPREL_HI);
+    SDValue TGALo = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0,
+                                               RISCVII::MO_TPREL_LO);
+    SDValue Hi = DAG.getNode(RISCVISD::Hi, DL, PtrVT, TGAHi);
+    SDValue Lo = DAG.getNode(RISCVISD::Lo, DL, PtrVT, TGALo);
+    Offset = DAG.getNode(ISD::ADD, DL, PtrVT, Hi, Lo);
+  } else {
+    llvm_unreachable("only local-exec TLS mode supported");
+  }
+
+  //SDValue ThreadPointer = DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
+  SDValue ThreadPointer = DAG.getRegister(
+      Subtarget.isRV64() ? RISCV::tp_64 : RISCV::tp, PtrVT);
+  
+  return DAG.getNode(ISD::ADD, DL, PtrVT, ThreadPointer, Offset);
+
 
 }
 
