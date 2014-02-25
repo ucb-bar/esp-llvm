@@ -133,7 +133,7 @@ def CC_RISCV64 : CallingConv<[
       [ a0_64,  a1_64,  a2_64,  a3_64,  a4_64,  a5_64,  a6_64,  a7_64]>>>,
 
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
-  CCIfType<[i32, i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
 ]>;
 
 def CC_RISCV64_VAR : CallingConv<[
@@ -151,7 +151,7 @@ def CC_RISCV64_VAR : CallingConv<[
       [fa0_64,fa1_64,fa2_64,fa3_64,fa4_64,fa5_64,fa6_64,fa7_64]>>,
 
   // Other arguments are passed in 8-byte-aligned 8-byte stack slots.
-  CCIfType<[i32, i64, f64], CCAssignToStack<8, 8>>
+  CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
 ]>;
 
 //===----------------------------------------------------------------------===//
