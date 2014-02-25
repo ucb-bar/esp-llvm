@@ -20,8 +20,6 @@ class CCIfSubtarget<string F, CCAction A>:
 // SVR4 return value calling convention
 //===----------------------------------------------------------------------===//
 def RetCC_RISCV32 : CallingConv<[
-  CCIf<"State.getMachineFunction().getFunction()->getReturnType()->isStructTy() && State.getMachineFunction().getFunction()->getReturnType()->getStructNumElements() > 2"
-      , CCAssignToStack<8, 8>>,
 
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
   // call-clobbered argument registers available for code that doesn't
@@ -38,13 +36,7 @@ def RetCC_RISCV32 : CallingConv<[
   CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
   CCIfType<[f64], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0_p64]>>>,
 
-  CCIfType<[f32], CCAssignToReg<[v0, v1]>>,
-
-  // ABI-compliant code returns long double by reference, but that conversion
-  // is left to higher-level code.  Perhaps we could add an f128 definition
-  // here for code that doesn't care about the ABI?
-  //TODO: f128 i128?
-  CCAssignToStack<8,8>
+  CCIfType<[f32], CCAssignToReg<[v0, v1]>>
 ]>;
 
 //===----------------------------------------------------------------------===//
@@ -91,12 +83,6 @@ def CC_RISCV32_VAR : CallingConv<[
 ]>;
 
 def RetCC_RISCV64 : CallingConv<[
-  CCIf<"State.getMachineFunction().getFunction()->getReturnType()->isStructTy() && State.getMachineFunction().getFunction()->getReturnType()->getStructNumElements() > 2"
-     , CCAssignToStack<8, 8>>,
-
-  //if(State.getMachineFunction().getFunction().getReturnType().isStructTy() &&
-     //ReturnType().getStructNumElements() > 2) CCAssignToStack<8, 8>>
-
   CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
   // ABI-compliant code returns 64-bit integers in R2.  Make the other
@@ -115,13 +101,8 @@ def RetCC_RISCV64 : CallingConv<[
   CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
 
   CCIfType<[f32], CCPromoteToType<f64>>,
-  CCIfType<[f64], CCAssignToReg<[v0_64, v1_64]>>,
+  CCIfType<[f64], CCAssignToReg<[v0_64, v1_64]>>
 
-  // ABI-compliant code returns long double by reference, but that conversion
-  // is left to higher-level code.  Perhaps we could add an f128 definition
-  // here for code that doesn't care about the ABI?
-  //TODO: f128 i128?
-  CCAssignToStack<8,8>
 ]>;
 
 //===----------------------------------------------------------------------===//
