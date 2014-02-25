@@ -1373,6 +1373,20 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   return Chain;
 }
 
+/// This hook should be implemented to check whether the return values
+/// described by the Outs array can fit into the return registers.  If false
+/// is returned, an sret-demotion is performed.
+bool
+RISCVTargetLowering::CanLowerReturn(CallingConv::ID CallConv,
+                                   MachineFunction &MF, bool IsVarArg,
+                                   const SmallVectorImpl<ISD::OutputArg> &Outs,
+                                   LLVMContext &Context) const {
+  SmallVector<CCValAssign, 16> RVLocs;
+  CCState CCInfo(CallConv, IsVarArg, MF, getTargetMachine(),
+                 RVLocs, Context);
+  return CCInfo.CheckReturn(Outs, Subtarget.isRV64() ? RetCC_RISCV64 : RetCC_RISCV32);
+}
+
 SDValue
 RISCVTargetLowering::LowerReturn(SDValue Chain,
                                    CallingConv::ID CallConv, bool IsVarArg,
@@ -1665,7 +1679,7 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
                                                RISCVII::MO_TPREL_LO);
     SDValue Hi = DAG.getNode(RISCVISD::Hi, DL, PtrVT, TGAHi);
     SDValue Lo = DAG.getNode(RISCVISD::Lo, DL, PtrVT, TGALo);
-    Offset = DAG.getNode(ISD::ADD, DL, PtrVT, Hi, Lo);
+    Offset = DAG.getNode(ISD::ADD, DL, PtrVT, Hi, Lo); 
   } else {
     llvm_unreachable("only local-exec TLS mode supported");
   }

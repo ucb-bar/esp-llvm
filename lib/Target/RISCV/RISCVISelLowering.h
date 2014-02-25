@@ -170,6 +170,12 @@ public:
     LowerCall(CallLoweringInfo &CLI,
               SmallVectorImpl<SDValue> &InVals) const LLVM_OVERRIDE;
 
+  virtual bool
+    CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
+                   bool isVarArg,
+                   const SmallVectorImpl<ISD::OutputArg> &Outs,
+                   LLVMContext &Context) const;
+
   virtual SDValue
     LowerReturn(SDValue Chain,
                 CallingConv::ID CallConv, bool IsVarArg,
