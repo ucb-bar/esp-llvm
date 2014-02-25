@@ -86,6 +86,8 @@ def FSGNJX_D : InstSign<"fsgnjx.d", 0b1010011, 0b00111, 0b01, 0b000,
 //llvm cant select fneq itsels so help it out
 def : Pat<(fneg FP64:$src), (FSGNJN_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
 def : Pat<(fabs FP64:$src), (FSGNJX_D FP64:$src, FP64:$src)>, Requires<[HasD]>;
+//llvm also can't select f32 = fcopysign f32,f64
+def : Pat<(fcopysign FP32:$src1, FP64:$src2), (FSGNJ_S FP32:$src1, (FCVT_S_D_RDY FP64:$src2))>;
 
 //Move instruction (bitcasts)
 def FMV_X_D : InstConv<"fmv.x.d", "", 0b1010011, 0b11100, 0b01, 0b000, bitconvert, GR64, FP64>, Requires<[HasD, IsRV64]>;
