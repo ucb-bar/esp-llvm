@@ -138,20 +138,17 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   //Custom Lower Overflow operators
 
   // Handle integer types.
-  if(Subtarget.isRV64()){
-    setOperationAction(ISD::MUL  , MVT::i64, Legal);
-    setOperationAction(ISD::MUL  , MVT::i32, Promote);
-  }else {
-    setOperationAction(ISD::MUL  , MVT::i64, Expand);
-    setOperationAction(ISD::MUL  , MVT::i32, Legal);
-  }
   for (unsigned I = MVT::FIRST_INTEGER_VALUETYPE;
        I <= MVT::LAST_INTEGER_VALUETYPE;
        ++I) {
     MVT VT = MVT::SimpleValueType(I);
     if (isTypeLegal(VT)) {
       if(Subtarget.hasM()) {
-        //setOperationAction(ISD::MUL  , VT, Legal);
+        if(Subtarget.isRV64() && VT==MVT::i32)
+          setOperationAction(ISD::MUL  , VT, Promote);
+        if(Subtarget.isRV32() && VT==MVT::i64)
+          setOperationAction(ISD::MUL  , VT, Expand);
+        setOperationAction(ISD::MUL  , VT, Legal);
         setOperationAction(ISD::MULHS, VT, Legal);
         setOperationAction(ISD::MULHU, VT, Legal);
         setOperationAction(ISD::SDIV , VT, Legal);
@@ -159,7 +156,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
         setOperationAction(ISD::SREM , VT, Legal);
         setOperationAction(ISD::UREM , VT, Legal);
       }else{
-        //setOperationAction(ISD::MUL  , VT, Expand);
+        setOperationAction(ISD::MUL  , VT, Expand);
         setOperationAction(ISD::MULHS, VT, Expand);
         setOperationAction(ISD::MULHU, VT, Expand);
         setOperationAction(ISD::SDIV , VT, Expand);
@@ -1592,6 +1589,7 @@ lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const
 
 SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const {
   // check the depth
+  //TODO: riscv-gcc can handle this, by navigating through the stack, we should be able to do this too
   assert((cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue() == 0) &&
     "Return address can be determined only for current frame.");
       
@@ -1732,7 +1730,7 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
   DebugLoc DL     = Op.getDebugLoc();
   SDValue FI      = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy());
+                                 PtrVT);
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
