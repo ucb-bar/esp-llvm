@@ -131,7 +131,8 @@ public:
 
   // Override TargetLowering.
   virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
-    return LHSTy.getSimpleVT();
+    //return LHSTy.getSimpleVT();
+    return LHSTy.getSizeInBits() <= 32 ? MVT::i32 : MVT::i64;
   }
   virtual EVT getSetCCResultType(EVT VT) const {
     return MVT::i32;

@@ -71,7 +71,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   if(Subtarget.isRV64())
     addRegisterClass(MVT::i64,  &RISCV::GR64BitRegClass);
   if(Subtarget.hasD()){
-    //TODO: do we need to add an f32 regclass that shadows the f64 regclass?
     addRegisterClass(MVT::f64,  &RISCV::FP64BitRegClass);
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
   }else if(Subtarget.hasF())
@@ -79,7 +78,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
 
 
   // Set up special registers.
-  // TODO: not all of these exist in RISCV
   setExceptionPointerRegister(RISCV::epc);
   setExceptionSelectorRegister(RISCV::evec);
   if(Subtarget.isRV64()) {
@@ -88,10 +86,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
     setStackPointerRegisterToSaveRestore(RISCV::sp);
   }
 
-  // TODO: It may be better to default to latency-oriented scheduling, however
-  // LLVM's current latency-oriented scheduler can't handle physreg definitions
-  // such as RISCV has with PSW, so set this to the register-pressure
-  // scheduler, because it can.
   setSchedulingPreference(Sched::RegPressure);
 
   //For i1 types all bits are zero except bit 0
@@ -136,7 +130,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::BRIND, MVT::Other, Expand);
 
   //Expand build_pair i64 since we don't support i64
-  setOperationAction(ISD::BUILD_PAIR, MVT::i64, Expand);
+  //setOperationAction(ISD::BUILD_PAIR, MVT::i64, Expand);
 
   //make BRCOND legal, its actually only legal for a subset of conds
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
@@ -1692,13 +1686,11 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
 
 SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
                                                  SelectionDAG &DAG) const {
-  DebugLoc DL = Node->getDebugLoc();
   const BlockAddress *BA = Node->getBlockAddress();
   int64_t Offset = Node->getOffset();
   EVT PtrVT = getPointerTy();
 
   SDValue Result = DAG.getTargetBlockAddress(BA, PtrVT, Offset);
-  //Result = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Result);
   return Result;
 }
 
@@ -1714,7 +1706,6 @@ SDValue RISCVTargetLowering::lowerJumpTable(JumpTableSDNode *JT,
 
 SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
                                                  SelectionDAG &DAG) const {
-  DebugLoc DL = CP->getDebugLoc();
   EVT PtrVT = getPointerTy();
 
   SDValue Result;
