@@ -135,27 +135,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
       int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
       unsigned Reg = I->getReg();
 
-      /* No double precision yet
-      // If Reg is a double precision register, emit two cfa_offsets,
-      // one for each of the paired single precision registers.
-      if (RISCV::AFGR64RegClass.contains(Reg)) {
-        MachineLocation DstML0(MachineLocation::VirtualFP, Offset);
-        MachineLocation DstML1(MachineLocation::VirtualFP, Offset + 4);
-        MachineLocation SrcML0(RegInfo->getSubReg(Reg, RISCV::sub_fpeven));
-        MachineLocation SrcML1(RegInfo->getSubReg(Reg, RISCV::sub_fpodd));
-
-        if (!STI.isLittle())
-          std::swap(SrcML0, SrcML1);
-
-        Moves.push_back(MachineMove(CSLabel, DstML0, SrcML0));
-        Moves.push_back(MachineMove(CSLabel, DstML1, SrcML1));
-      } else {
-      */
-        // Reg is either in CPURegs or FGR32.
-        DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
-        SrcML = MachineLocation(Reg);
-        Moves.push_back(MachineMove(CSLabel, DstML, SrcML));
-    //  }
+      // Reg is either in CPURegs or FGR32.
+      DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
+      SrcML = MachineLocation(Reg);
+      Moves.push_back(MachineMove(CSLabel, DstML, SrcML));
     }
   }
 
@@ -327,20 +310,6 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   // Create spill slots for eh data registers if function calls eh_return.
   if (RISCVFI->getCallsEhReturn())
     RISCVFI->createEhDataRegsFI();
-
-  /*
-  // Expand pseudo instructions which load, store or copy accumulators.
-  // Add an emergency spill slot if a pseudo was expanded.
-  if (ExpandPseudo(MF).expand()) {
-    // The spill slot should be half the size of the accumulator. If target is
-    // riscv64, it should be 64-bit, otherwise it should be 32-bt.
-    const TargetRegisterClass *RC = STI.hasRISCV64() ?
-      &RISCV::CPU64RegsRegClass : &RISCV::CPURegsRegClass;
-    int FI = MF.getFrameInfo()->CreateStackObject(RC->getSize(),
-                                                  RC->getAlignment(), false);
-    RS->addScavengingFrameIndex(FI);
-  }
-  */
 
   // Set scavenging frame index if necessary.
   uint64_t MaxSPOffset = MF.getInfo<RISCVMachineFunctionInfo>()->getIncomingArgSize() +

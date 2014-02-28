@@ -103,7 +103,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 let isCall = 1 in {
   let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
-          [(z_call pcrel32call:$target)]>, Requires<[IsRV32]>;
+          [(r_call pcrel32call:$target)]>, Requires<[IsRV32]>;
   }
 }
 let isCall = 1 in {
@@ -111,7 +111,7 @@ let isCall = 1 in {
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
   let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
     def JALR: InstRISCV<4, (outs), (ins jalrmem:$target), "jalr\t$target", 
-          [(z_call addr:$target)]>, Requires<[IsRV32]>{//, (z_call addr:$target))]>{
+          [(r_call addr:$target)]>, Requires<[IsRV32]>{//, (r_call addr:$target))]>{
           //[]>{
             field bits<32> Inst;
 
@@ -219,7 +219,7 @@ def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sxu20:$imm),
 
 def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
                "auipc\t$dst, $target",
-               [(set GR32:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
+               [(set GR32:$dst, (r_pcrel_wrapper tglobaladdr:$target))]>;
 
 //simple immediate loading
 // Transformation Function - get the lower 12 bits.
@@ -247,8 +247,8 @@ def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
 def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>, Requires<[IsRV32]>;
 //call
-def : Pat<(z_call (i32 texternalsym:$in)), (JAL texternalsym:$in)>, Requires<[IsRV32]>;
-def : Pat<(z_call (i32 tglobaladdr:$in)), (JAL tglobaladdr:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_call (i32 texternalsym:$in)), (JAL texternalsym:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_call (i32 tglobaladdr:$in)), (JAL tglobaladdr:$in)>, Requires<[IsRV32]>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI tglobaladdr:$in)>, Requires<[IsRV32]>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI tblockaddress:$in)>, Requires<[IsRV32]>;
@@ -300,11 +300,11 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
             let Inst{6 - 0} = 0b1101011;
           }
    }
-  def : Pat<(z_retflag), (RET)>;
+  def : Pat<(r_retflag), (RET)>;
 
 //Fence
 def FENCE: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence", 
-      [(z_fence fenceImm:$pred, fenceImm:$succ)]>{
+      [(r_fence fenceImm:$pred, fenceImm:$succ)]>{
         field bits<32> Inst;
 
         bits<4> pred;

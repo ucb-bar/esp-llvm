@@ -30,7 +30,7 @@ class Immediate<ValueType vt, code pred, SDNodeXForm xform, string asmop>
 // Constructs both a DAG pattern and instruction operand for a PC-relative
 // address with address size VT.  SELF is the name of the operand.
 class PCRelAddress<ValueType vt, string self>
-  : ComplexPattern<vt, 1, "selectPCRelAddress", [z_pcrel_wrapper]>,
+  : ComplexPattern<vt, 1, "selectPCRelAddress", [r_pcrel_wrapper]>,
     Operand<vt> {
   let MIOperandInfo = (ops !cast<Operand>(self));
 }
@@ -175,9 +175,6 @@ def fenceImm64 : Immediate<i64, [{
 
 // Floating-point zero.
 def fpimm0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+0.0); }]>;
-
-// Floating point negative zero.
-//def fpimmneg0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(-0.0); }]>;
 
 //===----------------------------------------------------------------------===//
 // Memory address operands

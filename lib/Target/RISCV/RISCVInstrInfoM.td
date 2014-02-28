@@ -37,5 +37,3 @@ def DIVW    : InstR<"divw" , 0b0111011, 0b0000001100, sdiv  , GR32, GR32>, Requi
 def DIVUW   : InstR<"divuw", 0b0111011, 0b0000001101, udiv  , GR32, GR32>, Requires<[IsRV64, HasM]>;
 def REMW    : InstR<"remw" , 0b0111011, 0b0000001110, srem  , GR32, GR32>, Requires<[IsRV64, HasM]>;
 def REMUW   : InstR<"remuw", 0b0111011, 0b0000001111, urem  , GR32, GR32>, Requires<[IsRV64, HasM]>;
-
-//def : Pat<(i32 (mul GR32:$src1, GR32:$src2)), (EXTRACT_SUBREG (SRLI64 (SLLI64 (MULW GR32:$src1, GR32:$src2), 32), 32), sub_32)>, Requires<[IsRV64, HasM]>;

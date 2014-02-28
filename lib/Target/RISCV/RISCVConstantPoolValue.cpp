@@ -43,9 +43,9 @@ getExistingMachineCPValue(MachineConstantPool *CP, unsigned Alignment) {
   for (unsigned I = 0, E = Constants.size(); I != E; ++I) {
     if (Constants[I].isMachineConstantPoolEntry() &&
         (Constants[I].getAlignment() & AlignMask) == 0) {
-      RISCVConstantPoolValue *ZCPV =
+      RISCVConstantPoolValue *RCPV =
         static_cast<RISCVConstantPoolValue *>(Constants[I].Val.MachineCPVal);
-      if (ZCPV->GV == GV && ZCPV->Modifier == Modifier)
+      if (RCPV->GV == GV && RCPV->Modifier == Modifier)
         return I;
     }
   }

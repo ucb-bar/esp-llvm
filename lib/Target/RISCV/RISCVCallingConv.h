@@ -13,10 +13,8 @@
 namespace llvm {
   namespace RISCV {
     const unsigned NumArgGPRs = 8;
-    extern const unsigned ArgGPRs[NumArgGPRs];
 
     const unsigned NumArgFPRs = 8;
-    extern const unsigned ArgFPRs[NumArgFPRs];
   }
 }
 

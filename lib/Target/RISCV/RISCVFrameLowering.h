@@ -50,9 +50,6 @@ public:
   void processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                             RegScavenger *RS) const;
   unsigned ehDataReg(unsigned I) const;
-
-protected:
-  //uint64_t estimateStackSize(const MachineFunction &MF) const;
 };
 
 } // End llvm namespace

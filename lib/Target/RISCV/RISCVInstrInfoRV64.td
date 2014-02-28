@@ -104,7 +104,7 @@ let isCall = 1 in {
            t0_64, t1_64, t2_64, t3_64, t4_64, gp_64] in {
   //let Defs = [ra_64] in { //after call return addr and values are defined
     def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "jal\t$target", 
-          [(z_call pcrel64call:$target)]>, Requires<[IsRV64]>;
+          [(r_call pcrel64call:$target)]>, Requires<[IsRV64]>;
   }
 }
 let isCall = 1 in {
@@ -113,7 +113,7 @@ let isCall = 1 in {
            a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
            t0_64, t1_64, t2_64, t3_64, t4_64] in {
     def JALR64: InstRISCV<4, (outs), (ins jalrmem64:$target), "jalr\t$target", 
-          [(z_call addr:$target)]>, Requires<[IsRV64]>{
+          [(r_call addr:$target)]>, Requires<[IsRV64]>{
             field bits<32> Inst;
 
             //bits<5> RD;
@@ -237,12 +237,11 @@ def LUI64: InstU<0b0110111, (outs GR64:$dst), (ins imm64sxu20:$imm),
 
 def AUIPC64: InstU<0b0110111, (outs GR64:$dst), (ins pcimm64:$target),
                    "auipc\t$dst, $target",
-                   [(set GR64:$dst, (z_pcrel_wrapper tglobaladdr:$target))]>;
+                   [(set GR64:$dst, (r_pcrel_wrapper tglobaladdr:$target))]>;
 
 
 //psuedo load low imm instruction to print operands better
 def LLI64 : InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>;
-//def L32I : Pat<(i64 imm64sxu32:$imm), (LLI64 (LUI64 (HI20 imm64:$imm)), (LO12 imm64:$imm))>;
 
 ///64 bit immediate loading
 // Transformation Function - get the lower 32 bits.
@@ -257,11 +256,6 @@ def HI32 : SDNodeXForm<imm, [{
                      (N->getZExtValue() >> 32);
     return getImm(N, value);
 }]>;
-/*def : Pat<(i64 imm64:$imm), (ADD64 
-                        (LLI64 (LUI64 (HI20 (i64 (LO32 $imm)))), (LO12 (i64 (LO32 $imm)))), 
-                        (SLL64 (i64 32), 
-                        (LLI64 (LUI64 (HI20 (i64 (HI32 $imm)))), (LO12 (i64 (HI32 $imm))))))>;
-*/
 def LI64 : InstRISCV<4, (outs GR64:$dst), (ins imm64:$imm), "li\t$dst, $imm",
   []> {
     let isPseudo = 1;
@@ -282,10 +276,10 @@ def : Pat<(i64 imm64:$imm), (LI64 imm64:$imm)>; //cheat and use gas for these
 def : Pat<(i64 imm64sx12:$imm), (LI64 imm64sx12:$imm)>; 
 def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas for these
 //call
-def : Pat<(z_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
-def : Pat<(z_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
+def : Pat<(r_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
+def : Pat<(r_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
 //constpool
-//def : Pat<(z_pcrel_wrapper tconstpool:$in), (ADDI64 (LUI64 (RISCVHi tconstpool:$in)), (RISCVLo tconstpool:$in))>;
+//def : Pat<(r_pcrel_wrapper tconstpool:$in), (ADDI64 (LUI64 (RISCVHi tconstpool:$in)), (RISCVLo tconstpool:$in))>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI64 tglobaladdr:$in)>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI64 tblockaddress:$in)>;
@@ -315,7 +309,7 @@ def : Pat<(add GR64:$hi, (RISCVLo tglobaltlsaddr:$lo)),
 
 //Fence
 def FENCE64: InstRISCV<4, (outs), (ins fenceImm64:$pred, fenceImm64:$succ), "fence", 
-      [(z_fence64 fenceImm64:$pred, fenceImm64:$succ)]>, Requires<[IsRV64]>{
+      [(r_fence64 fenceImm64:$pred, fenceImm64:$succ)]>, Requires<[IsRV64]>{
         field bits<32> Inst;
 
         bits<4> pred;
@@ -350,4 +344,4 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
             let Inst{6 - 0} = 0b1101011;
           }
    }
-  def : Pat<(z_retflag), (RET)>, Requires<[IsRV64]>;
+  def : Pat<(r_retflag), (RET)>, Requires<[IsRV64]>;

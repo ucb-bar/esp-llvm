@@ -17,39 +17,33 @@ class CCIfSubtarget<string F, CCAction A>:
   CCIf<!strconcat("State.getTarget().getSubtarget<RISCVSubtarget>().", F), A>;
 
 //===----------------------------------------------------------------------===//
-// SVR4 return value calling convention
+// RV32 return value calling convention
 //===----------------------------------------------------------------------===//
 def RetCC_RISCV32 : CallingConv<[
 
-  // ABI-compliant code returns 64-bit integers in R2.  Make the other
-  // call-clobbered argument registers available for code that doesn't
-  // care about the ABI.  (R6 is an argument register too, but is
-  // call-saved and therefore not suitable for return values.)
+  //First two return values go in v0,v1
   CCIfType<[i32], CCAssignToReg<[v0, v1]>>,
 
-  // ABI-complaint code returns float and double in F0.  Make the
-  // other floating-point argument registers available for code that
-  // doesn't care about the ABI.  All floating-point argument registers
-  // are call-clobbered, so we can use all of them here.
+  //Floating points go in their respective fv0,fv1
   CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
   CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
   CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
   CCIfType<[f64], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0_p64]>>>,
 
   CCIfType<[f32], CCAssignToReg<[v0, v1]>>
+  //Falling off the end of allocation here leads to SRet demotion
 ]>;
 
 //===----------------------------------------------------------------------===//
-// SVR4 argument calling conventions
+// RV32 argument calling conventions
 //===----------------------------------------------------------------------===//
-//TODO:this is a very simple version of the RISCV calling convention just to start with
 def CC_RISCV32 : CallingConv<[
   //Always assign the sret pointer to the first arg reg
   CCIfSRet<CCAssignToReg<[a0]>>,
   //Promote small int types to i32
   CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
-  // The first 14 integer arguments are passed in a0-a13. 
+  // The first 8 integer arguments are passed in a0-a7
   CCIfType<[i32], CCAssignToRegWithShadow<
                    [a0,   a1,  a2,  a3,  a4,  a5,  a6,  a7],
                    [fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7]>>,
@@ -82,20 +76,17 @@ def CC_RISCV32_VAR : CallingConv<[
   CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>
 ]>;
 
+//===----------------------------------------------------------------------===//
+// RV64 return value calling convention
+//===----------------------------------------------------------------------===//
 def RetCC_RISCV64 : CallingConv<[
   CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
-  // ABI-compliant code returns 64-bit integers in R2.  Make the other
-  // call-clobbered argument registers available for code that doesn't
-  // care about the ABI.  (R6 is an argument register too, but is
-  // call-saved and therefore not suitable for return values.)
+  //return the values in the correct size register class if possible
   CCIfType<[i32], CCAssignToReg<[v0, v1]>>,
   CCIfType<[i64], CCAssignToReg<[v0_64, v1_64]>>,
 
-  // ABI-complaint code returns float and double in F0.  Make the
-  // other floating-point argument registers available for code that
-  // doesn't care about the ABI.  All floating-point argument registers
-  // are call-clobbered, so we can use all of them here.
+  //use the best register class for floats as well
   CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
   CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
   CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
@@ -103,19 +94,19 @@ def RetCC_RISCV64 : CallingConv<[
   CCIfType<[f32], CCPromoteToType<f64>>,
   CCIfType<[f64], CCAssignToReg<[v0_64, v1_64]>>
 
+  //Falling off the end of allocation here leads to SRet demotion
 ]>;
 
 //===----------------------------------------------------------------------===//
-// RISCV64 argument calling conventions
+// RV64 argument calling conventions
 //===----------------------------------------------------------------------===//
-//TODO:this is a very simple version of the RISCV calling convention just to start with
 def CC_RISCV64 : CallingConv<[
   //Always assign the sret pointer to the first arg reg
   CCIfSRet<CCAssignToReg<[a0_64]>>,
-  //Promote small int types to i64
+  //Promote small int types to i32
   CCIfType<[i8, i16], CCPromoteToType<i32>>,
 
-  // The first 14 integer arguments are passed in a0-a13. 
+  // The first 8 integer arguments are passed in a0-a7
   CCIfType<[i32], CCAssignToRegWithShadow<
       [ a0, a1, a2, a3, a4, a5, a6, a7],
       [fa0,fa1,fa2,fa3,fa4,fa5,fa6,fa7]>>,

@@ -112,7 +112,6 @@ bool RISCVAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   return false;
 }
 
-//RISCV
 void RISCVAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
                                       raw_ostream &OS) {
     OS << '%' << RISCVInstPrinter::getRegisterName(MI->getOperand(opNum).getReg());
@@ -120,7 +119,6 @@ void RISCVAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
     OS << MI->getOperand(opNum+1).getImm();
     OS << ")";
 }
-//End RISCV
 
 void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
   if (Subtarget->isTargetELF()) {

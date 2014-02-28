@@ -13,49 +13,18 @@
 def SDT_CallSeqStart        : SDCallSeqStart<[SDTCisVT<0, i64>]>;
 def SDT_CallSeqEnd          : SDCallSeqEnd<[SDTCisVT<0, i64>,
                                             SDTCisVT<1, i64>]>;
-def SDT_ZCall               : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
-def SDT_ZCmp                : SDTypeProfile<0, 2, [SDTCisSameAs<0, 1>]>;
-def SDT_ZBRCCMask           : SDTypeProfile<0, 2,
-                                            [SDTCisVT<0, i8>,
-                                             SDTCisVT<1, OtherVT>]>;
-def SDT_ZSelectCC           : SDTypeProfile<1, 3,
+def SDT_RCall               : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
+def SDT_RSelectCC           : SDTypeProfile<1, 3,
                                             [SDTCisSameAs<0, 1>,
                                              SDTCisSameAs<1, 2>,
                                              SDTCisVT<3, i32>]>;
-def SDT_ZWrapPtr            : SDTypeProfile<1, 1,
+def SDT_RWrapPtr            : SDTypeProfile<1, 1,
                                             [SDTCisSameAs<0, 1>,
                                              SDTCisPtrTy<0>]>;
-def SDT_ZAdjDynAlloc        : SDTypeProfile<1, 0, [SDTCisVT<0, i64>]>;
-def SDT_ZExtractAccess      : SDTypeProfile<1, 1,
-                                            [SDTCisVT<0, i32>,
-                                             SDTCisVT<1, i8>]>;
-def SDT_ZGR128Binary32      : SDTypeProfile<1, 2,
-                                            [SDTCisVT<0, untyped>,
-                                             SDTCisVT<1, untyped>,
-                                             SDTCisVT<2, i32>]>;
-def SDT_ZGR128Binary64      : SDTypeProfile<1, 2,
-                                            [SDTCisVT<0, untyped>,
-                                             SDTCisVT<1, untyped>,
-                                             SDTCisVT<2, i64>]>;
-def SDT_ZFence              : SDTypeProfile<0, 2,[SDTCisVT<0, i32>,
+def SDT_RFence              : SDTypeProfile<0, 2,[SDTCisVT<0, i32>,
                                                   SDTCisVT<1, i32>]>;
-def SDT_ZFence64            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
+def SDT_RFence64            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>]>;
-def SDT_ZAtomicLoadBinaryW  : SDTypeProfile<1, 5,
-                                            [SDTCisVT<0, i32>,
-                                             SDTCisPtrTy<1>,
-                                             SDTCisVT<2, i32>,
-                                             SDTCisVT<3, i32>,
-                                             SDTCisVT<4, i32>,
-                                             SDTCisVT<5, i32>]>;
-def SDT_ZAtomicCmpSwap      : SDTypeProfile<1, 6,
-                                            [SDTCisVT<0, i32>,
-                                             SDTCisPtrTy<1>,
-                                             SDTCisVT<2, i32>,
-                                             SDTCisVT<3, i32>,
-                                             SDTCisVT<4, i32>,
-                                             SDTCisVT<5, i32>,
-                                             SDTCisVT<6, i32>]>;
 
 //===----------------------------------------------------------------------===//
 // Node definitions
@@ -69,26 +38,17 @@ def callseq_end         : SDNode<"ISD::CALLSEQ_END",   SDT_CallSeqEnd,
                                   SDNPOutGlue]>;
 
 // Nodes for RISCVISD::*.  See RISCVISelLowering.h for more details.
-def z_retflag           : SDNode<"RISCVISD::RET_FLAG", SDTNone,
+def r_retflag           : SDNode<"RISCVISD::RET_FLAG", SDTNone,
                                  [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
-def z_call              : SDNode<"RISCVISD::CALL", SDT_ZCall,
+def r_call              : SDNode<"RISCVISD::CALL", SDT_RCall,
                                  [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                                   SDNPVariadic]>;
-def z_pcrel_wrapper     : SDNode<"RISCVISD::PCREL_WRAPPER", SDT_ZWrapPtr, []>;
-def z_cmp               : SDNode<"RISCVISD::CMP", SDT_ZCmp, [SDNPOutGlue]>;
-def z_ucmp              : SDNode<"RISCVISD::UCMP", SDT_ZCmp, [SDNPOutGlue]>;
-//def z_br_ccmask         : SDNode<"RISCVISD::BR_CCMASK", SDT_ZBRCCMask,
-                                 //[SDNPHasChain, SDNPInGlue]>;
-def z_select_cc         : SDNode<"RISCVISD::SELECT_CC", SDT_ZSelectCC,
+def r_pcrel_wrapper     : SDNode<"RISCVISD::PCREL_WRAPPER", SDT_RWrapPtr, []>;
+def r_select_cc         : SDNode<"RISCVISD::SELECT_CC", SDT_RSelectCC,
     		                 [SDNPInGlue]>;
-def z_adjdynalloc       : SDNode<"RISCVISD::ADJDYNALLOC", SDT_ZAdjDynAlloc>;
-def z_umul_lohi64       : SDNode<"RISCVISD::UMUL_LOHI64", SDT_ZGR128Binary64>;
-def z_sdivrem64         : SDNode<"RISCVISD::SDIVREM64", SDT_ZGR128Binary64>;
-def z_udivrem32         : SDNode<"RISCVISD::UDIVREM32", SDT_ZGR128Binary32>;
-def z_udivrem64         : SDNode<"RISCVISD::UDIVREM64", SDT_ZGR128Binary64>;
 
-def z_fence             : SDNode<"RISCVISD::FENCE", SDT_ZFence, [SDNPHasChain, SDNPSideEffect]>;
-def z_fence64           : SDNode<"RISCVISD::FENCE", SDT_ZFence64, [SDNPHasChain, SDNPSideEffect]>;
+def r_fence             : SDNode<"RISCVISD::FENCE", SDT_RFence, [SDNPHasChain, SDNPSideEffect]>;
+def r_fence64           : SDNode<"RISCVISD::FENCE", SDT_RFence64, [SDNPHasChain, SDNPSideEffect]>;
 
 //global addr
 def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;
@@ -137,45 +97,6 @@ class AlignedStore<SDPatternOperator store>
 def aligned_store         : AlignedStore<store>;
 def aligned_truncstorei16 : AlignedStore<truncstorei16>;
 def aligned_truncstorei32 : AlignedStore<truncstorei32>;
-
-// Insertions.
-def inserti8 : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, -256), node:$src2)>;
-def insertll : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0xffffffffffff0000), node:$src2)>;
-def insertlh : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0xffffffff0000ffff), node:$src2)>;
-def inserthl : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0xffff0000ffffffff), node:$src2)>;
-def inserthh : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0x0000ffffffffffff), node:$src2)>;
-def insertlf : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0xffffffff00000000), node:$src2)>;
-def inserthf : PatFrag<(ops node:$src1, node:$src2),
-                       (or (and node:$src1, 0x00000000ffffffff), node:$src2)>;
-
-// ORs that can be treated as insertions.
-def or_as_inserti8 : PatFrag<(ops node:$src1, node:$src2),
-                             (or node:$src1, node:$src2), [{
-  unsigned BitWidth = N->getValueType(0).getScalarType().getSizeInBits();
-  return CurDAG->MaskedValueIsZero(N->getOperand(0),
-                                   APInt::getLowBitsSet(BitWidth, 8));
-}]>;
-
-// ORs that can be treated as reversed insertions.
-def or_as_revinserti8 : PatFrag<(ops node:$src1, node:$src2),
-                                (or node:$src1, node:$src2), [{
-  unsigned BitWidth = N->getValueType(0).getScalarType().getSizeInBits();
-  return CurDAG->MaskedValueIsZero(N->getOperand(1),
-                                   APInt::getLowBitsSet(BitWidth, 8));
-}]>;
-
-// Fused multiply-add and multiply-subtract, but with the order of the
-// operands matching RISCV's MA and MS instructions.
-def z_fma : PatFrag<(ops node:$src1, node:$src2, node:$src3),
-                    (fma node:$src2, node:$src3, node:$src1)>;
-def z_fms : PatFrag<(ops node:$src1, node:$src2, node:$src3),
-                    (fma node:$src2, node:$src3, (fneg node:$src1))>;
 
 // Floating-point negative absolute.
 def fnabs : PatFrag<(ops node:$ptr), (fneg (fabs node:$ptr))>;

@@ -118,7 +118,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       FBB = 0;
 
       // Delete the JMP if it's equivalent to a fall-through.
-/*For now don't do this as a test
+/*We can't do this now because the BBs can still be rearranged
       if (MBB.isLayoutSuccessor(ThisTarget->getMBB())) {
         TBB = 0;
         I->eraseFromParent();
@@ -139,7 +139,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       TBB = ThisTarget->getMBB();
       Cond.push_back(MachineOperand::CreateImm(ThisCond));
       //push remaining operands
-      for (int i=0; i<(I->getNumExplicitOperands()); i++)
+      for (unsigned int i=0; i<(I->getNumExplicitOperands()); i++)
         Cond.push_back(I->getOperand(i));
 
       continue;
@@ -239,7 +239,7 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
   }
   ++Count;
 
-  //TODO: does RISCV have any two way branches (assume not)
+  //RISCV doesn't have any two way branches
   if (FBB) {
     ++Count;
     llvm_unreachable("Can not insert two-way branch!");
@@ -255,7 +255,7 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 
   unsigned Opcode;
   const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
-  //TODO: when we are copying a phys reg do we want the value or bits for fp?
+  //when we are copying a phys reg we want the bits for fp
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = STI.isRV64() ? RISCV::ADDIW : RISCV::ADDI;
   else if (RISCV::GR64BitRegClass.contains(DestReg, SrcReg))
@@ -419,7 +419,6 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
     return true;
   case RISCV::BEQ:
   case RISCV::BEQ64:
-  //case RISCV::BEQ64_32:
     Cond = RISCV::CCMASK_CMP_EQ;
     Target = &MI->getOperand(2);
     return true;
@@ -481,7 +480,7 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
                                            unsigned &LoadOpcode,
                                            unsigned &StoreOpcode) const {
   const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
-  if (RC == &RISCV::GR32BitRegClass ){//|| RC == &RISCV::ADDR32BitRegClass) {
+  if (RC == &RISCV::GR32BitRegClass ){
     LoadOpcode = STI.isRV64() ? RISCV::LW64 : RISCV::LW;
     StoreOpcode = STI.isRV64() ? RISCV::SW64 : RISCV::SW;
   } else if (RC == &RISCV::GR64BitRegClass) {
@@ -499,7 +498,6 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
 
 unsigned RISCVInstrInfo::getOpcodeForOffset(unsigned Opcode,
                                               int64_t Offset) const {
-  const MCInstrDesc &MCID = get(Opcode);
   int64_t Offset2 = Offset;
   if (isInt<12>(Offset) && isInt<12>(Offset2)) {
     return Opcode;

@@ -53,18 +53,10 @@ namespace RISCVISD {
     TprelHi,
     TprelLo,
 
-    // Signed integer and floating-point comparisons.  The operands are the
-    // two values to compare.
-    CMP,
-
-    // Likewise unsigned integer comparison.
-    UCMP,
-
     // Branches if a condition is true.  Operand 0 is the chain operand;
     // operand 1 is the 4-bit condition-code mask, with bit N in
     // big-endian order meaning "branch if CC=N"; operand 2 is the
     // target block and operand 3 is the flag operand.
-    //BR_CCMASK,
     BRCOND,
 
     // Selects between operand 0 and operand 1.  Operand 2 is the
@@ -72,18 +64,6 @@ namespace RISCVISD {
     // chosen over operand 1; it has the same form as BR_CCMASK.
     // Operand 3 is the flag operand.
     SELECT_CC,
-
-    // Evaluates to the gap between the stack pointer and the
-    // base of the dynamically-allocatable area.
-    ADJDYNALLOC,
-
-    // Wrappers around the ISD opcodes of the same name.  The output and
-    // first input operands are GR128s.  The trailing numbers are the
-    // widths of the second operand in bits.
-    UMUL_LOHI64,
-    SDIVREM64,
-    UDIVREM32,
-    UDIVREM64,
 
     FENCE,
 
@@ -107,18 +87,7 @@ namespace RISCVISD {
     ATOMIC_LOADW_MIN,
     ATOMIC_LOADW_MAX,
     ATOMIC_LOADW_UMIN,
-    ATOMIC_LOADW_UMAX,
-
-    // A wrapper around the inner loop of an ATOMIC_CMP_SWAP.
-    //
-    // Operand 0: the address of the containing 32-bit-aligned field
-    // Operand 1: the compare value, in the low bits of an i32
-    // Operand 2: the swap value, in the low bits of an i32
-    // Operand 3: how many bits to rotate the i32 left to bring the first
-    //            operand into the high bits
-    // Operand 4: the negative of operand 2, for rotating the other way
-    // Operand 5: the width of the field in bits (8 or 16)
-    ATOMIC_CMP_SWAPW
+    ATOMIC_LOADW_UMAX
   };
 }
 
@@ -131,7 +100,6 @@ public:
 
   // Override TargetLowering.
   virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
-    //return LHSTy.getSimpleVT();
     return LHSTy.getSizeInBits() <= 32 ? MVT::i32 : MVT::i64;
   }
   virtual EVT getSetCCResultType(EVT VT) const {
@@ -299,7 +267,6 @@ public:
 private:
 
   // Implement LowerOperation for individual opcodes.
-  //SDValue lowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerGlobalAddress(SDValue Op,
@@ -313,15 +280,11 @@ private:
   SDValue lowerVASTART(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerVAARG(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerDYNAMIC_STACKALLOC(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerUMUL_LOHI(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerSDIVREM(SDValue Op, SelectionDAG &DAG) const;
-  SDValue lowerUDIVREM(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerBITCAST(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerOR(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerATOMIC_LOAD(SDValue Op, SelectionDAG &DAG,
                            unsigned Opcode) const;
-  SDValue lowerATOMIC_CMP_SWAP(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSTACKSAVE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSTACKRESTORE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
@@ -329,23 +292,6 @@ private:
   // Implement EmitInstrWithCustomInserter for individual operation types.
   MachineBasicBlock *emitSelectCC(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
-  MachineBasicBlock *emitAtomicCmpSwap(MachineInstr *MI,
-                                        MachineBasicBlock *BB,
-                                        unsigned Size) const;
-  MachineBasicBlock *emitExt128(MachineInstr *MI,
-                                MachineBasicBlock *MBB,
-                                bool ClearEven, unsigned SubReg) const;
-  MachineBasicBlock *emitAtomicLoadBinary(MachineInstr *MI,
-                                          MachineBasicBlock *BB,
-                                          unsigned BinOpcode, unsigned BitSize,
-                                          bool Invert = false) const;
-  MachineBasicBlock *emitAtomicLoadMinMax(MachineInstr *MI,
-                                          MachineBasicBlock *MBB,
-                                          unsigned CompareOpcode,
-                                          unsigned KeepOldMask,
-                                          unsigned BitSize) const;
-  MachineBasicBlock *emitAtomicCmpSwapW(MachineInstr *MI,
-                                        MachineBasicBlock *BB) const;
 
   // copyByValArg - Copy argument registers which were used to pass a byval
   // argument to the stack. Create a stack frame object for the byval
