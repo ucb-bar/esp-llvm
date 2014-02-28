@@ -150,7 +150,6 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     MachineBasicBlock &MBB = *MI.getParent();
     DebugLoc DL = II->getDebugLoc();
     unsigned ADD = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::ADD64 : RISCV::ADD;
-    unsigned NewImm;
     unsigned Reg;
 
     TII.loadImmediate(MBB, II, &Reg, Offset);
@@ -158,7 +157,6 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       .addReg(Reg, RegState::Kill);
 
     FrameReg = Reg;
-    //TODO:understand what NewImm is used for in Mips code
     Offset = SignExtend64<12>(0);
     IsKill = true;
   }

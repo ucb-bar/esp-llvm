@@ -28,18 +28,6 @@
 
 using namespace llvm;
 
-// Classify VT as either 32 or 64 bit.
-static bool is32Bit(EVT VT) {
-  switch (VT.getSimpleVT().SimpleTy) {
-  case MVT::i32:
-    return true;
-  case MVT::i64:
-    return false;
-  default:
-    llvm_unreachable("Unsupported type");
-  }
-}
-
 static const uint16_t RV32IntRegs[8] = {
   RISCV::a0, RISCV::a1, RISCV::a2, RISCV::a3,
   RISCV::a4, RISCV::a5, RISCV::a6, RISCV::a7
@@ -127,10 +115,8 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // indirect jump.
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   //RISCV also does not have indirect branch so expand them
+  //TODO: don't we have one via JALR?
   setOperationAction(ISD::BRIND, MVT::Other, Expand);
-
-  //Expand build_pair i64 since we don't support i64
-  //setOperationAction(ISD::BUILD_PAIR, MVT::i64, Expand);
 
   //make BRCOND legal, its actually only legal for a subset of conds
   setOperationAction(ISD::BRCOND, MVT::Other, Legal);
@@ -407,12 +393,9 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   // structure, but VAEND is a no-op.
   setOperationAction(ISD::VASTART, MVT::Other, Custom);
   //we always write var args with word boundary so we have to customize this
-  //TODO: it seems like the default imp should store values that vaarg know how to get
   setOperationAction(ISD::VAARG  , MVT::Other, Custom);
   setOperationAction(ISD::VACOPY , MVT::Other, Expand);
   setOperationAction(ISD::VAEND  , MVT::Other, Expand);
-  //setOperationAction(ISD::VACOPY,  MVT::Other, Custom);
-  //setOperationAction(ISD::VAEND,   MVT::Other, Expand);
 
 
   // Compute derived properties from the register classes
@@ -614,15 +597,6 @@ addLiveIn(MachineFunction &MF, unsigned PReg, const TargetRegisterClass *RC)
   unsigned VReg = MF.getRegInfo().createVirtualRegister(RC);
   MF.getRegInfo().addLiveIn(PReg, VReg);
   return VReg;
-}
-
-//Return the next register that can be paired with this one to pass doble word values
-static unsigned getNextIntArgReg(unsigned Reg) {
-  assert((Reg == RISCV::a0) || (Reg == RISCV::a2) || (Reg == RISCV::a4) || (Reg == RISCV::a6)); 
-  return (Reg == RISCV::a0) ? RISCV::a1 :
-         (Reg == RISCV::a2) ? RISCV::a3 :
-         (Reg == RISCV::a4) ? RISCV::a5 :
-                              RISCV::a7;
 }
 
 //===----------------------------------------------------------------------===//
@@ -1236,7 +1210,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
 
   // Copy argument values to their designated locations.
-  //SmallVector<std::pair<unsigned, SDValue>, 9> RegsToPass;
   std::deque< std::pair<unsigned, SDValue> > RegsToPass;
   SmallVector<SDValue, 8> MemOpChains;
   SDValue StackPtr;
@@ -1272,10 +1245,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       // floats are passed as right-justified 8-byte values.
       if (!StackPtr.getNode())
         StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
-      unsigned Offset = /*RISCVMC::CallFrameSize +*/ VA.getLocMemOffset();
-      /*if (VA.getLocVT() == MVT::i32 || VA.getLocVT() == MVT::f32)
-        Offset += 4;
-        */
+      unsigned Offset = VA.getLocMemOffset();
       SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
                                     DAG.getIntPtrConstant(Offset));
 
@@ -1424,154 +1394,6 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
 
   return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other,
                      RetOps.data(), RetOps.size());
-}
-
-// CC is a comparison that will be implemented using an integer or
-// floating-point comparison.  Return the condition code mask for
-// a branch on true.  In the integer case, CCMASK_CMP_UO is set for
-// unsigned comparisons and clear for signed ones.  In the floating-point
-// case, CCMASK_CMP_UO has its normal mask meaning (unordered).
-static unsigned CCMaskForCondCode(ISD::CondCode CC) {
-#define CONV(X) \
-  case ISD::SET##X: return RISCV::CCMASK_CMP_##X; \
-  case ISD::SETO##X: return RISCV::CCMASK_CMP_##X; \
-  case ISD::SETU##X: return RISCV::CCMASK_CMP_UO | RISCV::CCMASK_CMP_##X
-
-  switch (CC) {
-  default:
-    llvm_unreachable("Invalid integer condition!");
-
-  CONV(EQ);
-  CONV(NE);
-  CONV(GT);
-  CONV(GE);
-  CONV(LT);
-  CONV(LE);
-
-  case ISD::SETO:  return RISCV::CCMASK_CMP_O;
-  case ISD::SETUO: return RISCV::CCMASK_CMP_UO;
-  }
-#undef CONV
-}
-
-// If a comparison described by IsUnsigned, CCMask, CmpOp0 and CmpOp1
-// is suitable for CLI(Y), CHHSI or CLHHSI, adjust the operands as necessary.
-static void adjustSubwordCmp(SelectionDAG &DAG, bool &IsUnsigned,
-                             SDValue &CmpOp0, SDValue &CmpOp1,
-                             unsigned &CCMask) {
-  // For us to make any changes, it must a comparison between a single-use
-  // load and a constant.
-  if (!CmpOp0.hasOneUse() ||
-      CmpOp0.getOpcode() != ISD::LOAD ||
-      CmpOp1.getOpcode() != ISD::Constant)
-    return;
-
-  // We must have an 8- or 16-bit load.
-  LoadSDNode *Load = cast<LoadSDNode>(CmpOp0);
-  unsigned NumBits = Load->getMemoryVT().getStoreSizeInBits();
-  if (NumBits != 8 && NumBits != 16)
-    return;
-
-  // The load must be an extending one and the constant must be within the
-  // range of the unextended value.
-  ConstantSDNode *Constant = cast<ConstantSDNode>(CmpOp1);
-  uint64_t Value = Constant->getZExtValue();
-  uint64_t Mask = (1 << NumBits) - 1;
-  if (Load->getExtensionType() == ISD::SEXTLOAD) {
-    int64_t SignedValue = Constant->getSExtValue();
-    if (uint64_t(SignedValue) + (1 << (NumBits - 1)) > Mask)
-      return;
-    // Unsigned comparison between two sign-extended values is equivalent
-    // to unsigned comparison between two zero-extended values.
-    if (IsUnsigned)
-      Value &= Mask;
-    else if (CCMask == RISCV::CCMASK_CMP_EQ ||
-             CCMask == RISCV::CCMASK_CMP_NE)
-      // Any choice of IsUnsigned is OK for equality comparisons.
-      // We could use either CHHSI or CLHHSI for 16-bit comparisons,
-      // but since we use CLHHSI for zero extensions, it seems better
-      // to be consistent and do the same here.
-      Value &= Mask, IsUnsigned = true;
-    else if (NumBits == 8) {
-      // Try to treat the comparison as unsigned, so that we can use CLI.
-      // Adjust CCMask and Value as necessary.
-      if (Value == 0 && CCMask == RISCV::CCMASK_CMP_LT)
-        // Test whether the high bit of the byte is set.
-        Value = 127, CCMask = RISCV::CCMASK_CMP_GT, IsUnsigned = true;
-      else if (SignedValue == -1 && CCMask == RISCV::CCMASK_CMP_GT)
-        // Test whether the high bit of the byte is clear.
-        Value = 128, CCMask = RISCV::CCMASK_CMP_LT, IsUnsigned = true;
-      else
-        // No instruction exists for this combination.
-        return;
-    }
-  } else if (Load->getExtensionType() == ISD::ZEXTLOAD) {
-    if (Value > Mask)
-      return;
-    // Signed comparison between two zero-extended values is equivalent
-    // to unsigned comparison.
-    IsUnsigned = true;
-  } else
-    return;
-
-  // Make sure that the first operand is an i32 of the right extension type.
-  ISD::LoadExtType ExtType = IsUnsigned ? ISD::ZEXTLOAD : ISD::SEXTLOAD;
-  if (CmpOp0.getValueType() != MVT::i32 ||
-      Load->getExtensionType() != ExtType)
-    CmpOp0 = DAG.getExtLoad(ExtType, Load->getDebugLoc(), MVT::i32,
-                            Load->getChain(), Load->getBasePtr(),
-                            Load->getPointerInfo(), Load->getMemoryVT(),
-                            Load->isVolatile(), Load->isNonTemporal(),
-                            Load->getAlignment());
-
-  // Make sure that the second operand is an i32 with the right value.
-  if (CmpOp1.getValueType() != MVT::i32 ||
-      Value != Constant->getZExtValue())
-    CmpOp1 = DAG.getConstant(Value, MVT::i32);
-}
-
-// Return true if a comparison described by CCMask, CmpOp0 and CmpOp1
-// is an equality comparison that is better implemented using unsigned
-// rather than signed comparison instructions.
-static bool preferUnsignedComparison(SelectionDAG &DAG, SDValue CmpOp0,
-                                     SDValue CmpOp1, unsigned CCMask) {
-  // The test must be for equality or inequality.
-  if (CCMask != RISCV::CCMASK_CMP_EQ && CCMask != RISCV::CCMASK_CMP_NE)
-    return false;
-
-  if (CmpOp1.getOpcode() == ISD::Constant) {
-    uint64_t Value = cast<ConstantSDNode>(CmpOp1)->getSExtValue();
-
-    // If we're comparing with memory, prefer unsigned comparisons for
-    // values that are in the unsigned 16-bit range but not the signed
-    // 16-bit range.  We want to use CLFHSI and CLGHSI.
-    if (CmpOp0.hasOneUse() &&
-        ISD::isNormalLoad(CmpOp0.getNode()) &&
-        (Value >= 32768 && Value < 65536))
-      return true;
-
-    // Use unsigned comparisons for values that are in the CLGFI range
-    // but not in the CGFI range.
-    if (CmpOp0.getValueType() == MVT::i64 && (Value >> 31) == 1)
-      return true;
-
-    return false;
-  }
-
-  // Prefer CL for zero-extended loads.
-  if (CmpOp1.getOpcode() == ISD::ZERO_EXTEND ||
-      ISD::isZEXTLoad(CmpOp1.getNode()))
-    return true;
-
-  // ...and for "in-register" zero extensions.
-  if (CmpOp1.getOpcode() == ISD::AND && CmpOp1.getValueType() == MVT::i64) {
-    SDValue Mask = CmpOp1.getOperand(1);
-    if (Mask.getOpcode() == ISD::Constant &&
-        cast<ConstantSDNode>(Mask)->getZExtValue() == 0xffffffff)
-      return true;
-  }
-
-  return false;
 }
 
 SDValue RISCVTargetLowering::
@@ -1761,50 +1583,6 @@ SDValue RISCVTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const{
                      std::min(PtrVT.getSizeInBits(), VT.getSizeInBits())/8);
 }
 
-SDValue RISCVTargetLowering::lowerUMUL_LOHI(SDValue Op,
-                                              SelectionDAG &DAG) const {
-  EVT VT = Op.getValueType();
-  DebugLoc DL = Op.getDebugLoc();
-  assert(!is32Bit(VT) && "Only support 64-bit UMUL_LOHI");
-
-  // UMUL_LOHI64 returns the low result in the odd register and the high
-  // result in the even register.  UMUL_LOHI is defined to return the
-  // low half first, so the results are in reverse order.
-  SDValue Ops[2];
-  return DAG.getMergeValues(Ops, 2, DL);
-}
-
-SDValue RISCVTargetLowering::lowerSDIVREM(SDValue Op,
-                                            SelectionDAG &DAG) const {
-  SDValue Op0 = Op.getOperand(0);
-  SDValue Op1 = Op.getOperand(1);
-  EVT VT = Op.getValueType();
-  DebugLoc DL = Op.getDebugLoc();
-
-  // We use DSGF for 32-bit division.
-  if (is32Bit(VT)) {
-    Op0 = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Op0);
-    Op1 = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i64, Op1);
-  }
-
-  // DSG(F) takes a 64-bit dividend, so the even register in the GR128
-  // input is "don't care".  The instruction returns the remainder in
-  // the even register and the quotient in the odd register.
-  SDValue Ops[2];
-  return DAG.getMergeValues(Ops, 2, DL);
-}
-
-SDValue RISCVTargetLowering::lowerUDIVREM(SDValue Op,
-                                            SelectionDAG &DAG) const {
-  DebugLoc DL = Op.getDebugLoc();
-
-  // DL(G) uses a double-width dividend, so we need to clear the even
-  // register in the GR128 input.  The instruction returns the remainder
-  // in the even register and the quotient in the odd register.
-  SDValue Ops[2];
-  return DAG.getMergeValues(Ops, 2, DL);
-}
-
 SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const {
   DebugLoc DL = Op.getDebugLoc();
   
@@ -1837,80 +1615,6 @@ SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) co
   return DAG.getNode(RISCVISD::FENCE, DL, MVT::Other,Op.getOperand(0),
                        DAG.getConstant(pred, Subtarget.isRV64() ? MVT::i64 : MVT::i32),
                        DAG.getConstant(succ, Subtarget.isRV64() ? MVT::i64 : MVT::i32));
-}
-
-// Op is an 8-, 16-bit or 32-bit ATOMIC_LOAD_* operation.  Lower the first
-// two into the fullword ATOMIC_LOADW_* operation given by Opcode.
-SDValue RISCVTargetLowering::lowerATOMIC_LOAD(SDValue Op,
-                                                SelectionDAG &DAG,
-                                                unsigned Opcode) const {
-  AtomicSDNode *Node = cast<AtomicSDNode>(Op.getNode());
-
-  // 32-bit operations need no code outside the main loop.
-  EVT NarrowVT = Node->getMemoryVT();
-  EVT WideVT = MVT::i32;
-  if (NarrowVT == WideVT)
-    return Op;
-
-  int64_t BitSize = NarrowVT.getSizeInBits();
-  SDValue ChainIn = Node->getChain();
-  SDValue Addr = Node->getBasePtr();
-  SDValue Src2 = Node->getVal();
-  MachineMemOperand *MMO = Node->getMemOperand();
-  DebugLoc DL = Node->getDebugLoc();
-  EVT PtrVT = Addr.getValueType();
-
-  // Convert atomic subtracts of constants into additions.
-  if (Opcode == RISCVISD::ATOMIC_LOADW_SUB)
-    if (ConstantSDNode *Const = dyn_cast<ConstantSDNode>(Src2)) {
-      Opcode = RISCVISD::ATOMIC_LOADW_ADD;
-      Src2 = DAG.getConstant(-Const->getSExtValue(), Src2.getValueType());
-    }
-
-  // Get the address of the containing word.
-  SDValue AlignedAddr = DAG.getNode(ISD::AND, DL, PtrVT, Addr,
-                                    DAG.getConstant(-4, PtrVT));
-
-  // Get the number of bits that the word must be rotated left in order
-  // to bring the field to the top bits of a GR32.
-  SDValue BitShift = DAG.getNode(ISD::SHL, DL, PtrVT, Addr,
-                                 DAG.getConstant(3, PtrVT));
-  BitShift = DAG.getNode(ISD::TRUNCATE, DL, WideVT, BitShift);
-
-  // Get the complementing shift amount, for rotating a field in the top
-  // bits back to its proper position.
-  SDValue NegBitShift = DAG.getNode(ISD::SUB, DL, WideVT,
-                                    DAG.getConstant(0, WideVT), BitShift);
-
-  // Extend the source operand to 32 bits and prepare it for the inner loop.
-  // ATOMIC_SWAPW uses RISBG to rotate the field left, but all other
-  // operations require the source to be shifted in advance.  (This shift
-  // can be folded if the source is constant.)  For AND and NAND, the lower
-  // bits must be set, while for other opcodes they should be left clear.
-  if (Opcode != RISCVISD::ATOMIC_SWAPW)
-    Src2 = DAG.getNode(ISD::SHL, DL, WideVT, Src2,
-                       DAG.getConstant(32 - BitSize, WideVT));
-  if (Opcode == RISCVISD::ATOMIC_LOADW_AND ||
-      Opcode == RISCVISD::ATOMIC_LOADW_NAND)
-    Src2 = DAG.getNode(ISD::OR, DL, WideVT, Src2,
-                       DAG.getConstant(uint32_t(-1) >> BitSize, WideVT));
-
-  // Construct the ATOMIC_LOADW_* node.
-  SDVTList VTList = DAG.getVTList(WideVT, MVT::Other);
-  SDValue Ops[] = { ChainIn, AlignedAddr, Src2, BitShift, NegBitShift,
-                    DAG.getConstant(BitSize, WideVT) };
-  SDValue AtomicOp = DAG.getMemIntrinsicNode(Opcode, DL, VTList, Ops,
-                                             array_lengthof(Ops),
-                                             NarrowVT, MMO);
-
-  // Rotate the result of the final CS so that the field is in the lower
-  // bits of a GR32, then truncate it.
-  SDValue ResultShift = DAG.getNode(ISD::ADD, DL, WideVT, BitShift,
-                                    DAG.getConstant(BitSize, WideVT));
-  SDValue Result = DAG.getNode(ISD::ROTL, DL, WideVT, AtomicOp, ResultShift);
-
-  SDValue RetOps[2] = { Result, AtomicOp.getValue(1) };
-  return DAG.getMergeValues(RetOps, 2, DL);
 }
 
 SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
@@ -1951,8 +1655,6 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
   switch (Op.getOpcode()) {
   case ISD::RETURNADDR:
     return lowerRETURNADDR(Op, DAG);
-  //case ISD::BR_CC:
-    //return lowerBR_CC(Op, DAG);
   case ISD::SELECT_CC:
     return lowerSELECT_CC(Op, DAG);
   case ISD::GlobalAddress:
@@ -1991,14 +1693,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(Hi);
     OPCODE(Lo);
     OPCODE(FENCE);
-    OPCODE(CMP);
-    OPCODE(UCMP);
     OPCODE(SELECT_CC);
-    OPCODE(ADJDYNALLOC);
-    OPCODE(SDIVREM64);
-    OPCODE(UDIVREM32);
-    OPCODE(UDIVREM64);
-    //OPCODE(ATOMIC_CMP_SWAPW);
   }
   return NULL;
 #undef OPCODE
@@ -2007,14 +1702,6 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
 //===----------------------------------------------------------------------===//
 // Custom insertion
 //===----------------------------------------------------------------------===//
-
-// Create a new basic block after MBB.
-static MachineBasicBlock *emitBlockAfter(MachineBasicBlock *MBB) {
-  MachineFunction &MF = *MBB->getParent();
-  MachineBasicBlock *NewMBB = MF.CreateMachineBasicBlock(MBB->getBasicBlock());
-  MF.insert(llvm::next(MachineFunction::iterator(MBB)), NewMBB);
-  return NewMBB;
-}
 
 MachineBasicBlock *RISCVTargetLowering::
 emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {

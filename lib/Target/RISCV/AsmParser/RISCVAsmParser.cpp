@@ -240,8 +240,8 @@ public:
   bool isS20Imm() const { return isImm(-2048, 2047); }
   bool isU32Imm() const { return isImm(0, (1LL << 32) - 1); }
   bool isS32Imm() const { return isImm(-(1LL << 31), (1LL << 31) - 1); }
-  bool isU64Imm() const { return isImm(0, (1LL << 64) - 1); }
-  bool isS64Imm() const { return isImm(-(1LL << 63), (1LL << 63) - 1); }
+  bool isU64Imm() const { return isImm(0, 18446744073709551615UL); }
+  bool isS64Imm() const { return isImm(-9223372036854775807LL,9223372036854775807LL); }
 };
 
 // Maps of asm register numbers to LLVM register numbers, with 0 indicating
