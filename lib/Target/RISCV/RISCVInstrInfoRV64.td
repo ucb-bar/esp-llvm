@@ -179,9 +179,12 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
               "bgeu\t$src2, $src1, $target", 
               [(brcond (i32 (setule GR64:$src1, GR64:$src2)), bb:$target)]>, Requires<[IsRV64]>;
 }
+
 //constant branches (e.g. br 1 $label or br 0 $label)
 def : Pat<(brcond GR64Bit:$cond, bb:$target),
           (BNE64 bb:$target, GR64Bit:$cond, zero_64)>;  
+
+def : Pat<(i64 0), (i64 zero_64)>;
 //Conditional moves
 // SELECT_CC_* - Used to implement the SELECT_CC DAG operation.  Expanded after
 // instruction selection into a branch sequence.
