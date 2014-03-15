@@ -178,6 +178,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 //constant branches (e.g. br 1 $label or br 0 $label)
 def : Pat<(brcond GR32Bit:$cond, bb:$target),
           (BNE bb:$target, GR32Bit:$cond, zero)>;  
+def : Pat<(i32 0), (i32 zero)>;
 //Conditional moves
 // SELECT_CC_* - Used to implement the SELECT_CC DAG operation.  Expanded after
 // instruction selection into a branch sequence.
