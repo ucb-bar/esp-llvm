@@ -1174,6 +1174,37 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   return Chain;
 }
 
+static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
+  EVT Ty = Op.getValueType();
+
+  if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
+    return DAG.getTargetGlobalAddress(N->getGlobal(), Op.getDebugLoc(), Ty, 0,
+                                      Flag);
+  if (ExternalSymbolSDNode *N = dyn_cast<ExternalSymbolSDNode>(Op))
+    return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flag);
+  if (BlockAddressSDNode *N = dyn_cast<BlockAddressSDNode>(Op))
+    return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, 0, Flag);
+  if (JumpTableSDNode *N = dyn_cast<JumpTableSDNode>(Op))
+    return DAG.getTargetJumpTable(N->getIndex(), Ty, Flag);
+  if (ConstantPoolSDNode *N = dyn_cast<ConstantPoolSDNode>(Op))
+    return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlignment(),
+                                     N->getOffset(), Flag);
+
+  llvm_unreachable("Unexpected node type.");
+  return SDValue();
+}
+
+
+static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
+  DebugLoc DL = Op.getDebugLoc();
+  EVT Ty = Op.getValueType();
+  SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
+  SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
+  SDValue ResHi = DAG.getNode(RISCVISD::Hi, DL, Ty, Hi);
+  SDValue ResLo = DAG.getNode(RISCVISD::Lo, DL, Ty, Lo);
+  return DAG.getNode(ISD::ADD, DL, Ty, ResHi, ResLo);
+}
+
 SDValue
 RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                  SmallVectorImpl<SDValue> &InVals) const {
@@ -1272,8 +1303,12 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Accept direct calls by converting symbolic call addresses to the
   // associated Target* opcodes.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
-    //Callee = DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, PtrVT, Callee);
+    if (TM.getRelocationModel() == Reloc::PIC_) {
+      //Currently this works with opencl PIC global address nodes
+      //TODO:determine if this works in general
+      Callee = getAddrNonPIC(Callee, DAG);
+    } else
+      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
   }
@@ -1424,37 +1459,6 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   // Return RA, which contains the return address. Mark it an implicit live-in.
   unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
   return DAG.getCopyFromReg(DAG.getEntryNode(), Op.getDebugLoc(), Reg, VT);
-}
-
-static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
-  EVT Ty = Op.getValueType();
-
-  if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
-    return DAG.getTargetGlobalAddress(N->getGlobal(), Op.getDebugLoc(), Ty, 0,
-                                      Flag);
-  if (ExternalSymbolSDNode *N = dyn_cast<ExternalSymbolSDNode>(Op))
-    return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flag);
-  if (BlockAddressSDNode *N = dyn_cast<BlockAddressSDNode>(Op))
-    return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, 0, Flag);
-  if (JumpTableSDNode *N = dyn_cast<JumpTableSDNode>(Op))
-    return DAG.getTargetJumpTable(N->getIndex(), Ty, Flag);
-  if (ConstantPoolSDNode *N = dyn_cast<ConstantPoolSDNode>(Op))
-    return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlignment(),
-                                     N->getOffset(), Flag);
-
-  llvm_unreachable("Unexpected node type.");
-  return SDValue();
-}
-
-
-static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
-  DebugLoc DL = Op.getDebugLoc();
-  EVT Ty = Op.getValueType();
-  SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
-  SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
-  SDValue ResHi = DAG.getNode(RISCVISD::Hi, DL, Ty, Hi);
-  SDValue ResLo = DAG.getNode(RISCVISD::Lo, DL, Ty, Lo);
-  return DAG.getNode(ISD::ADD, DL, Ty, ResHi, ResLo);
 }
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
