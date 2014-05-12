@@ -102,6 +102,14 @@ void RISCVInstPrinter::printJALRMemOperand(const MCInst *MI, int opNum,
      printOperand(MI, opNum+1, OS);
 }
 
+void RISCVInstPrinter::printBranchTarget(const MCInst *MI, int opNum, 
+                                         raw_ostream &OS) {
+    if(MI->getOperand(opNum).isImm()){
+      OS << ".+";//constant branch
+    }
+    printOperand(MI, opNum, OS);
+}
+
 void RISCVInstPrinter::printMemRegOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
      OS << "0"; //No offset for this ever

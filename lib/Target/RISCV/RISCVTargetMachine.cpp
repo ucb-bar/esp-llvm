@@ -58,11 +58,17 @@ public:
   }
 
   virtual bool addInstSelector();
+  virtual bool addPreEmitPass();
 };
 } // end anonymous namespace
 
 bool RISCVPassConfig::addInstSelector() {
   addPass(createRISCVISelDag(getRISCVTargetMachine(), getOptLevel()));
+  return false;
+}
+
+bool RISCVPassConfig::addPreEmitPass(){
+  addPass(createRISCVBranchSelectionPass());
   return false;
 }
 

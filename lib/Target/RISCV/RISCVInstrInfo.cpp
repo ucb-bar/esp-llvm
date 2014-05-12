@@ -72,6 +72,13 @@ void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
   }
 }
 
+unsigned RISCVInstrInfo::GetInstSizeInBytes(MachineInstr *I) const {
+  //Since we don't have variable length instructions this just looks at the subtarget
+  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
+  //TODO:check for C
+  return (STI.isRV64() || STI.isRV32()) ? 4 : 4;
+}
+
 bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
                                      MachineBasicBlock *&TBB,
                                      MachineBasicBlock *&FBB,
@@ -94,7 +101,8 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
 
     // A terminator that isn't a branch can't easily be handled by this
     // analysis.
-    unsigned ThisCond;
+    SmallVector<MachineOperand, 4> ThisCond;
+    ThisCond.push_back(MachineOperand::CreateImm(0));
     const MachineOperand *ThisTarget;
     if (!isBranch(I, ThisCond, ThisTarget))
       return true;
@@ -103,7 +111,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
     if (!ThisTarget->isMBB())
       return true;
 
-    if (ThisCond == RISCV::CCMASK_ANY) {
+    if (ThisCond[0].getImm() == RISCV::CCMASK_ANY) {
       // Handle unconditional branches.
       if (!AllowModify) {
         TBB = ThisTarget->getMBB();
@@ -137,7 +145,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       // FIXME: add X86-style branch swap
       FBB = TBB;
       TBB = ThisTarget->getMBB();
-      Cond.push_back(MachineOperand::CreateImm(ThisCond));
+      Cond.push_back(MachineOperand::CreateImm(ThisCond[0].getImm()));
       //push remaining operands
       for (unsigned int i=0; i<(I->getNumExplicitOperands()); i++)
         Cond.push_back(I->getOperand(i));
@@ -156,7 +164,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
 
     // If the conditions are the same, we can leave them alone.
     unsigned OldCond = Cond[0].getImm();
-    if (OldCond == ThisCond)
+    if (OldCond == ThisCond[0].getImm())
       continue;
 
     // FIXME: Try combining conditions like X86 does.
@@ -174,7 +182,8 @@ unsigned RISCVInstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
     --I;
     if (I->isDebugValue())
       continue;
-    unsigned Cond;
+    SmallVector<MachineOperand, 4> Cond;
+    Cond.push_back(MachineOperand::CreateImm(0));
     const MachineOperand *Target;
     if (!isBranch(I, Cond, Target))
       break;
@@ -194,6 +203,20 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                MachineBasicBlock *FBB,
                                const SmallVectorImpl<MachineOperand> &Cond,
                                DebugLoc DL) const {
+  //RISCV doesn't have any two way branches, can only have FBB if it is a fall through
+  if (FBB && !MBB.isLayoutSuccessor(FBB)) {
+    //Need to build two branches then
+    //one to branch to TBB on Cond
+    //and a second one immediately after to unconditionally jump to FBB
+    unsigned count = InsertBranchAtInst(MBB, MBB.end(), TBB, Cond, DL);
+    BuildMI(&MBB, DL, get(RISCV::J)).addMBB(FBB);
+    count++;
+    return count;
+  }
+  //This function inserts the branch at the end of the MBB
+  return InsertBranchAtInst(MBB, MBB.end(), TBB, Cond, DL);
+
+  /*
   // Shouldn't be a fall through.
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");
   assert(Cond.size() <= 4 &&
@@ -244,6 +267,123 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
     ++Count;
     llvm_unreachable("Can not insert two-way branch!");
   }
+  return Count;*/
+}
+unsigned
+RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, int64_t offset,
+                               const SmallVectorImpl<MachineOperand> &Cond,
+                               DebugLoc DL) const {
+  // Shouldn't be a fall through.
+  assert(&MBB && "InsertBranch must not be told to insert a fallthrough");
+  assert(Cond.size() <= 4 &&
+         "RISCV branch conditions have less than four components!");
+
+  if (Cond.empty() || Cond[0].getImm() == RISCV::CCMASK_ANY) {
+    // Unconditional branch
+    BuildMI(MBB, I, DL, get(RISCV::J)).addImm(offset);
+    return 1;
+  }
+
+  // Conditional branch.
+  unsigned Count = 0;
+  unsigned CC = Cond[0].getImm();
+  switch(CC) {
+    case RISCV::CCMASK_CMP_EQ:
+      BuildMI(MBB, I, DL, get(RISCV::BEQ)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_NE:
+      BuildMI(MBB, I, DL, get(RISCV::BNE)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LT:
+      BuildMI(MBB, I, DL, get(RISCV::BLT)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case (RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO):
+      BuildMI(MBB, I, DL, get(RISCV::BLTU)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_GE:
+      BuildMI(MBB, I, DL, get(RISCV::BGE)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
+      BuildMI(MBB, I, DL, get(RISCV::BGEU)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    //synth
+    case RISCV::CCMASK_CMP_GT:
+      BuildMI(MBB, I, DL, get(RISCV::BGT)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE:
+      BuildMI(MBB, I, DL, get(RISCV::BLE)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BGTU)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BLEU)).addImm(offset).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    default:
+      llvm_unreachable("Invalid branch condition code!");
+  }
+  ++Count;
+  return Count;
+}
+
+unsigned
+RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, MachineBasicBlock *TBB,
+                               const SmallVectorImpl<MachineOperand> &Cond,
+                               DebugLoc DL) const {
+  // Shouldn't be a fall through.
+  assert(TBB && "InsertBranch must not be told to insert a fallthrough");
+  assert(Cond.size() <= 4 &&
+         "RISCV branch conditions have less than four components!");
+
+  if (Cond.empty() || Cond[0].getImm() == RISCV::CCMASK_ANY) {
+    // Unconditional branch
+    BuildMI(MBB, I, DL, get(RISCV::J)).addMBB(TBB);
+    return 1;
+  }
+
+  // Conditional branch.
+  unsigned Count = 0;
+  unsigned CC = Cond[0].getImm();
+  switch(CC) {
+    case RISCV::CCMASK_CMP_EQ:
+      BuildMI(MBB, I, DL, get(RISCV::BEQ)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_NE:
+      BuildMI(MBB, I, DL, get(RISCV::BNE)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LT:
+      BuildMI(MBB, I, DL, get(RISCV::BLT)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case (RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO):
+      BuildMI(MBB, I, DL, get(RISCV::BLTU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_GE:
+      BuildMI(MBB, I, DL, get(RISCV::BGE)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
+      BuildMI(MBB, I, DL, get(RISCV::BGEU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    default:
+      llvm_unreachable("Invalid branch condition code!");
+  }
+  ++Count;
+
   return Count;
 }
 
@@ -405,7 +545,7 @@ ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
   }
 }
 
-bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
+bool RISCVInstrInfo::isBranch(const MachineInstr *MI, SmallVectorImpl<MachineOperand> &Cond,
                                 const MachineOperand *&Target) const {
   switch (MI->getOpcode()) {
   case RISCV::J:
@@ -414,59 +554,59 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, unsigned &Cond,
   case RISCV::JAL64:
   case RISCV::JALR:
   case RISCV::JALR64:
-    Cond = RISCV::CCMASK_ANY;
+    Cond[0].setImm(RISCV::CCMASK_ANY);
     Target = &MI->getOperand(0);
     return true;
   case RISCV::BEQ:
   case RISCV::BEQ64:
-    Cond = RISCV::CCMASK_CMP_EQ;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_EQ);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BNE:
   case RISCV::BNE64:
-    Cond = RISCV::CCMASK_CMP_NE;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_NE);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BLT:
   case RISCV::BLT64:
-    Cond = RISCV::CCMASK_CMP_LT;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_LT);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BLTU:
   case RISCV::BLTU64:
-    Cond = RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BGE:
   case RISCV::BGE64:
-    Cond = RISCV::CCMASK_CMP_GE;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_GE);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BGEU:
   case RISCV::BGEU64:
-    Cond = RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO);
+    Target = &MI->getOperand(0);
     return true;
 //synth
   case RISCV::BGT:
   case RISCV::BGT64:
-    Cond = RISCV::CCMASK_CMP_GT;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_GT);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BGTU:
   case RISCV::BGTU64:
-    Cond = RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BLE:
   case RISCV::BLE64:
-    Cond = RISCV::CCMASK_CMP_LE;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_LE);
+    Target = &MI->getOperand(0);
     return true;
   case RISCV::BLEU:
   case RISCV::BLEU64:
-    Cond = RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO;
-    Target = &MI->getOperand(2);
+    Cond[0].setImm(RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO);
+    Target = &MI->getOperand(0);
     return true;
  
 
