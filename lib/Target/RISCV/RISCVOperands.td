@@ -236,6 +236,7 @@ def jumptarget : Operand<OtherVT> {
 }
 
 def brtarget : Operand<OtherVT> {
+  let PrintMethod = "printBranchTarget";
   let EncoderMethod = "getBranchTargetEncoding";
 }
 

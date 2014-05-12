@@ -73,5 +73,6 @@ namespace llvm {
 
   FunctionPass *createRISCVISelDag(RISCVTargetMachine &TM,
                                      CodeGenOpt::Level OptLevel);
+  FunctionPass *createRISCVBranchSelectionPass();
 } // end namespace llvm;
 #endif

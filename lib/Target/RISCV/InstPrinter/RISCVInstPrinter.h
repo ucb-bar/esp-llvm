@@ -46,6 +46,7 @@ public:
 private:
   // Print various types of operand.
   void printOperand(const MCInst *MI, int OpNum, raw_ostream &O);
+  void printBranchTarget(const MCInst *MI, int OpNum, raw_ostream &O);
   void printBDAddrOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printBDXAddrOperand(const MCInst *MI, int OpNum, raw_ostream &O);
   void printS12ImmOperand(const MCInst *MI, int OpNum, raw_ostream &O);

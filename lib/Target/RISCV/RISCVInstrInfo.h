@@ -64,6 +64,7 @@ public:
   void adjustStackPtr(unsigned SP, int64_t Amount,
                                      MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator I) const;
+  unsigned GetInstSizeInBytes(MachineInstr *I) const;
   virtual bool AnalyzeBranch(MachineBasicBlock &MBB,
                              MachineBasicBlock *&TBB,
                              MachineBasicBlock *&FBB,
@@ -74,6 +75,14 @@ public:
                                 MachineBasicBlock *FBB,
                                 const SmallVectorImpl<MachineOperand> &Cond,
                                 DebugLoc DL) const LLVM_OVERRIDE;
+  virtual unsigned InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
+                                MachineBasicBlock *TBB,
+                                const SmallVectorImpl<MachineOperand> &Cond,
+                                DebugLoc DL) const;
+  virtual unsigned InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
+                                int64_t offset,
+                                const SmallVectorImpl<MachineOperand> &Cond,
+                                DebugLoc DL) const;
   virtual void copyPhysReg(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MBBI, DebugLoc DL,
                            unsigned DestReg, unsigned SrcReg,
@@ -104,7 +113,7 @@ public:
   // values on which the instruction will branch, and set Target
   // to the operand that contains the branch target.  This target
   // can be a register or a basic block.
-  bool isBranch(const MachineInstr *MI, unsigned &Cond,
+  bool isBranch(const MachineInstr *MI, SmallVectorImpl<MachineOperand> &Cond,
                 const MachineOperand *&Target) const;
 
   // Get the load and store opcodes for a given register class.
