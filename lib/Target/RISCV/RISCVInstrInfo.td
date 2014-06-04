@@ -243,6 +243,12 @@ def LI : InstRISCV<4, (outs GR32:$dst), (ins imm32:$imm), "li\t$dst, $imm",
   []>, Requires<[IsRV32]>{
     let isPseudo = 1;
 }
+
+def LA : InstRISCV<4, (outs GR32:$dst), (ins imm32:$label), "la\t$dst, $label",
+  []>, Requires<[IsRV32]>{
+    let isPseudo = 1;
+}
+
 def : Pat<(i32 imm32sx12:$imm), (LI imm32sx12:$imm)>, Requires<[IsRV32]>; 
 def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
@@ -250,6 +256,13 @@ def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobala
 //call
 def : Pat<(r_call (i32 texternalsym:$in)), (JAL texternalsym:$in)>, Requires<[IsRV32]>;
 def : Pat<(r_call (i32 tglobaladdr:$in)), (JAL tglobaladdr:$in)>, Requires<[IsRV32]>;
+//pcrel addr loading using LA
+def : Pat<(r_pcrel_wrapper tglobaladdr:$in), (LA tglobaladdr:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_pcrel_wrapper tblockaddress:$in), (LA tblockaddress:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_pcrel_wrapper tjumptable:$in), (LA tjumptable:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_pcrel_wrapper tconstpool:$in), (LA tconstpool:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_pcrel_wrapper tglobaltlsaddr:$in), (LA tglobaltlsaddr:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_pcrel_wrapper texternalsym:$in), (LA texternalsym:$in)>, Requires<[IsRV32]>;
 //global addr loading
 def : Pat<(RISCVHi tglobaladdr:$in), (LUI tglobaladdr:$in)>, Requires<[IsRV32]>;
 def : Pat<(RISCVHi tblockaddress:$in), (LUI tblockaddress:$in)>, Requires<[IsRV32]>;
