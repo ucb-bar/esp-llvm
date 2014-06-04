@@ -38,7 +38,7 @@ namespace RISCVISD {
     CALL,
 
     // Wraps a TargetGlobalAddress that should be loaded using PC-relative
-    // accesses (LARL).  Operand 0 is the address.
+    // accesses (AUIPC).  Operand 0 is the address.
     PCREL_WRAPPER,
 
     // Get the Higher 20 bits from a 32-bit immediate

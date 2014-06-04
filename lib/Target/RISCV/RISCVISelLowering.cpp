@@ -319,7 +319,7 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
       setOperationAction(ISD::FMUL, VT, Legal);
       setOperationAction(ISD::FDIV, VT, Legal);
       //TODO: once implemented in InstrInfo uncomment
-      //setOperationAction(ISD::FSQRT, VT, Legal);
+      setOperationAction(ISD::FSQRT, VT, Expand);
 
       // No special instructions for these.
       setOperationAction(ISD::FSIN, VT, Expand);
@@ -1205,6 +1205,12 @@ static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::ADD, DL, Ty, ResHi, ResLo);
 }
 
+static SDValue getAddrPIC(SDValue Op, SelectionDAG &DAG) {
+  DebugLoc DL = Op.getDebugLoc();
+  EVT Ty = Op.getValueType();
+  return DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, Ty, Op);
+}
+
 SDValue
 RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                  SmallVectorImpl<SDValue> &InVals) const {
@@ -1304,13 +1310,14 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // associated Target* opcodes.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     if (TM.getRelocationModel() == Reloc::PIC_) {
-      //Currently this works with opencl PIC global address nodes
-      //TODO:determine if this works in general
-      Callee = getAddrNonPIC(Callee, DAG);
+      Callee = getAddrPIC(Callee, DAG);
     } else
       Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
+    if (TM.getRelocationModel() == Reloc::PIC_) {
+      Callee = getAddrPIC(DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT), DAG);
+    } else
+      Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
   }
 
   // The first call operand is the chain and the second is the target address.
@@ -1469,7 +1476,11 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
       //%hi/%lo relocation
       return getAddrNonPIC(Op,DAG);
   }
-  llvm_unreachable("Can not handle PIC global addresses yet");
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Op)) {
+      Op = DAG.getTargetGlobalAddress(G->getGlobal(), Op->getDebugLoc(), getPointerTy());
+      return Op;
+  }
+  llvm_unreachable("invalid global addresses to lower");
 }
 
 SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
@@ -1540,8 +1551,11 @@ SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
     Result = DAG.getTargetConstantPool(CP->getConstVal(), PtrVT,
 				       CP->getAlignment(), CP->getOffset());
 
-  // Use LARL to load the address of the constant pool entry.
-  return getAddrNonPIC(Result, DAG);
+  Reloc::Model RM = TM.getRelocationModel();
+
+  if(RM != Reloc::PIC_)
+    return getAddrNonPIC(Result, DAG);
+  return getAddrPIC(Result, DAG);
 }
 
 SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,

@@ -240,7 +240,7 @@ def LUI64: InstU<0b0110111, (outs GR64:$dst), (ins imm64sxu20:$imm),
 
 def AUIPC64: InstU<0b0110111, (outs GR64:$dst), (ins pcimm64:$target),
                    "auipc\t$dst, $target",
-                   [(set GR64:$dst, (r_pcrel_wrapper tglobaladdr:$target))]>;
+                   [(set GR64:$dst, (r_pcrel_wrapper imm64:$target))]>;
 
 
 //psuedo load low imm instruction to print operands better
@@ -267,6 +267,11 @@ def LI64_32 : InstRISCV<4, (outs GR64:$dst), (ins imm32:$imm), "li\t$dst, $imm",
   []> {
     let isPseudo = 1;
 }
+
+def LA64 : InstRISCV<4, (outs GR64:$dst), (ins imm64:$label), "la\t$dst, $label",
+  []>, Requires<[IsRV64]>{
+    let isPseudo = 1;
+}
 //simple immediate loading
 //simple zext i32 to i64
 def : Pat<(i64 (zext GR32:$val)), (SUBREG_TO_REG (i64 0), GR32:$val, sub_32)>;
@@ -281,6 +286,13 @@ def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas fo
 //call
 def : Pat<(r_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
 def : Pat<(r_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
+//pcrel addr loading using LA
+def : Pat<(r_pcrel_wrapper tglobaladdr:$in), (LA64 tglobaladdr:$in)>, Requires<[IsRV64]>;
+def : Pat<(r_pcrel_wrapper tblockaddress:$in), (LA64 tblockaddress:$in)>, Requires<[IsRV64]>;
+def : Pat<(r_pcrel_wrapper tjumptable:$in), (LA64 tjumptable:$in)>, Requires<[IsRV64]>;
+def : Pat<(r_pcrel_wrapper tconstpool:$in), (LA64 tconstpool:$in)>, Requires<[IsRV64]>;
+def : Pat<(r_pcrel_wrapper tglobaltlsaddr:$in), (LA64 tglobaltlsaddr:$in)>, Requires<[IsRV64]>;
+def : Pat<(r_pcrel_wrapper texternalsym:$in), (LA64 texternalsym:$in)>, Requires<[IsRV64]>;
 //constpool
 //def : Pat<(r_pcrel_wrapper tconstpool:$in), (ADDI64 (LUI64 (RISCVHi tconstpool:$in)), (RISCVLo tconstpool:$in))>;
 //global addr loading
