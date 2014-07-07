@@ -94,10 +94,17 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
     if (I->isDebugValue())
       continue;
 
+    //Any VFetch Instruction makes us not want to change the branches
+    if(I->getOpcode() == RISCV::VFetch
+       || I->getOpcode() == RISCV::STOP
+       || I->getOpcode() == RISCV::FENCE)
+      return true;
+
     // Working from the bottom, when we see a non-terminator instruction, we're
     // done.
     if (!isUnpredicatedTerminator(I))
       break;
+
 
     // A terminator that isn't a branch can't easily be handled by this
     // analysis.
@@ -377,6 +384,23 @@ RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, Mach
       break;
     case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
       BuildMI(MBB, I, DL, get(RISCV::BGEU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    //synth
+    case RISCV::CCMASK_CMP_GT:
+      BuildMI(MBB, I, DL, get(RISCV::BGT)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE:
+      BuildMI(MBB, I, DL, get(RISCV::BLE)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BGTU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BLEU)).addMBB(TBB).addReg(Cond[2].getReg())
           .addReg(Cond[3].getReg());
       break;
     default:

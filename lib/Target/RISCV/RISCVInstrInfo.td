@@ -11,18 +11,20 @@
  * Predicates for Subtargets
  */
 
- def IsRV32 :    Predicate<"Subtarget.isRV32()">,
-                 AssemblerPredicate<"FeatureRV32">; 
- def IsRV64 :    Predicate<"Subtarget.isRV64()">,
-                 AssemblerPredicate<"FeatureRV64">; 
- def HasM   :    Predicate<"Subtarget.hasM()">,
-                 AssemblerPredicate<"FeatureM">; 
- def HasF   :    Predicate<"Subtarget.hasF()">,
-                 AssemblerPredicate<"FeatureF">; 
- def HasD   :    Predicate<"Subtarget.hasD()">,
-                 AssemblerPredicate<"FeatureD">; 
- def HasA   :    Predicate<"Subtarget.hasA()">,
-                 AssemblerPredicate<"FeatureA">; 
+ def IsRV32     :    Predicate<"Subtarget.isRV32()">,
+                     AssemblerPredicate<"FeatureRV32">; 
+ def IsRV64     :    Predicate<"Subtarget.isRV64()">,
+                     AssemblerPredicate<"FeatureRV64">; 
+ def HasM       :    Predicate<"Subtarget.hasM()">,
+                     AssemblerPredicate<"FeatureM">; 
+ def HasF       :    Predicate<"Subtarget.hasF()">,
+                     AssemblerPredicate<"FeatureF">; 
+ def HasD       :    Predicate<"Subtarget.hasD()">,
+                     AssemblerPredicate<"FeatureD">; 
+ def HasA       :    Predicate<"Subtarget.hasA()">,
+                     AssemblerPredicate<"FeatureA">; 
+ def HasXHwacha :    Predicate<"Subtarget.hasXHwacha()">,
+                     AssemblerPredicate<"FeatureXHwacha">; 
 
 /*******************
 *RISCV Instructions
@@ -348,4 +350,5 @@ include "RISCVInstrInfoM.td"
 include "RISCVInstrInfoF.td"
 include "RISCVInstrInfoA.td"
 include "RISCVInstrInfoD.td"
+include "RISCVInstrInfoXHwacha.td"
 

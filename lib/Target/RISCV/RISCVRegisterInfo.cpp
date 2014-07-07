@@ -69,19 +69,19 @@ RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
   const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
 
-  // zero is reserved so llvm doesn't store things there
+  // zero is reserved
   Reserved.set(RISCV::zero);
   Reserved.set(RISCV::zero_64);
   Reserved.set(RISCV::ra);
   Reserved.set(RISCV::ra_64);
 
-  if (TFI->hasFP(MF)) {
+  //if (TFI->hasFP(MF)) {
     // fp is the frame pointer.  Reserve all aliases.
     Reserved.set(RISCV::fp);
     Reserved.set(RISCV::s0);
     Reserved.set(RISCV::fp_64);
     Reserved.set(RISCV::s0_64);
-  }
+  //}
 
   // sp is the stack pointer.  Reserve all aliases.
   Reserved.set(RISCV::sp);

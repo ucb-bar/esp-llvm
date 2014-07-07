@@ -15,8 +15,10 @@
 #include "llvm/CodeGen/SelectionDAGISel.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include <stdio.h>
 
 using namespace llvm;
 
@@ -199,7 +201,6 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   //   (Opcode (Opcode Op0 UpperVal) LowerVal)
   SDNode *splitLargeImmediate(unsigned Opcode, SDNode *Node, SDValue Op0,
                               uint64_t UpperVal, uint64_t LowerVal);
-
 public:
   RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
     : SelectionDAGISel(TM, OptLevel),
@@ -228,7 +229,10 @@ public:
 bool RISCVDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
   bool ret = SelectionDAGISel::runOnMachineFunction(MF);
 
-  processFunctionAfterISel(MF);
+  if(Subtarget.hasXHwacha()){
+    //OpenCL -> vector fetch pass
+    processFunctionAfterISel(MF);
+  }
 
   return ret;
 }
@@ -429,11 +433,168 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
   return false;
 }
 
+//TODO:this pass should be done much more systematically. In its current
+//state it is an adhoc unfinished class project. Fixes pending
 void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
 
+  const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  MachineBasicBlock *prevBB;
+  MachineBasicBlock::iterator vecLength;
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
-       ++MFI)
-    for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
-      //replaceUsesWithZeroReg(MRI, *I);
+       ++MFI){
+    if(MFI->getName().startswith("pregion_for_entry")){
+        //we assume this is a parallel region defined by pocl
+        //TODO:use instruction metadata like "!llvm.loop.parallel"
+      MachineBasicBlock::iterator vfFallThrough;
+      for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
+        //We are going to move all the vector fetch instructions to the end of this function
+        if(I->isPHI()){
+          //If we are still looking for the first phi which selects the induction variable
+          //check if this phi reads the last conditional
+          MachineOperand *inductionVar;
+          if(I->getOperand(2).isMBB() && I->getOperand(2).getMBB() == MFI){
+            //Operand(1) holds the reg we are looking for in the last branch
+            inductionVar = &I->getOperand(1);
+            //and the other MBB is where we need to insert the VF
+            prevBB = I->getOperand(4).getMBB();
+          }else if(I->getOperand(4).isMBB() && I->getOperand(4).getMBB() == MFI){
+            //Operand(3) holds the reg we are looking for in the last branch
+            inductionVar = &I->getOperand(3);
+            //and the other MBB is where we need to insert the VF
+            prevBB = I->getOperand(2).getMBB();
+          }
+          MachineBasicBlock::iterator term = MFI->getFirstTerminator();
+          while(!term->isConditionalBranch() && !(term->getOperand(0).isMBB() && term->getOperand(0).getMBB() == MFI)) {
+
+            term++;
+          }
+          //term contains the exit condition of the loop
+          MachineOperand exitCond = term->getOperand(1).getReg() == inductionVar->getReg() ?
+                                term->getOperand(2) : term->getOperand(1);
+          MachineOperand condVar = term->getOperand(1).isReg() ?
+                                term->getOperand(1) : term->getOperand(2);
+
+          MachineBasicBlock::iterator defs = term;
+          while(defs->findRegisterDefOperandIdx(inductionVar->getReg())==-1){
+            if(defs->findRegisterDefOperandIdx(exitCond.getReg())!=-1){
+              //this instr defines the exit condition so we will pull it out
+              //to use as the vector length
+              vecLength = defs;
+            }
+            defs--;
+          }
+          //if we still haven't found the vecLength instr keep going
+          if(!vecLength){
+            vecLength = defs;
+            while(vecLength->findRegisterDefOperandIdx(exitCond.getReg())==-1){
+              vecLength--;
+            }
+          }
+          //We need to remove the instructions the def its two reg operands
+          //i.e. vecLength and defs
+          MFI->remove(vecLength);
+          MFI->remove(defs);
+
+          //Then we replace term with a stop instruction
+            //create stop instruction inserted before term
+          BuildMI(*I->getParent(), term, term->getDebugLoc(), TII->get(RISCV::STOP));
+          vfFallThrough = MFI->erase(term);
+
+          //Finally we need to have the fall through of this branch placed after the VF
+          //TODO:do above to deal with end of vf block
+
+          //After fixing the end we replace this phi with a utidx to a new VirtReg of type VR64
+          unsigned VReg = MRI.createVirtualRegister(MRI.getRegClass(I->getOperand(0).getReg()));
+          BuildMI(*I->getParent(), I, I->getDebugLoc(), TII->get(RISCV::UTIDX), VReg);
+
+          //We replace uses of the old VirtReg the Phi def'd with the new VirtReg
+          MF.getRegInfo().replaceRegWith(I->getOperand(0).getReg(), VReg);
+          MFI->erase(I);
+          break;
+        }
+      }
+      //After finding and dealing with the phi and branch we need to adjust the CFG
+      //and add the vcfg vsetvl and vmsv
+      //CFG should be updated last
+
+      //All these instructions are added in place of the original branch to this BB
+      //first we find that
+      MachineBasicBlock::iterator vfInsert = prevBB->getFirstTerminator();
+      //only serach for a terminator if there was one
+      if(vfInsert != prevBB->end()){
+        //all RISCV terminators have the BB as their first operand
+        while(vfInsert->getOperand(0).getMBB() != MFI){ vfInsert++; }
+      }
+      //First add vsetcfg #live ins,0 (its not just #live ins!)
+      //TODO:optimize this, maybe by custom emitting it so we can look at the postRA code
+      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::VSETCFG)).addImm(32).addImm(32);
+      //Next add vsetvl (term's non inductionVar operand)
+      prevBB->insert(vfInsert, vecLength);
+      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::VSETVL),
+          MRI.createVirtualRegister(
+            MRI.getRegClass(vecLength->getOperand(0).getReg())))
+        .addReg(vecLength->getOperand(0).getReg());
+      //Then put vmsv's from each live in to new VirtReg's and replace the liveins in this BB with their respective new VirtRegs
+      std::vector<unsigned> defs;
+      for(MachineBasicBlock::iterator liveins = MFI->begin(); liveins != MFI->end(); liveins++){
+        if(liveins->getNumOperands() > 0 && liveins->getOperand(0).isReg() && liveins->getOperand(0).isDef()){
+            defs.push_back(liveins->getOperand(0).getReg());
+        }
+        for(unsigned opIdx = 1; opIdx < liveins->getNumOperands(); opIdx++){
+          if(liveins->getOperand(opIdx).isReg() && liveins->getOperand(opIdx).isDef()){
+            defs.push_back(liveins->getOperand(opIdx).getReg());
+          }
+          if(liveins->getOperand(opIdx).isReg() && liveins->getOperand(opIdx).isUse()){
+            bool livein = true;
+            for(std::vector<unsigned>::iterator ds = defs.begin(); ds != defs.end(); ds++){
+              if(*ds == liveins->getOperand(opIdx).getReg()) livein = false;
+            }
+            if(livein){
+              const TargetRegisterClass *RC = MRI.getRegClass(liveins->getOperand(opIdx).getReg());
+              unsigned VReg = MRI.createVirtualRegister(RC);
+              BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RC == &RISCV::GR64BitRegClass ? RISCV::VMSV64 : RISCV::VMSV),
+                  VReg).addReg(liveins->getOperand(opIdx).getReg());
+              MachineRegisterInfo::use_iterator users = MRI.use_begin(liveins->getOperand(opIdx).getReg());
+              for(;users != MF.getRegInfo().use_end(); users++){
+                if(users->getParent() == MFI)
+                  users->substituteRegister(liveins->getOperand(opIdx).getReg(), VReg, 0, *MF.getTarget().getRegisterInfo());
+              }
+            }
+          }
+        }
+      }
+      //Next add VF to this BB (which now needs a label)
+      unsigned vfAddrReg = MRI.createVirtualRegister(&RISCV::GR64BitRegClass);
+      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::LUI64),vfAddrReg).addMBB(MFI, RISCVII::MO_ABS_HI);
+      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::VFetch)).addReg(vfAddrReg).addMBB(MFI, RISCVII::MO_ABS_LO);
+      
+      //create a basic block after the vfetch return
+      const BasicBlock *retBB = prevBB->getBasicBlock();//->splitBasicBlock(--vfInsert);
+      MachineBasicBlock *retMBB = MF.CreateMachineBasicBlock(retBB);
+      MachineFunction::iterator MFitr = prevBB;
+      MF.insert(++MFitr, retMBB);
+      //Put a fence after VF
+      BuildMI(retMBB, vfInsert->getDebugLoc(), TII->get(RISCV::FENCE)).addImm(15).addImm(15);
+      //Finally update the CFG by taking whatever was after term in this BB and appending it after the fence
+      retMBB->splice(retMBB->end(), MFI, vfFallThrough);
+
+
+      //Disallow rearrangement of MBBs by setting the hot path
+      //The BB containing the vf instr should be followed by the fence&ret BB not the vfectch block
+      prevBB->addSuccessor(retMBB, 100);
+      prevBB->addSuccessor(MFI, 1);
+
+      //The vfetch block is no longer a loop, and returns to the fence&ret BB
+      //infrequently so it is not moved after the vfetch block, the falltrhough
+      //BB is the hot path here
+      MFI->removeSuccessor(MFI);
+      MFI->removeSuccessor(vfFallThrough->getOperand(0).getMBB());
+      MFI->addSuccessor(retMBB, 1);
+      MFI->addSuccessor(vfFallThrough->getOperand(0).getMBB(),100);
+
+      //The fence&ret BB only goes to the fallthrough
+      retMBB->addSuccessor(vfFallThrough->getOperand(0).getMBB());
     }
+  }
 }
