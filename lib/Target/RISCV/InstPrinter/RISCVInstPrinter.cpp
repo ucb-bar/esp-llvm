@@ -97,7 +97,8 @@ void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum,
 
 void RISCVInstPrinter::printJALRMemOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
-     OS << getRegisterName(MI->getOperand(opNum).getReg());
+     //OS << getRegisterName(MI->getOperand(opNum).getReg());
+     printOperand(MI, opNum, OS);
      OS << ",";
      printOperand(MI, opNum+1, OS);
 }

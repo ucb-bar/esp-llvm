@@ -29,8 +29,8 @@ let mayStore = 1 in {
 
 //Vector fetch
 let isCodeGenOnly = 1 in {
-  let isCall = 1, isTerminator = 1, isBarrier = 1  in {
-    def VFetch : InstV< (outs), (ins mem64:$target), "vf\t$target", []>, Requires<[HasXHwacha]>;
+  let isCall = 1, isTerminator = 1, isBarrier = 1, isPseudo = 1  in {
+    def VFetch : InstV< (outs), (ins jalrmem64:$target), "vf\t$target", []>, Requires<[HasXHwacha]>;
   }
   let isReturn = 1, isTerminator = 1, isBarrier = 1 in {
     def STOP   : InstV<(outs), (ins), "stop",[]>,Requires<[HasXHwacha]>;

@@ -566,8 +566,8 @@ void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
       }
       //Next add VF to this BB (which now needs a label)
       unsigned vfAddrReg = MRI.createVirtualRegister(&RISCV::GR64BitRegClass);
-      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::LUI64),vfAddrReg).addMBB(MFI, RISCVII::MO_ABS_HI);
-      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::VFetch)).addReg(vfAddrReg).addMBB(MFI, RISCVII::MO_ABS_LO);
+      //BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::LUI64),vfAddrReg).addMBB(MFI, RISCVII::MO_ABS_HI);
+      BuildMI(*prevBB, vfInsert, vfInsert->getDebugLoc(), TII->get(RISCV::VFetch)).addMBB(MFI).addReg(vfAddrReg, RegState::Define);
       
       //create a basic block after the vfetch return
       const BasicBlock *retBB = prevBB->getBasicBlock();//->splitBasicBlock(--vfInsert);
