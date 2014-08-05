@@ -1,5 +1,4 @@
-Low Level Virtual Machine (LLVM)
-================================
+##Low Level Virtual Machine (LLVM)
 
 This directory and its subdirectories contain source code for the Low Level
 Virtual Machine, a toolkit for the construction of highly optimized compilers,
@@ -17,11 +16,11 @@ If you're writing a package for LLVM, see docs/Packaging.rst for our
 suggestions.
 
 
-RISC-V LLVM Support
-===================
-# Author  : Colin Schmidt (colins@eecs.berkeley.edu)
-# Date    : February 24, 2014
-# Version : (under version control)
+###RISC-V LLVM Support
+Author  : Colin Schmidt (colins@eecs.berkeley.edu)  
+Date    : February 24, 2014  
+Version : (under version control)  
+
 
 This repository contains a new target for LLVM RISC-V. It supports the latest
 version of the ISA 2.0. This backend currently only supports assembly generation
@@ -54,34 +53,32 @@ in any and all projects is encouraged.
 
 Feedback and suggestions are welcome.
 
-Installation
-============
+###Installation
 
 The LLVM RISCV backend is built just as the normal LLVM system.
 
-$ git clone -b RISCV git@github.com:ucb-bar/riscv-llvm.git
-$ git submodule update --init
-$ mkdir build
-$ cd build
-$ ../configure --prefix=/opt/riscv
-$ make
-$ make install
+	$ git clone -b RISCV git@github.com:ucb-bar/riscv-llvm.git
+	$ git submodule update --init
+	$ mkdir build
+	$ cd build
+	$ ../configure --prefix=/opt/riscv
+	$ make
+	$ make install
 
 Now if /opt/riscv is on your path you should be able to use clang and LLVM with
 RISC-V support.
 
-Use
-===
+###Use
 
 Using the llvm-riscv is fairly simple to build a full executable however you
 need riscv-gcc to do the assembling and linking. An example of compiling hello
 world:
 
-$ cat hello.c
-#include <stdio.h>
-int main() {
-    printf("Hello World!\n");
-}
-$ clang -target riscv -mriscv=RV64IAMFD -S hello.c -o hello.S
-$ riscv-gcc -o hello.riscv hello.S
+	$ cat hello.c
+	#include <stdio.h>
+	int main() {
+    	printf("Hello World!\n");
+	}
+	$ clang -target riscv -mriscv=RV64IAMFD -S hello.c -o hello.S
+	$ riscv-gcc -o hello.riscv hello.S
 
