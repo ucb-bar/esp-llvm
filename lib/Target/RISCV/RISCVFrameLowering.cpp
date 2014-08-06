@@ -237,6 +237,12 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MI,
                           const std::vector<CalleeSavedInfo> &CSI,
                           const TargetRegisterInfo *TRI) const {
+  //if we are in a vector fetch block we do not save or restore scalar registers
+  //TODO:extract this into a separate isBBVF() function
+  if(MBB.getFirstTerminator()->getOpcode() == RISCV::STOP){
+    return true;
+  }
+  //otherwise do the normal thing
   MachineFunction *MF = MBB.getParent();
   MachineBasicBlock *EntryBlock = MF->begin();
   const TargetInstrInfo &TII = *MF->getTarget().getInstrInfo();
@@ -260,6 +266,29 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                             CSI[i].getFrameIdx(), RC, TRI);
   }
 
+  return true;
+}
+
+bool RISCVFrameLowering::
+restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MI,
+                          const std::vector<CalleeSavedInfo> &CSI,
+                          const TargetRegisterInfo *TRI) const {
+  //if we are in a vector fetch block we do not save or restore scalar registers
+  //TODO:extract this into a separate isBBVF() function
+  if(MBB.getFirstTerminator()->getOpcode() == RISCV::STOP){
+    return true;
+  }
+  //otherwise do the normal thing
+  MachineFunction *MF = MBB.getParent();
+  const TargetInstrInfo &TII = *MF->getTarget().getInstrInfo();
+  for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
+    unsigned Reg = CSI[i].getReg();
+    const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
+    TII.loadRegFromStackSlot(MBB, MI, Reg, CSI[i].getFrameIdx(), RC, TRI);
+    assert(MI != MBB.begin() &&
+           "loadRegFromStackSlot didn't insert any code!");
+  }
   return true;
 }
 

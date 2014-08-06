@@ -437,6 +437,7 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
 //state it is an adhoc unfinished class project. Fixes pending
 void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
 
+  //MF.dump();
   const TargetInstrInfo *TII = MF.getTarget().getInstrInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
   MachineBasicBlock *prevBB;
@@ -595,6 +596,9 @@ void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
 
       //The fence&ret BB only goes to the fallthrough
       retMBB->addSuccessor(vfFallThrough->getOperand(0).getMBB());
+
+      //debug
+      //MF.dump();
     }
   }
 }
