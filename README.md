@@ -1,22 +1,25 @@
-##Low Level Virtual Machine (LLVM)
+Low Level Virtual Machine (LLVM)
+======================================================
 
 This directory and its subdirectories contain source code for the Low Level
 Virtual Machine, a toolkit for the construction of highly optimized compilers,
 optimizers, and runtime environments.
 
 LLVM is open source software. You may freely distribute it under the terms of
-the license agreement found in LICENSE.txt.
+the license agreement found in `LICENSE.txt`.
 
-Please see the documentation provided in docs/ for further
-assistance with LLVM, and in particular docs/GettingStarted.rst for getting
-started with LLVM and docs/README.txt for an overview of LLVM's
+Please see the documentation provided in `docs/` for further
+assistance with LLVM, and in particular `docs/GettingStarted.rst` for getting
+started with LLVM and `docs/README.txt` for an overview of LLVM's
 documentation setup.
 
-If you're writing a package for LLVM, see docs/Packaging.rst for our
+If you're writing a package for LLVM, see `docs/Packaging.rst` for our
 suggestions.
 
 
-###RISC-V LLVM Support
+RISC-V LLVM Support
+--------------------------------------------------------
+
 Author  : Colin Schmidt (colins@eecs.berkeley.edu)  
 Date    : February 24, 2014  
 Version : (under version control)  
@@ -28,19 +31,19 @@ and riscv-gcc must be used to assemble and link the executable.
 
 The backend is structured similarly to most other LLVM backends and tries to use 
 the tablegen format as much as possible. The description of the instructions
-are found in RISCVInstFormats.td, and RISCVInstrInfo*.td. The registers are 
-described in RISCVRegisterInfo.td and the calling convention is described in
-RISCVCallingConv.td.
+are found in `RISCVInstFormats.td`, and `RISCVInstrInfo*.td`. The registers are 
+described in `RISCVRegisterInfo.td` and the calling convention is described in
+`RISCVCallingConv.td`.
 
 The instructions are defined using the LLVM IR DAG format, and simple 
 instructions that use pre-existing LLVM IR operations should be very easy to
 add. The instructions are divided into separate files based on their extension,
-e.g. atomic operations are defined in RISCVInstInfoA.td. Instructions 
+e.g. atomic operations are defined in `RISCVInstInfoA.td`. Instructions 
 implemented with these patterns are simply matched against the programs LLVM IR
 DAG for selection. More complicated instructions can use C++ to perform custom
-lowering of the LLVM IR in RISCVISelLowering.cpp. Combining of multiple LLVM IR
+lowering of the LLVM IR in `RISCVISelLowering.cpp`. Combining of multiple LLVM IR
 nodes into single target instructions is also possible using C++ in
-the same file. In general RISCVISelLowering.cpp sets up the lowering based on
+the same file. In general `RISCVISelLowering.cpp` sets up the lowering based on
 the ISA and the specific subtargets features. 
 
 This backend does not include all features of a backend but is focused on 
@@ -53,7 +56,8 @@ in any and all projects is encouraged.
 
 Feedback and suggestions are welcome.
 
-###Installation
+Installation
+------------------------------------------------------------------
 
 The LLVM RISCV backend is built just as the normal LLVM system.
 
@@ -65,10 +69,11 @@ The LLVM RISCV backend is built just as the normal LLVM system.
 	$ make
 	$ make install
 
-Now if /opt/riscv is on your path you should be able to use clang and LLVM with
+Now if `/opt/riscv` is on your path you should be able to use clang and LLVM with
 RISC-V support.
 
-###Use
+Use
+--------------------------------------------------------------------
 
 Using the llvm-riscv is fairly simple to build a full executable however you
 need riscv-gcc to do the assembling and linking. An example of compiling hello
