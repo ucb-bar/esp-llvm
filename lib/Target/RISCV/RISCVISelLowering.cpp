@@ -1800,8 +1800,8 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
     //Do the actual phi using the virtual reg now
     BuildMI(*BB, BB->begin(), DL,
             TII->get(RISCV::PHI), MI->getOperand(0).getReg())
-      .addReg(MI->getOperand(3).getReg()).addMBB(copy0MBB)
-      .addReg(VReg).addMBB(thisMBB);
+      .addReg(MI->getOperand(3).getReg()).addMBB(thisMBB)
+      .addReg(VReg).addMBB(copy0MBB);
   }else if(MI->getOperand(3).getReg() == RISCV::zero ||
            MI->getOperand(3).getReg() == RISCV::zero_64){
     //Create a virtual register for zero and make a copy into it
