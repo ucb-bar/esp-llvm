@@ -221,6 +221,8 @@ void initializeProfileInfoAnalysisGroup(PassRegistry&);
 void initializePathProfileInfoAnalysisGroup(PassRegistry&);
 void initializePathProfileVerifierPass(PassRegistry&);
 void initializeProfileVerifierPassPass(PassRegistry&);
+void initializeProgramDependenceGraphPass(PassRegistry&);
+void initializeProgramDependenceGraphPrinterPass(PassRegistry&);
 void initializePromotePassPass(PassRegistry&);
 void initializePruneEHPass(PassRegistry&);
 void initializeReassociatePass(PassRegistry&);

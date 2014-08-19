@@ -116,7 +116,7 @@ cross-compile-build-tools:
 	  unset UNIVERSAL_SDK_PATH ; \
 	  $(PROJ_SRC_DIR)/configure --build=$(BUILD_TRIPLE) \
 		--host=$(BUILD_TRIPLE) --target=$(BUILD_TRIPLE) \
-	        --disable-polly ; \
+	        --disable-polly --disable-zlib --disable-threads --disable-pthreads ; \
 	  cd .. ; \
 	fi; \
 	($(MAKE) -C BuildTools \
@@ -132,6 +132,9 @@ cross-compile-build-tools:
 	  DISABLE_ASSERTIONS=$(DISABLE_ASSERTIONS) \
 	  ENABLE_EXPENSIVE_CHECKS=$(ENABLE_EXPENSIVE_CHECKS) \
 	  ENABLE_LIBCPP=$(ENABLE_LIBCPP) \
+    LLVM_ENABLE_THREADS=$(LLVM_ENABLE_THREADS) \
+    ENABLE_PTHREADS=$(ENABLE_PTHREADS) \
+    LLVM_ENABLE_ZLIB=$(LLVM_ENABLE_ZLIB) \
 	  CFLAGS= \
 	  CXXFLAGS= \
 	) || exit 1;
