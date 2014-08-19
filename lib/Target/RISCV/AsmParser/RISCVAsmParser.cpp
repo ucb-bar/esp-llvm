@@ -38,8 +38,6 @@ public:
     PairGR64Reg,
     PairGR128Reg,
     GR128Reg,
-    ADDR32Reg,
-    ADDR64Reg,
     FP32Reg,
     FP64Reg,
     PairFP64Reg,
@@ -51,7 +49,6 @@ private:
   enum OperandKind {
     KindToken,
     KindReg,
-    KindAccessReg,
     KindImm,
     KindMem
   };
@@ -72,7 +69,7 @@ private:
   };
 
   // Base + Disp + Index, where Base and Index are LLVM registers or 0.
-  // RegKind says what type the registers have (ADDR32Reg or ADDR64Reg).
+  // RegKind says what type the registers have
   struct MemOp {
     unsigned Base : 8;
     unsigned Index : 8;
@@ -84,7 +81,6 @@ private:
   union {
     TokenOp Token;
     RegOp Reg;
-    unsigned AccessReg;
     const MCExpr *Imm;
     MemOp Mem;
   };
@@ -116,12 +112,6 @@ public:
     RISCVOperand *Op = new RISCVOperand(KindReg, StartLoc, EndLoc);
     Op->Reg.Kind = Kind;
     Op->Reg.Num = Num;
-    return Op;
-  }
-  static RISCVOperand *createAccessReg(unsigned Num, SMLoc StartLoc,
-                                         SMLoc EndLoc) {
-    RISCVOperand *Op = new RISCVOperand(KindAccessReg, StartLoc, EndLoc);
-    Op->AccessReg = Num;
     return Op;
   }
   static RISCVOperand *createImm(const MCExpr *Expr, SMLoc StartLoc,
@@ -160,12 +150,6 @@ public:
   virtual unsigned getReg() const LLVM_OVERRIDE {
     assert(Kind == KindReg && "Not a register");
     return Reg.Num;
-  }
-
-  // Access register operands.  Access registers aren't exposed to LLVM
-  // as registers.
-  bool isAccessReg() const {
-    return Kind == KindAccessReg;
   }
 
   // Immediate operands.
@@ -207,11 +191,6 @@ public:
     assert(N == 1 && "Invalid number of operands");
     Inst.addOperand(MCOperand::CreateReg(getReg()));
   }
-  void addAccessRegOperands(MCInst &Inst, unsigned N) const {
-    assert(N == 1 && "Invalid number of operands");
-    assert(Kind == KindAccessReg && "Invalid operand type");
-    Inst.addOperand(MCOperand::CreateImm(AccessReg));
-  }
   void addImmOperands(MCInst &Inst, unsigned N) const {
     assert(N == 1 && "Invalid number of operands");
     addExpr(Inst, getImm());
@@ -225,9 +204,6 @@ public:
   bool isPairGR64() const { return isReg(PairGR64Reg); }
   bool isPairGR128() const { return isReg(PairGR128Reg); }
   bool isGR128() const { return isReg(GR128Reg); }
-  bool isADDR32() const { return isReg(ADDR32Reg); }
-  bool isADDR64() const { return isReg(ADDR64Reg); }
-  bool isADDR128() const { return false; }
   bool isFP32() const { return isReg(FP32Reg); }
   bool isFP64() const { return isReg(FP64Reg); }
   bool isPairFP64() const { return isReg(PairFP64Reg); }
@@ -379,33 +355,27 @@ public:
   // Used by the TableGen code to parse particular operand types.
   OperandMatchResultTy
   parseGR32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'r', GR32Regs, RISCVOperand::GR32Reg);
+    return parseRegister(Operands, 'x', GR32Regs, RISCVOperand::GR32Reg);
   }
 
   OperandMatchResultTy
   parseGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'r', GR64Regs, RISCVOperand::GR64Reg);
+    return parseRegister(Operands, 'x', GR64Regs, RISCVOperand::GR64Reg);
   }
 
   OperandMatchResultTy
   parsePairGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'r', PairGR64Regs, RISCVOperand::PairGR64Reg);
+    return parseRegister(Operands, 'x', PairGR64Regs, RISCVOperand::PairGR64Reg);
   }
 
   OperandMatchResultTy
   parsePairGR128(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'r', PairGR128Regs, RISCVOperand::PairGR128Reg);
+    return parseRegister(Operands, 'x', PairGR128Regs, RISCVOperand::PairGR128Reg);
   }
 
   OperandMatchResultTy
   parsePCReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
     return parseRegister(Operands, 'p', PCReg, RISCVOperand::PCReg);
-  }
-
-  OperandMatchResultTy
-  parseADDR32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'r', GR32Regs, RISCVOperand::ADDR32Reg,
-                         true);
   }
 
   OperandMatchResultTy
@@ -497,8 +467,6 @@ public:
     return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
   }
 
-  OperandMatchResultTy
-  parseAccessReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands);
 };
 }
 
@@ -575,7 +543,7 @@ RISCVAsmParser::parseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
 
 // Parse a memory operand and add it to Operands.  Regs maps asm register
 // numbers to LLVM address registers and RegKind says what kind of address
-// register we're using (ADDR32Reg or ADDR64Reg).  HasIndex says whether
+// register we're using (GR32Reg or GR64Reg).  HasIndex says whether
 // the address allows index registers.
 RISCVAsmParser::OperandMatchResultTy
 RISCVAsmParser::parseAddress(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
@@ -640,9 +608,9 @@ bool RISCVAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
   Register Reg;
   if (parseRegister(Reg))
     return Error(Reg.StartLoc, "register expected");
-  if (Reg.Prefix == 'x' && Reg.Number < 16)
+  if (Reg.Prefix == 'x' && Reg.Number < 32)
     RegNo = GR32Regs[Reg.Number];
-  else if (Reg.Prefix == 'f' && Reg.Number < 16)
+  else if (Reg.Prefix == 'f' && Reg.Number < 32)
     RegNo = FP32Regs[Reg.Number];
   else
     return Error(Reg.StartLoc, "invalid register");
@@ -762,20 +730,6 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   }
 
   llvm_unreachable("Unexpected match type");
-}
-
-RISCVAsmParser::OperandMatchResultTy RISCVAsmParser::
-parseAccessReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-  Register Reg;
-  if (parseRegister(Reg))
-    return MatchOperand_NoMatch;
-  if (Reg.Prefix != 'a' || Reg.Number > 15) {
-    Error(Reg.StartLoc, "invalid register");
-    return MatchOperand_ParseFail;
-  }
-  Operands.push_back(RISCVOperand::createAccessReg(Reg.Number,
-                                                     Reg.StartLoc, Reg.EndLoc));
-  return MatchOperand_Success;
 }
 
 // Force static initialization.
