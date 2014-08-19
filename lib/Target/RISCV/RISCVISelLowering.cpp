@@ -521,10 +521,6 @@ getRegForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
         return std::make_pair(0U, &RISCV::GR64BitRegClass);
       return std::make_pair(0U, &RISCV::GR32BitRegClass);
 
-    /*case 'a': // Address register
-      return std::make_pair(0U, &RISCV::ADDR32BitRegClass);
-      */
-
     case 'f': // Floating-point register
       if(Subtarget.hasD())
         return std::make_pair(0U, &RISCV::FP64BitRegClass);

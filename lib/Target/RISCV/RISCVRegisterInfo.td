@@ -114,10 +114,6 @@ defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
   t0, t1, t2, t3, t4, 
   gp), 1>;
 
-// Base and index registers.  Everything except R0, which in an address
-// context evaluates as 0.
-//defm ADDR32 : RISCVRegClass<"ADDR32", i32, 32, (sub GR32Bit, zero), 1>;
-
 //Pairs of int arg regs can be used to store double-pointer word args
 class PairGPR64<bits<16> num, string n, list<Register> subregs>
   : RISCVRegWithSubRegs<n, subregs> {
