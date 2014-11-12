@@ -213,7 +213,7 @@ public:
   bool isU12Imm() const { return isImm(0, 4096); }
   bool isS12Imm() const { return isImm(-2048, 2047); }
   bool isU20Imm() const { return isImm(0, 1048576); }
-  bool isS20Imm() const { return isImm(-2048, 2047); }
+  bool isS20Imm() const { return isImm(-524288, 524287); }
   bool isU32Imm() const { return isImm(0, (1LL << 32) - 1); }
   bool isS32Imm() const { return isImm(-(1LL << 31), (1LL << 31) - 1); }
   bool isU64Imm() const { return isImm(0, 18446744073709551615UL); }
