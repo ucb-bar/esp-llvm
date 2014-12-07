@@ -13,12 +13,12 @@ add_public_tablegen_target(RISCVCommonTableGen)
 add_llvm_target(RISCVCodeGen
   RISCVAsmPrinter.cpp
   RISCVBranchSelector.cpp
-  RISCVCallingConv.cpp
   RISCVConstantPoolValue.cpp
   RISCVFrameLowering.cpp
+  RISCVInstrInfo.cpp
   RISCVISelDAGToDAG.cpp
   RISCVISelLowering.cpp
-  RISCVInstrInfo.cpp
+  RISCVMachineFunctionInfo.cpp
   RISCVMCInstLower.cpp
   RISCVRegisterInfo.cpp
   RISCVSubtarget.cpp

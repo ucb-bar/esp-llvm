@@ -163,6 +163,7 @@ set(LLVM_ALL_TARGETS
   NVPTX
   PowerPC
   R600
+  RISCV
   Sparc
   SystemZ
   X86
