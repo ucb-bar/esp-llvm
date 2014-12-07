@@ -1,3 +1,5 @@
+; RUN: llc -march=riscv < %s
+
 define void @f1(i32 %a, i32 %b, i32 *%dest) {
   %slt = icmp slt i32 %a, %b
   %conv = zext i1 %slt to i32

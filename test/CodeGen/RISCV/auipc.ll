@@ -1,3 +1,5 @@
+; RUN: llc -march=riscv < %s
+
 @G = global i32 1
 
 define i32 @f1() {

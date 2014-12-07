@@ -1,3 +1,5 @@
+; RUN: llc -march=riscv < %s
+
 define i8* @f1() nounwind {
 entry:
   %0 = call i8* @llvm.returnaddress(i32 0)

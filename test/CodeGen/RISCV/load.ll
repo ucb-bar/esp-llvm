@@ -1,3 +1,5 @@
+; RUN: llc -march=riscv < %s
+
 define i32 @f1(i32* %p) {
 entry:
   %b = load i32* %p, align 4

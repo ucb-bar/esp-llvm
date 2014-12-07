@@ -1,3 +1,5 @@
+; RUN: llc -march=riscv < %s
+
 define i32 @addi(i32 %a) {
   %result     = add  i32 %a, 100
   ret i32 %result
