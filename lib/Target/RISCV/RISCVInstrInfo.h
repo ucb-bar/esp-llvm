@@ -46,64 +46,58 @@ namespace RISCVII {
   };
 }
 
+class RISCVSubtarget;
 class RISCVInstrInfo : public RISCVGenInstrInfo {
   const RISCVRegisterInfo RI;
-  const RISCVTargetMachine &TM;
+  RISCVSubtarget &STI;
 
   void splitMove(MachineBasicBlock::iterator MI, unsigned NewOpcode) const;
   void splitAdjDynAlloc(MachineBasicBlock::iterator MI) const;
 
 public:
-  explicit RISCVInstrInfo(RISCVTargetMachine &TM);
+  explicit RISCVInstrInfo(RISCVSubtarget &STI);
 
   // Override TargetInstrInfo.
-  virtual unsigned isLoadFromStackSlot(const MachineInstr *MI,
-                                       int &FrameIndex) const LLVM_OVERRIDE;
-  virtual unsigned isStoreToStackSlot(const MachineInstr *MI,
-                                      int &FrameIndex) const LLVM_OVERRIDE;
+  unsigned isLoadFromStackSlot(const MachineInstr *MI,
+                               int &FrameIndex) const override;
+  unsigned isStoreToStackSlot(const MachineInstr *MI,
+                              int &FrameIndex) const override;
   void adjustStackPtr(unsigned SP, int64_t Amount,
                                      MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator I) const;
   unsigned GetInstSizeInBytes(MachineInstr *I) const;
-  virtual bool AnalyzeBranch(MachineBasicBlock &MBB,
-                             MachineBasicBlock *&TBB,
-                             MachineBasicBlock *&FBB,
-                             SmallVectorImpl<MachineOperand> &Cond,
-                             bool AllowModify) const LLVM_OVERRIDE;
-  virtual unsigned RemoveBranch(MachineBasicBlock &MBB) const LLVM_OVERRIDE;
-  virtual unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
-                                MachineBasicBlock *FBB,
-                                const SmallVectorImpl<MachineOperand> &Cond,
-                                DebugLoc DL) const LLVM_OVERRIDE;
-  virtual unsigned InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
-                                MachineBasicBlock *TBB,
-                                const SmallVectorImpl<MachineOperand> &Cond,
-                                DebugLoc DL) const;
-  virtual unsigned InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
-                                int64_t offset,
-                                const SmallVectorImpl<MachineOperand> &Cond,
-                                DebugLoc DL) const;
-  virtual void copyPhysReg(MachineBasicBlock &MBB,
-                           MachineBasicBlock::iterator MBBI, DebugLoc DL,
-                           unsigned DestReg, unsigned SrcReg,
-                           bool KillSrc) const LLVM_OVERRIDE;
-  virtual void
-    storeRegToStackSlot(MachineBasicBlock &MBB,
-                        MachineBasicBlock::iterator MBBI,
-                        unsigned SrcReg, bool isKill, int FrameIndex,
-                        const TargetRegisterClass *RC,
-                        const TargetRegisterInfo *TRI) const LLVM_OVERRIDE;
-  virtual void
-    loadRegFromStackSlot(MachineBasicBlock &MBB,
-                         MachineBasicBlock::iterator MBBI,
-                         unsigned DestReg, int FrameIdx,
-                         const TargetRegisterClass *RC,
-                         const TargetRegisterInfo *TRI) const LLVM_OVERRIDE;
-  virtual bool
-    expandPostRAPseudo(MachineBasicBlock::iterator MBBI) const LLVM_OVERRIDE;
-  virtual bool
-    ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const
-    LLVM_OVERRIDE;
+  bool AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+                     MachineBasicBlock *&FBB,
+                     SmallVectorImpl<MachineOperand> &Cond,
+                     bool AllowModify) const override;
+  unsigned RemoveBranch(MachineBasicBlock &MBB) const override;
+  unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+                        MachineBasicBlock *FBB,
+                        const SmallVectorImpl<MachineOperand> &Cond,
+                        DebugLoc DL) const override;
+  unsigned InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
+                              MachineBasicBlock *TBB,
+                              const SmallVectorImpl<MachineOperand> &Cond,
+                              DebugLoc DL) const;
+  unsigned InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
+                                   int64_t offset,
+                                   const SmallVectorImpl<MachineOperand> &Cond,
+                                   DebugLoc DL) const;
+  void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+                   DebugLoc DL, unsigned DestReg, unsigned SrcReg,
+                   bool KillSrc) const override;
+  void storeRegToStackSlot(MachineBasicBlock &MBB,
+                           MachineBasicBlock::iterator MBBI, unsigned SrcReg,
+                           bool isKill, int FrameIndex,
+                           const TargetRegisterClass *RC,
+                           const TargetRegisterInfo *TRI) const override;
+  void loadRegFromStackSlot(MachineBasicBlock &MBB,
+                            MachineBasicBlock::iterator MBBI, unsigned DestReg,
+                            int FrameIdx, const TargetRegisterClass *RC,
+                            const TargetRegisterInfo *TRI) const override;
+  bool expandPostRAPseudo(MachineBasicBlock::iterator MBBI) const override;
+  bool
+  ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 
   // Return the RISCVRegisterInfo, which this class owns.
   const RISCVRegisterInfo &getRegisterInfo() const { return RI; }

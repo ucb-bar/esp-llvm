@@ -1435,8 +1435,8 @@ Optional Features:
   --enable-targets        Build specific host targets: all or
                           target1,target2,... Valid targets are: host, x86,
                           x86_64, sparc, powerpc, arm64, arm, aarch64, mips,
-                          hexagon, xcore, msp430, nvptx, systemz, r600, riscv,
-                          and cpp (default=all)
+                          hexagon, xcore, msp430, nvptx, systemz, r600, and
+                          cpp (default=all)
   --enable-experimental-targets
                           Build experimental host targets: disable or
                           target1,target2,... (default=disable)
@@ -4144,6 +4144,7 @@ else
   hexagon-*)              llvm_cv_target_arch="Hexagon" ;;
   nvptx-*)                llvm_cv_target_arch="NVPTX" ;;
   s390x-*)                llvm_cv_target_arch="SystemZ" ;;
+  riscv-*)                llvm_cv_target_arch="RISCV" ;;
   *)                      llvm_cv_target_arch="Unknown" ;;
 esac
 fi
@@ -4180,6 +4181,7 @@ case $host in
   msp430-*)               host_arch="MSP430" ;;
   hexagon-*)              host_arch="Hexagon" ;;
   s390x-*)                host_arch="SystemZ" ;;
+  riscv-*)                host_arch="RISCV" ;;
   *)                      host_arch="Unknown" ;;
 esac
 
@@ -5066,6 +5068,8 @@ else
     NVPTX)       TARGET_HAS_JIT=0
  ;;
     SystemZ)     TARGET_HAS_JIT=1
+ ;;
+    RISCV)       TARGET_HAS_JIT=0
  ;;
     *)           TARGET_HAS_JIT=0
  ;;
@@ -18459,7 +18463,7 @@ ac_config_files="$ac_config_files docs/doxygen.cfg"
 if test "${clang_src_root}" = ""; then
   clang_src_root="$srcdir/tools/clang"
 fi
-if test -f ${clang_src_root}/README.txt; then
+if test -f ${clang_src_root}/README.md; then
     configh="include/clang/Config/config.h"
   doxy="docs/doxygen.cfg"
   ac_config_headers="$ac_config_headers tools/clang/${configh}:${clang_src_root}/${configh}.in"

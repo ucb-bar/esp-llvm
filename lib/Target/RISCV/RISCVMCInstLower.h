@@ -20,17 +20,14 @@ class MCOperand;
 class MCSymbol;
 class MachineInstr;
 class MachineOperand;
-class Mangler;
 class RISCVAsmPrinter;
 
 class LLVM_LIBRARY_VISIBILITY RISCVMCInstLower {
-  Mangler *Mang;
   MCContext &Ctx;
   RISCVAsmPrinter &AsmPrinter;
 
 public:
-  RISCVMCInstLower(Mangler *mang, MCContext &ctx,
-                     RISCVAsmPrinter &asmPrinter);
+  RISCVMCInstLower(MCContext &ctx, RISCVAsmPrinter &asmPrinter);
 
   // Lower MachineInstr MI to MCInst OutMI.
   void lower(const MachineInstr *MI, MCInst &OutMI) const;

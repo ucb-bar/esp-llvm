@@ -16,15 +16,15 @@
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 
-#define GET_INSTRINFO_CTOR
+#define GET_INSTRINFO_CTOR_DTOR
 #define GET_INSTRMAP_INFO
 #include "RISCVGenInstrInfo.inc"
 
 using namespace llvm;
 
-RISCVInstrInfo::RISCVInstrInfo(RISCVTargetMachine &tm)
+RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &sti)
   : RISCVGenInstrInfo(RISCV::ADJCALLSTACKDOWN, RISCV::ADJCALLSTACKUP),
-    RI(tm, *this), TM(tm) {
+    RI(sti), STI(sti) {
 }
 
 // If MI is a simple load or store for a frame object, return the register
@@ -58,7 +58,6 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
 void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
                                      MachineBasicBlock &MBB,
                                      MachineBasicBlock::iterator I) const {
-  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
   unsigned ADD =  STI.isRV64() ? RISCV::ADD64 : RISCV::ADD;
   unsigned ADDI = STI.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
@@ -74,7 +73,6 @@ void RISCVInstrInfo::adjustStackPtr(unsigned SP, int64_t Amount,
 
 unsigned RISCVInstrInfo::GetInstSizeInBytes(MachineInstr *I) const {
   //Since we don't have variable length instructions this just looks at the subtarget
-  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   //TODO:check for C
   return (STI.isRV64() || STI.isRV32()) ? 4 : 4;
 }
@@ -119,8 +117,8 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
       }
 
       // If the block has any instructions after a JMP, delete them.
-      while (llvm::next(I) != MBB.end())
-        llvm::next(I)->eraseFromParent();
+      while (std::next(I) != MBB.end())
+        std::next(I)->eraseFromParent();
 
       Cond.clear();
       FBB = 0;
@@ -394,7 +392,6 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
 			      bool KillSrc) const {
 
   unsigned Opcode;
-  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   //when we are copying a phys reg we want the bits for fp
   if (RISCV::GR32BitRegClass.contains(DestReg, SrcReg))
     Opcode = STI.isRV64() ? RISCV::ADDIW : RISCV::ADDI;
@@ -619,7 +616,6 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, SmallVectorImpl<MachineOpe
 void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
                                            unsigned &LoadOpcode,
                                            unsigned &StoreOpcode) const {
-  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   if (RC == &RISCV::GR32BitRegClass ){
     LoadOpcode = STI.isRV64() ? RISCV::LW64 : RISCV::LW;
     StoreOpcode = STI.isRV64() ? RISCV::SW64 : RISCV::SW;
@@ -654,7 +650,6 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   unsigned Opcode;
   MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
-  const RISCVSubtarget &STI = TM.getSubtarget<RISCVSubtarget>();
   const TargetRegisterClass *RC = STI.isRV64() ?
     &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;

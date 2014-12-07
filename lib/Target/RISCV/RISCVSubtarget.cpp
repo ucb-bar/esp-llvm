@@ -12,17 +12,16 @@
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/Debug.h"
 
+#define DEBUG_TYPE "riscv-subtarget"
+
 #define GET_SUBTARGETINFO_TARGET_DESC
 #define GET_SUBTARGETINFO_CTOR
 #include "RISCVGenSubtargetInfo.inc"
 
 using namespace llvm;
 
-RISCVSubtarget::RISCVSubtarget(const std::string &TT,
-                                   const std::string &CPU,
-                                   const std::string &FS)
-  : RISCVGenSubtargetInfo(TT, CPU, FS), TargetTriple(TT),
-    RISCVArchVersion(RV32), HasM(false), HasA(false), HasF(false), HasD(false){
+RISCVSubtarget &RISCVSubtarget::initializeSubtargetDependencies(StringRef CPU,
+                                                                StringRef FS) {
   std::string CPUName = CPU;
   if (CPUName.empty()){
     //TODO:generate cpu name?
@@ -31,7 +30,21 @@ RISCVSubtarget::RISCVSubtarget(const std::string &TT,
 
   // Parse features string.
   ParseSubtargetFeatures(CPUName, FS);
+  return *this;
 }
+
+static std::string computeDataLayout(const RISCVSubtarget &ST) {
+  std::string Ret =
+      ST.isRV64() ? "e-m:e-n32:64-S128" : "e-m:e-p:32:32-n32-S128";
+  return Ret;
+}
+
+RISCVSubtarget::RISCVSubtarget(const std::string &TT, const std::string &CPU,
+                               const std::string &FS, const TargetMachine &TM)
+    : RISCVGenSubtargetInfo(TT, CPU, FS), RISCVArchVersion(RV32), HasM(false),
+      HasA(false), HasF(false), HasD(false), TargetTriple(TT),
+      DL(computeDataLayout(initializeSubtargetDependencies(CPU, FS))),
+      InstrInfo(*this), TLInfo(TM), TSInfo(&DL), FrameLowering() {}
 
 // Return true if GV binds locally under reloc model RM.
 static bool bindsLocally(const GlobalValue *GV, Reloc::Model RM) {

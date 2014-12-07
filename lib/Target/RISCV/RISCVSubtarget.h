@@ -14,7 +14,14 @@
 #ifndef RISCVSUBTARGET_H
 #define RISCVSUBTARGET_H
 
+#include "RISCVFrameLowering.h"
+#include "RISCVISelLowering.h"
+#include "RISCVInstrInfo.h"
+#include "RISCVRegisterInfo.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/Target/TargetSelectionDAGInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
@@ -26,9 +33,6 @@ class GlobalValue;
 class StringRef;
 
 class RISCVSubtarget : public RISCVGenSubtargetInfo {
-private:
-  Triple TargetTriple;
-
 protected:
   enum RISCVArchEnum {
     RV32,
@@ -42,9 +46,28 @@ protected:
   bool HasF;
   bool HasD;
 
+private:
+  Triple TargetTriple;
+  const DataLayout DL;
+  RISCVInstrInfo InstrInfo;
+  RISCVTargetLowering TLInfo;
+  TargetSelectionDAGInfo TSInfo;
+  RISCVFrameLowering FrameLowering;
+
+  RISCVSubtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
+
 public:
   RISCVSubtarget(const std::string &TT, const std::string &CPU,
-                   const std::string &FS);
+                 const std::string &FS, const TargetMachine &TM);
+
+  const TargetFrameLowering *getFrameLowering() const { return &FrameLowering; }
+  const RISCVInstrInfo *getInstrInfo() const { return &InstrInfo; }
+  const DataLayout *getDataLayout() const { return &DL; }
+  const RISCVRegisterInfo *getRegisterInfo() const {
+    return &InstrInfo.getRegisterInfo();
+  }
+  const RISCVTargetLowering *getTargetLowering() const { return &TLInfo; }
+  const TargetSelectionDAGInfo *getSelectionDAGInfo() const { return &TSInfo; }
 
   bool isRV32() const { return RISCVArchVersion == RV32; };
   bool isRV64() const { return RISCVArchVersion == RV64; };

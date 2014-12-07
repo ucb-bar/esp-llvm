@@ -27,11 +27,13 @@
 
 using namespace llvm;
 
-static MCAsmInfo *createRISCVMCAsmInfo(const Target &T, StringRef TT) {
-  MCAsmInfo *MAI = new RISCVMCAsmInfo(T, TT);
-  MachineLocation FPDst(MachineLocation::VirtualFP);
-  MachineLocation FPSrc(RISCV::sp, -RISCVMC::CFAOffsetFromInitialSP);
-  MAI->addInitialFrameState(0, FPDst, FPSrc);
+static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
+                                       StringRef TT) {
+  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
+  MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(
+      nullptr, MRI.getDwarfRegNum(RISCV::sp, true),
+      RISCVMC::CFAOffsetFromInitialSP);
+  MAI->addInitialFrameState(Inst);
   return MAI;
 }
 
@@ -111,13 +113,11 @@ static MCInstPrinter *createRISCVMCInstPrinter(const Target &T,
   return new RISCVInstPrinter(MAI, MII, MRI);
 }
 
-static MCStreamer *createRISCVMCObjectStreamer(const Target &T, StringRef TT,
-                                                 MCContext &Ctx,
-                                                 MCAsmBackend &MAB,
-                                                 raw_ostream &OS,
-                                                 MCCodeEmitter *Emitter,
-                                                 bool RelaxAll,
-                                                 bool NoExecStack) {
+static MCStreamer *
+createRISCVMCObjectStreamer(const Target &T, StringRef TT, MCContext &Ctx,
+                            MCAsmBackend &MAB, raw_ostream &OS,
+                            MCCodeEmitter *Emitter, const MCSubtargetInfo &STI,
+                            bool RelaxAll, bool NoExecStack) {
   return createELFStreamer(Ctx, MAB, OS, Emitter, RelaxAll, NoExecStack);
 }
 

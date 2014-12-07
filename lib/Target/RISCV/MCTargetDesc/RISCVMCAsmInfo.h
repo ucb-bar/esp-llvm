@@ -14,16 +14,14 @@
 #include "llvm/Support/Compiler.h"
 
 namespace llvm {
-class Target;
 class StringRef;
 
 class RISCVMCAsmInfo : public MCAsmInfo {
 public:
-  explicit RISCVMCAsmInfo(const Target &T, StringRef TT);
+  explicit RISCVMCAsmInfo(StringRef TT);
 
   // Override MCAsmInfo;
-  virtual const MCSection *getNonexecutableStackSection(MCContext &Ctx) const
-    LLVM_OVERRIDE;
+  const MCSection *getNonexecutableStackSection(MCContext &Ctx) const override;
 };
 
 } // namespace llvm

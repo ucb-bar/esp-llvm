@@ -41,8 +41,9 @@ MCCodeEmitter *createRISCVMCCodeEmitter(const MCInstrInfo &MCII,
                                           const MCSubtargetInfo &STI,
                                           MCContext &Ctx);
 
-MCAsmBackend *createRISCVMCAsmBackend(const Target &T, StringRef TT,
-                                        StringRef CPU);
+MCAsmBackend *createRISCVMCAsmBackend(const Target &T,
+                                      const MCRegisterInfo &MRI, StringRef TT,
+                                      StringRef CPU);
 
 MCObjectWriter *createRISCVObjectWriter(raw_ostream &OS, uint8_t OSABI);
 } // end namespace llvm

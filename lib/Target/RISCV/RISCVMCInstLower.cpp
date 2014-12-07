@@ -11,7 +11,6 @@
 #include "RISCVAsmPrinter.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCStreamer.h"
-#include "llvm/Target/Mangler.h"
 
 using namespace llvm;
 
@@ -37,9 +36,8 @@ static MCSymbolRefExpr::VariantKind getVariantKind(unsigned Flags) {
   llvm_unreachable("Unrecognised MO_ACCESS_MODEL");
 }
 
-RISCVMCInstLower::RISCVMCInstLower(Mangler *mang, MCContext &ctx,
-                                       RISCVAsmPrinter &asmprinter)
-  : Mang(mang), Ctx(ctx), AsmPrinter(asmprinter) {}
+RISCVMCInstLower::RISCVMCInstLower(MCContext &ctx, RISCVAsmPrinter &asmprinter)
+    : Ctx(ctx), AsmPrinter(asmprinter) {}
 
 MCOperand RISCVMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
                                                  const MCSymbol *Symbol,
@@ -78,7 +76,7 @@ MCOperand RISCVMCInstLower::lowerOperand(const MachineOperand &MO) const {
                               /* MO has no offset field */0);
 
   case MachineOperand::MO_GlobalAddress:
-    return lowerSymbolOperand(MO, Mang->getSymbol(MO.getGlobal()),
+    return lowerSymbolOperand(MO, AsmPrinter.getSymbol(MO.getGlobal()),
                               MO.getOffset());
 
   case MachineOperand::MO_ExternalSymbol: {

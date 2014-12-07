@@ -13,16 +13,12 @@
 
 using namespace llvm;
 
-RISCVMCAsmInfo::RISCVMCAsmInfo(const Target &T, StringRef TT) {
+RISCVMCAsmInfo::RISCVMCAsmInfo(StringRef TT) {
   PointerSize = 8;
   CalleeSaveStackSlotSize = 8;
   IsLittleEndian = false;
 
   CommentString = "#";
-  PCSymbol = ".";
-  GlobalPrefix = "";
-  PrivateGlobalPrefix = ".L";
-  WeakRefDirective = "\t.weak\t";
   ZeroDirective = "\t.space\t";
   Data64bitsDirective = "\t.quad\t";
   UsesELFSectionDirectiveForBSS = true;

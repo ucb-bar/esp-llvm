@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
@@ -85,10 +86,6 @@ private:
     MemOp Mem;
   };
 
-  RISCVOperand(OperandKind kind, SMLoc startLoc, SMLoc endLoc)
-    : Kind(kind), StartLoc(startLoc), EndLoc(endLoc)
-  {}
-
   void addExpr(MCInst &Inst, const MCExpr *Expr) const {
     // Add as immediates when possible.  Null MCExpr = 0.
     if (Expr == 0)
@@ -100,30 +97,33 @@ private:
   }
 
 public:
+  RISCVOperand(OperandKind kind, SMLoc startLoc, SMLoc endLoc)
+      : Kind(kind), StartLoc(startLoc), EndLoc(endLoc) {}
+
   // Create particular kinds of operand.
-  static RISCVOperand *createToken(StringRef Str, SMLoc Loc) {
-    RISCVOperand *Op = new RISCVOperand(KindToken, Loc, Loc);
+  static std::unique_ptr<RISCVOperand> createToken(StringRef Str, SMLoc Loc) {
+    auto Op = make_unique<RISCVOperand>(KindToken, Loc, Loc);
     Op->Token.Data = Str.data();
     Op->Token.Length = Str.size();
     return Op;
   }
-  static RISCVOperand *createReg(RegisterKind Kind, unsigned Num,
-                                   SMLoc StartLoc, SMLoc EndLoc) {
-    RISCVOperand *Op = new RISCVOperand(KindReg, StartLoc, EndLoc);
+  static std::unique_ptr<RISCVOperand>
+  createReg(RegisterKind Kind, unsigned Num, SMLoc StartLoc, SMLoc EndLoc) {
+    auto Op = make_unique<RISCVOperand>(KindReg, StartLoc, EndLoc);
     Op->Reg.Kind = Kind;
     Op->Reg.Num = Num;
     return Op;
   }
-  static RISCVOperand *createImm(const MCExpr *Expr, SMLoc StartLoc,
-                                   SMLoc EndLoc) {
-    RISCVOperand *Op = new RISCVOperand(KindImm, StartLoc, EndLoc);
+  static std::unique_ptr<RISCVOperand> createImm(const MCExpr *Expr,
+                                                 SMLoc StartLoc, SMLoc EndLoc) {
+    auto Op = make_unique<RISCVOperand>(KindImm, StartLoc, EndLoc);
     Op->Imm = Expr;
     return Op;
   }
-  static RISCVOperand *createMem(RegisterKind RegKind, unsigned Base,
-                                   const MCExpr *Disp, unsigned Index,
-                                   SMLoc StartLoc, SMLoc EndLoc) {
-    RISCVOperand *Op = new RISCVOperand(KindMem, StartLoc, EndLoc);
+  static std::unique_ptr<RISCVOperand>
+  createMem(RegisterKind RegKind, unsigned Base, const MCExpr *Disp,
+            unsigned Index, SMLoc StartLoc, SMLoc EndLoc) {
+    auto Op = make_unique<RISCVOperand>(KindMem, StartLoc, EndLoc);
     Op->Mem.RegKind = RegKind;
     Op->Mem.Base = Base;
     Op->Mem.Index = Index;
@@ -132,7 +132,7 @@ public:
   }
 
   // Token operands
-  virtual bool isToken() const LLVM_OVERRIDE {
+  bool isToken() const override {
     return Kind == KindToken;
   }
   StringRef getToken() const {
@@ -141,19 +141,19 @@ public:
   }
 
   // Register operands.
-  virtual bool isReg() const LLVM_OVERRIDE {
+  bool isReg() const override {
     return Kind == KindReg;
   }
   bool isReg(RegisterKind RegKind) const {
     return Kind == KindReg && Reg.Kind == RegKind;
   }
-  virtual unsigned getReg() const LLVM_OVERRIDE {
+  unsigned getReg() const override {
     assert(Kind == KindReg && "Not a register");
     return Reg.Num;
   }
 
   // Immediate operands.
-  virtual bool isImm() const LLVM_OVERRIDE {
+  bool isImm() const override {
     return Kind == KindImm;
   }
   bool isImm(int64_t MinValue, int64_t MaxValue) const {
@@ -165,7 +165,7 @@ public:
   }
 
   // Memory operands.
-  virtual bool isMem() const LLVM_OVERRIDE {
+  bool isMem() const override {
     return Kind == KindMem;
   }
   bool isMem(RegisterKind RegKind, bool HasIndex) const {
@@ -181,9 +181,9 @@ public:
   }
 
   // Override MCParsedAsmOperand.
-  virtual SMLoc getStartLoc() const LLVM_OVERRIDE { return StartLoc; }
-  virtual SMLoc getEndLoc() const LLVM_OVERRIDE { return EndLoc; }
-  virtual void print(raw_ostream &OS) const LLVM_OVERRIDE;
+  SMLoc getStartLoc() const override { return StartLoc; }
+  SMLoc getEndLoc() const override { return EndLoc; }
+  void print(raw_ostream &OS) const override;
 
   // Used by the TableGen code to add particular types of operand
   // to an instruction.
@@ -311,27 +311,26 @@ private:
 
   bool parseRegister(Register &Reg);
 
-  OperandMatchResultTy
-  parseRegister(Register &Reg, char Prefix, const unsigned *Regs,
-                bool IsAddress = false);
+  OperandMatchResultTy parseRegister(Register &Reg, char Prefix,
+                                     const unsigned *Regs,
+                                     bool IsAddress = false);
 
-  OperandMatchResultTy
-  parseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                char Prefix, const unsigned *Regs,
-                RISCVOperand::RegisterKind Kind,
-                bool IsAddress = false);
+  OperandMatchResultTy parseRegister(OperandVector &Operands, char Prefix,
+                                     const unsigned *Regs,
+                                     RISCVOperand::RegisterKind Kind,
+                                     bool IsAddress = false);
 
-  OperandMatchResultTy
-  parseAddress(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-               const unsigned *Regs, RISCVOperand::RegisterKind RegKind,
-               bool HasIndex);
+  OperandMatchResultTy parseAddress(OperandVector &Operands,
+                                    const unsigned *Regs,
+                                    RISCVOperand::RegisterKind RegKind,
+                                    bool HasIndex);
 
-  bool parseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                    StringRef Mnemonic);
+  bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
 
 public:
-  RISCVAsmParser(MCSubtargetInfo &sti, MCAsmParser &parser)
-    : MCTargetAsmParser(), STI(sti), Parser(parser) {
+  RISCVAsmParser(MCSubtargetInfo &sti, MCAsmParser &parser,
+                 const MCInstrInfo &MII, const MCTargetOptions &Options)
+      : MCTargetAsmParser(), STI(sti), Parser(parser) {
     MCAsmParserExtension::Initialize(Parser);
 
     // Initialize the set of available features.
@@ -339,67 +338,57 @@ public:
   }
 
   // Override MCTargetAsmParser.
-  virtual bool ParseDirective(AsmToken DirectiveID) LLVM_OVERRIDE;
-  virtual bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
-                             SMLoc &EndLoc) LLVM_OVERRIDE;
-  virtual bool ParseInstruction(ParseInstructionInfo &Info,
-                                StringRef Name, SMLoc NameLoc,
-                                SmallVectorImpl<MCParsedAsmOperand*> &Operands)
-    LLVM_OVERRIDE;
-  virtual bool
-    MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
-                            SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                            MCStreamer &Out, unsigned &ErrorInfo,
-                            bool MatchingInlineAsm) LLVM_OVERRIDE;
+  bool ParseDirective(AsmToken DirectiveID) override;
+  bool ParseRegister(unsigned &RegNo, SMLoc &StartLoc, SMLoc &EndLoc) override;
+  bool ParseInstruction(ParseInstructionInfo &Info, StringRef Name,
+                        SMLoc NameLoc, OperandVector &Operands) override;
+  bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+                               OperandVector &Operands, MCStreamer &Out,
+                               unsigned &ErrorInfo,
+                               bool MatchingInlineAsm) override;
 
   // Used by the TableGen code to parse particular operand types.
-  OperandMatchResultTy
-  parseGR32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parseGR32(OperandVector &Operands) {
     return parseRegister(Operands, 'x', GR32Regs, RISCVOperand::GR32Reg);
   }
 
-  OperandMatchResultTy
-  parseGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parseGR64(OperandVector &Operands) {
     return parseRegister(Operands, 'x', GR64Regs, RISCVOperand::GR64Reg);
   }
 
-  OperandMatchResultTy
-  parsePairGR64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'x', PairGR64Regs, RISCVOperand::PairGR64Reg);
+  OperandMatchResultTy parsePairGR64(OperandVector &Operands) {
+    return parseRegister(Operands, 'x', PairGR64Regs,
+                         RISCVOperand::PairGR64Reg);
   }
 
-  OperandMatchResultTy
-  parsePairGR128(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'x', PairGR128Regs, RISCVOperand::PairGR128Reg);
+  OperandMatchResultTy parsePairGR128(OperandVector &Operands) {
+    return parseRegister(Operands, 'x', PairGR128Regs,
+                         RISCVOperand::PairGR128Reg);
   }
 
-  OperandMatchResultTy
-  parsePCReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parsePCReg(OperandVector &Operands) {
     return parseRegister(Operands, 'p', PCReg, RISCVOperand::PCReg);
   }
 
-  OperandMatchResultTy
-  parseFP32(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parseFP32(OperandVector &Operands) {
     return parseRegister(Operands, 'f', FP32Regs, RISCVOperand::FP32Reg);
   }
 
-  OperandMatchResultTy
-  parseFP64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parseFP64(OperandVector &Operands) {
     return parseRegister(Operands, 'f', FP64Regs, RISCVOperand::FP64Reg);
   }
 
-  OperandMatchResultTy
-  parsePairFP64(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'f', PairFP64Regs, RISCVOperand::PairFP64Reg);
+  OperandMatchResultTy parsePairFP64(OperandVector &Operands) {
+    return parseRegister(Operands, 'f', PairFP64Regs,
+                         RISCVOperand::PairFP64Reg);
   }
 
-  OperandMatchResultTy
-  parsePairFP128(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
-    return parseRegister(Operands, 'f', PairFP128Regs, RISCVOperand::PairFP128Reg);
+  OperandMatchResultTy parsePairFP128(OperandVector &Operands) {
+    return parseRegister(Operands, 'f', PairFP128Regs,
+                         RISCVOperand::PairFP128Reg);
   }
 
-  OperandMatchResultTy
-  parsePCRReg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  OperandMatchResultTy parsePCRReg(OperandVector &Operands) {
     const AsmToken &Tok = Parser.getTok();
     if(Tok.is(AsmToken::Identifier) && Tok.getIdentifier().equals("ASM_CR")) {
       SMLoc S = Tok.getLoc();
@@ -407,7 +396,7 @@ public:
       if(Tok.is(AsmToken::LParen)) {
         const AsmToken Tok = Parser.getTok();
         if(Tok.is(AsmToken::Identifier)) {
-          RISCVOperand *op;
+          std::unique_ptr<RISCVOperand> op;
           //TODO: make this a tablegen or something
           if(Tok.getIdentifier().equals_lower("PCR_K0"))
             op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::sup0,S, Tok.getLoc());
@@ -450,7 +439,7 @@ public:
           else
             return MatchOperand_ParseFail;
 
-          Operands.push_back(op);
+          Operands.push_back(std::move(op));
 
           Parser.Lex();//eat close paren
           return MatchOperand_Success;
@@ -529,10 +518,9 @@ RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
 // register represented by Regs and IsAddress says whether the register is
 // being parsed in an address context, meaning that %r0 evaluates as 0.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                                char Prefix, const unsigned *Regs,
-                                RISCVOperand::RegisterKind Kind,
-                                bool IsAddress) {
+RISCVAsmParser::parseRegister(OperandVector &Operands, char Prefix,
+                              const unsigned *Regs,
+                              RISCVOperand::RegisterKind Kind, bool IsAddress) {
   Register Reg;
   OperandMatchResultTy Result = parseRegister(Reg, Prefix, Regs, IsAddress);
   if (Result == MatchOperand_Success)
@@ -546,10 +534,9 @@ RISCVAsmParser::parseRegister(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
 // register we're using (GR32Reg or GR64Reg).  HasIndex says whether
 // the address allows index registers.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseAddress(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                               const unsigned *Regs,
-                               RISCVOperand::RegisterKind RegKind,
-                               bool HasIndex) {
+RISCVAsmParser::parseAddress(OperandVector &Operands, const unsigned *Regs,
+                             RISCVOperand::RegisterKind RegKind,
+                             bool HasIndex) {
   SMLoc StartLoc = Parser.getTok().getLoc();
 
   // Parse the displacement, which must always be present.
@@ -619,9 +606,9 @@ bool RISCVAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
   return false;
 }
 
-bool RISCVAsmParser::
-ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
-                 SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
+                                      StringRef Name, SMLoc NameLoc,
+                                      OperandVector &Operands) {
   Operands.push_back(RISCVOperand::createToken(Name, NameLoc));
 
   // Read the remaining operands.
@@ -652,9 +639,7 @@ ParseInstruction(ParseInstructionInfo &Info, StringRef Name, SMLoc NameLoc,
   return false;
 }
 
-bool RISCVAsmParser::
-parseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-             StringRef Mnemonic) {
+bool RISCVAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
   // Check if the current operand has a custom associated parser, if so, try to
   // custom parse the operand, or fallback to the general approach.
   OperandMatchResultTy ResTy = MatchOperandParserImpl(Operands, Mnemonic);
@@ -679,11 +664,11 @@ parseOperand(SmallVectorImpl<MCParsedAsmOperand*> &Operands,
   return false;
 }
 
-bool RISCVAsmParser::
-MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
-                        SmallVectorImpl<MCParsedAsmOperand*> &Operands,
-                        MCStreamer &Out, unsigned &ErrorInfo,
-                        bool MatchingInlineAsm) {
+bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
+                                             OperandVector &Operands,
+                                             MCStreamer &Out,
+                                             unsigned &ErrorInfo,
+                                             bool MatchingInlineAsm) {
   MCInst Inst;
   unsigned MatchResult;
 
@@ -693,7 +678,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   default: break;
   case Match_Success:
     Inst.setLoc(IDLoc);
-    Out.EmitInstruction(Inst);
+    Out.EmitInstruction(Inst, STI);
     return false;
 
   case Match_MissingFeature: {
@@ -718,7 +703,7 @@ MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
       if (ErrorInfo >= Operands.size())
         return Error(IDLoc, "too few operands for instruction");
 
-      ErrorLoc = ((RISCVOperand*)Operands[ErrorInfo])->getStartLoc();
+      ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
       if (ErrorLoc == SMLoc())
         ErrorLoc = IDLoc;
     }

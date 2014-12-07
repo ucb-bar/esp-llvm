@@ -17,6 +17,7 @@
 #include "RISCVCallingConv.h"
 #include "RISCVConstantPoolValue.h"
 #include "RISCVMachineFunctionInfo.h"
+#include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -48,10 +49,9 @@ static const uint16_t FPDRegs[8] = {
   RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64
 };
 
-RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
-  : TargetLowering(tm, new TargetLoweringObjectFileELF()),
-    Subtarget(*tm.getSubtargetImpl()), TM(tm), 
-    IsRV32(Subtarget.isRV32()) {
+RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
+    : TargetLowering(tm, new TargetLoweringObjectFileELF()),
+      Subtarget(tm.getSubtarget<RISCVSubtarget>()), IsRV32(Subtarget.isRV32()) {
   MVT PtrVT = getPointerTy();
 
   // Set up the register classes.
@@ -301,11 +301,6 @@ RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
   setOperationAction(ISD::STACKRESTORE, MVT::Other, Custom);
   setOperationAction(ISD::FRAMEADDR,    MVT::Other, Custom);
 
-  // Expand these using getExceptionSelectorRegister() and
-  // getExceptionPointerRegister().
-  setOperationAction(ISD::EXCEPTIONADDR, PtrVT, Expand);
-  setOperationAction(ISD::EHSELECTION,   PtrVT, Expand);
-
   // Handle floating-point types.
   for (unsigned I = MVT::FIRST_FP_VALUETYPE;
        I <= MVT::LAST_FP_VALUETYPE;
@@ -510,7 +505,7 @@ getSingleConstraintMatchWeight(AsmOperandInfo &info,
 }
 
 std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
-getRegForInlineAsmConstraint(const std::string &Constraint, EVT VT) const {
+getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const {
   if (Constraint.size() == 1) {
     // GCC Constraint Letters
     switch (Constraint[0]) {
@@ -604,9 +599,8 @@ addLiveIn(MachineFunction &MF, unsigned PReg, const TargetRegisterClass *RC)
 // Value is a value that has been passed to us in the location described by VA
 // (and so has type VA.getLocVT()).  Convert Value to VA.getValVT(), chaining
 // any loads onto Chain.
-static SDValue convertLocVTToValVT(SelectionDAG &DAG, DebugLoc DL,
-                                   CCValAssign &VA, SDValue Chain,
-                                   SDValue Value) {
+static SDValue convertLocVTToValVT(SelectionDAG &DAG, SDLoc DL, CCValAssign &VA,
+                                   SDValue Chain, SDValue Value) {
   // If the argument has been promoted from a smaller type, insert an
   // assertion to capture this.
   if (VA.getLocInfo() == CCValAssign::SExt)
@@ -629,8 +623,8 @@ static SDValue convertLocVTToValVT(SelectionDAG &DAG, DebugLoc DL,
 // Value is a value of type VA.getValVT() that we need to copy into
 // the location described by VA.  Return a copy of Value converted to
 // VA.getValVT().  The caller is responsible for handling indirect values.
-static SDValue convertValVTToLocVT(SelectionDAG &DAG, DebugLoc DL,
-                                   CCValAssign &VA, SDValue Value) {
+static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDLoc DL, CCValAssign &VA,
+                                   SDValue Value) {
   switch (VA.getLocInfo()) {
   case CCValAssign::SExt:
     return DAG.getNode(ISD::SIGN_EXTEND, DL, VA.getLocVT(), Value);
@@ -792,7 +786,7 @@ MVT RISCVTargetLowering::RISCVCC::getRegVT(MVT VT, const Type *OrigTy,
 }
 
 void RISCVTargetLowering::
-copyByValRegs(SDValue Chain, DebugLoc DL, std::vector<SDValue> &OutChains,
+copyByValRegs(SDValue Chain, SDLoc DL, std::vector<SDValue> &OutChains,
               SelectionDAG &DAG, const ISD::ArgFlagsTy &Flags,
               SmallVectorImpl<SDValue> &InVals, const Argument *FuncArg,
               const RISCVCC &CC, const ByValArgInfo &ByVal) const {
@@ -836,7 +830,7 @@ copyByValRegs(SDValue Chain, DebugLoc DL, std::vector<SDValue> &OutChains,
 
 // Copy byVal arg to registers and stack.
 void RISCVTargetLowering::
-passByValArg(SDValue Chain, DebugLoc DL,
+passByValArg(SDValue Chain, SDLoc DL,
              std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
              SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
              MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
@@ -927,7 +921,7 @@ passByValArg(SDValue Chain, DebugLoc DL,
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
                         DAG.getConstant(MemCpySize, PtrTy), Alignment,
                         /*isVolatile=*/false, /*AlwaysInline=*/false,
-                        MachinePointerInfo(0), MachinePointerInfo(0));
+                        MachinePointerInfo(), MachinePointerInfo());
   MemOpChains.push_back(Chain);
 }
 
@@ -953,6 +947,10 @@ RISCVTargetLowering::RISCVCC::handleByValArg(unsigned ValNo, MVT ValVT,
   CCInfo.addLoc(CCValAssign::getMem(ValNo, ValVT, ByVal.Address, LocVT,
                                     LocInfo));
   ByValArgs.push_back(ByVal);
+}
+
+unsigned RISCVTargetLowering::RISCVCC::fpRegSize() const {
+  return Subtarget.hasD() ? 8 : Subtarget.hasF() ? 4 : regSize();
 }
 
 unsigned RISCVTargetLowering::RISCVCC::numIntArgRegs() const {
@@ -1038,7 +1036,7 @@ void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
 SDValue RISCVTargetLowering::
 LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                      const SmallVectorImpl<ISD::InputArg> &Ins,
-                     DebugLoc DL, SelectionDAG &DAG,
+                     SDLoc DL, SelectionDAG &DAG,
                      SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -1163,8 +1161,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   // the size of Ins and InVals. This only happens when on varg functions
   if (!OutChains.empty()) {
     OutChains.push_back(Chain);
-    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other,
-                        &OutChains[0], OutChains.size());
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, OutChains);
   }
 
   return Chain;
@@ -1174,8 +1171,7 @@ static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
   EVT Ty = Op.getValueType();
 
   if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
-    return DAG.getTargetGlobalAddress(N->getGlobal(), Op.getDebugLoc(), Ty, 0,
-                                      Flag);
+    return DAG.getTargetGlobalAddress(N->getGlobal(), SDLoc(Op), Ty, 0, Flag);
   if (ExternalSymbolSDNode *N = dyn_cast<ExternalSymbolSDNode>(Op))
     return DAG.getTargetExternalSymbol(N->getSymbol(), Ty, Flag);
   if (BlockAddressSDNode *N = dyn_cast<BlockAddressSDNode>(Op))
@@ -1192,7 +1188,7 @@ static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
 
 
 static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
-  DebugLoc DL = Op.getDebugLoc();
+  SDLoc DL(Op);
   EVT Ty = Op.getValueType();
   SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
   SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
@@ -1202,7 +1198,7 @@ static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue getAddrPIC(SDValue Op, SelectionDAG &DAG) {
-  DebugLoc DL = Op.getDebugLoc();
+  SDLoc DL(Op);
   EVT Ty = Op.getValueType();
   return DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, Ty, Op);
 }
@@ -1211,7 +1207,7 @@ SDValue
 RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
                                  SmallVectorImpl<SDValue> &InVals) const {
   SelectionDAG &DAG = CLI.DAG;
-  DebugLoc &DL = CLI.DL;
+  SDLoc &DL = CLI.DL;
   SmallVector<ISD::OutputArg, 32> &Outs = CLI.Outs;
   SmallVector<SDValue, 32> &OutVals = CLI.OutVals;
   SmallVector<ISD::InputArg, 32> &Ins = CLI.Ins;
@@ -1229,7 +1225,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
-  CCState ArgCCInfo(CallConv, IsVarArg, MF, TM, ArgLocs, *DAG.getContext());
+  CCState ArgCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), ArgLocs,
+                    *DAG.getContext());
   RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo, Subtarget);
   RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, getTargetMachine().Options.UseSoftFloat,
                                    Callee.getNode(), CLI.Args);
@@ -1238,7 +1235,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   unsigned NumBytes = ArgCCInfo.getNextStackOffset();
 
   // Mark the start of the call.
-  Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, PtrVT, true));
+  Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, PtrVT, true),
+                               DL);
 
   RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
 
@@ -1291,8 +1289,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Join the stores, which are independent of one another.
   if (!MemOpChains.empty())
-    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other,
-                        &MemOpChains[0], MemOpChains.size());
+    Chain = DAG.getNode(ISD::TokenFactor, DL, MVT::Other, MemOpChains);
 
   // Build a sequence of copy-to-reg nodes, chained and glued together.
   SDValue Glue;
@@ -1305,12 +1302,12 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Accept direct calls by converting symbolic call addresses to the
   // associated Target* opcodes.
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    if (TM.getRelocationModel() == Reloc::PIC_) {
+    if (DAG.getTarget().getRelocationModel() == Reloc::PIC_) {
       Callee = getAddrPIC(Callee, DAG);
     } else
       Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    if (TM.getRelocationModel() == Reloc::PIC_) {
+    if (DAG.getTarget().getRelocationModel() == Reloc::PIC_) {
       Callee = getAddrPIC(DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT), DAG);
     } else
       Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
@@ -1333,19 +1330,20 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Emit the call.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
-  Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, &Ops[0], Ops.size());
+  Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
   Glue = Chain.getValue(1);
 
   // Mark the end of the call, which is glued to the call itself.
   Chain = DAG.getCALLSEQ_END(Chain,
                              DAG.getConstant(NumBytes, PtrVT, true),
                              DAG.getConstant(0, PtrVT, true),
-                             Glue);
+                             Glue, DL);
   Glue = Chain.getValue(1);
 
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RetLocs;
-  CCState RetCCInfo(CallConv, IsVarArg, MF, TM, RetLocs, *DAG.getContext());
+  CCState RetCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), RetLocs,
+                    *DAG.getContext());
   if(Subtarget.isRV64())
     RetCCInfo.AnalyzeCallResult(Ins, RetCC_RISCV64);
   else
@@ -1388,12 +1386,13 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
                                    CallingConv::ID CallConv, bool IsVarArg,
                                    const SmallVectorImpl<ISD::OutputArg> &Outs,
                                    const SmallVectorImpl<SDValue> &OutVals,
-                                   DebugLoc DL, SelectionDAG &DAG) const {
+                                   SDLoc DL, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
 
   // Assign locations to each returned value.
   SmallVector<CCValAssign, 16> RetLocs;
-  CCState RetCCInfo(CallConv, IsVarArg, MF, TM, RetLocs, *DAG.getContext());
+  CCState RetCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), RetLocs,
+                    *DAG.getContext());
   if(Subtarget.isRV64())
     RetCCInfo.AnalyzeReturn(Outs, RetCC_RISCV64);
   else
@@ -1430,16 +1429,16 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
   if (Glue.getNode())
     RetOps.push_back(Glue);
 
-  return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other,
-                     RetOps.data(), RetOps.size());
+  return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, RetOps);
 }
 
 SDValue RISCVTargetLowering::
 lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const
 {
-  DebugLoc DL = Op.getDebugLoc();
+  SDLoc DL(Op);
   EVT Ty = Op.getOperand(0).getValueType();
-  SDValue Cond = DAG.getNode(ISD::SETCC, DL, getSetCCResultType(Ty),
+  SDValue Cond = DAG.getNode(ISD::SETCC, DL,
+                             getSetCCResultType(*DAG.getContext(), Ty),
                              Op.getOperand(0), Op.getOperand(1),
                              Op.getOperand(4));
 
@@ -1461,20 +1460,20 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
 
   // Return RA, which contains the return address. Mark it an implicit live-in.
   unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), Op.getDebugLoc(), Reg, VT);
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), Reg, VT);
 }
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
                                                   SelectionDAG &DAG) const {
-  Reloc::Model RM = TM.getRelocationModel();
+  Reloc::Model RM = DAG.getTarget().getRelocationModel();
 
   if(RM != Reloc::PIC_) {
       //%hi/%lo relocation
       return getAddrNonPIC(Op,DAG);
   }
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Op)) {
-      Op = DAG.getTargetGlobalAddress(G->getGlobal(), Op->getDebugLoc(), getPointerTy());
-      return Op;
+    Op = DAG.getTargetGlobalAddress(G->getGlobal(), SDLoc(Op), getPointerTy());
+    return Op;
   }
   llvm_unreachable("invalid global addresses to lower");
 }
@@ -1485,7 +1484,7 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
   // Local Dynamic TLS model, otherwise use the Initial Exec or
   // Local Exec TLS Model.
 
-  DebugLoc DL = GA->getDebugLoc();
+  SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
   EVT PtrVT = getPointerTy();
 
@@ -1527,7 +1526,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
 
 SDValue RISCVTargetLowering::lowerJumpTable(JumpTableSDNode *JT,
                                               SelectionDAG &DAG) const {
-  DebugLoc DL = JT->getDebugLoc();
+  SDLoc DL(JT);
   EVT PtrVT = getPointerTy();
   SDValue Result = DAG.getTargetJumpTable(JT->getIndex(), PtrVT);
 
@@ -1547,7 +1546,7 @@ SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
     Result = DAG.getTargetConstantPool(CP->getConstVal(), PtrVT,
 				       CP->getAlignment(), CP->getOffset());
 
-  Reloc::Model RM = TM.getRelocationModel();
+  Reloc::Model RM = DAG.getTarget().getRelocationModel();
 
   if(RM != Reloc::PIC_)
     return getAddrNonPIC(Result, DAG);
@@ -1564,7 +1563,7 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
   SDValue Chain   = Op.getOperand(0);
   SDValue Addr    = Op.getOperand(1);
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
-  DebugLoc DL     = Op.getDebugLoc();
+  SDLoc DL(Op);
   SDValue FI      = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
                                  PtrVT);
 
@@ -1581,7 +1580,7 @@ SDValue RISCVTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const{
   SDValue VAListPtr = Node->getOperand(1);
   EVT PtrVT = VAListPtr.getValueType();
   const Value *SV = cast<SrcValueSDNode>(Node->getOperand(2))->getValue();
-  DebugLoc DL = Node->getDebugLoc();
+  SDLoc DL(Node);
   SDValue VAList = DAG.getLoad(PtrVT, DL, InChain, VAListPtr,
                                MachinePointerInfo(SV), false, false, false, 0);
   // Increment the pointer, VAList, to the next vaarg.
@@ -1598,7 +1597,7 @@ SDValue RISCVTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const{
 }
 
 SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) const {
-  DebugLoc DL = Op.getDebugLoc();
+  SDLoc DL(Op);
   
   unsigned PI,PO,PR,PW,SI,SO,SR,SW;
   switch(Op.getConstantOperandVal(1)) {
@@ -1636,8 +1635,7 @@ SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
   unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
-  return DAG.getCopyFromReg(Op.getOperand(0), Op.getDebugLoc(),
-                            sp, Op.getValueType());
+  return DAG.getCopyFromReg(Op.getOperand(0), SDLoc(Op), sp, Op.getValueType());
 }
 
 SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
@@ -1645,8 +1643,7 @@ SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
   unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
-  return DAG.getCopyToReg(Op.getOperand(0), Op.getDebugLoc(),
-                          sp, Op.getOperand(1));
+  return DAG.getCopyToReg(Op.getOperand(0), SDLoc(Op), sp, Op.getOperand(1));
 }
 
 SDValue RISCVTargetLowering::
@@ -1658,7 +1655,7 @@ lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
   MachineFrameInfo *MFI = DAG.getMachineFunction().getFrameInfo();
   MFI->setFrameAddressIsTaken(true);
   EVT VT = Op.getValueType();
-  DebugLoc DL = Op.getDebugLoc();
+  SDLoc DL(Op);
   SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL,
                                          Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp, VT);
   return FrameAddr;
@@ -1746,7 +1743,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   // Transfer the remainder of BB and its successor edges to sinkMBB.
   sinkMBB->splice(sinkMBB->begin(), BB,
-                  llvm::next(MachineBasicBlock::iterator(MI)),
+                  std::next(MachineBasicBlock::iterator(MI)),
                   BB->end());
   sinkMBB->transferSuccessorsAndUpdatePHIs(BB);
 
@@ -1838,7 +1835,7 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
 void
 RISCVTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
                                     const RISCVCC &CC, SDValue Chain,
-                                    DebugLoc DL, SelectionDAG &DAG) const {
+                                    SDLoc DL, SelectionDAG &DAG) const {
   unsigned NumRegs = CC.numIntArgRegs();
   const uint16_t *ArgRegs = CC.intArgRegs();
   const CCState &CCInfo = CC.getCCInfo();
@@ -1875,7 +1872,9 @@ RISCVTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
     SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy());
     SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
                                  MachinePointerInfo(), false, false, 0);
-    cast<StoreSDNode>(Store.getNode())->getMemOperand()->setValue(0);
+    cast<StoreSDNode>(Store.getNode())
+        ->getMemOperand()
+        ->setValue((Value *)nullptr);
     OutChains.push_back(Store);
   }
 }

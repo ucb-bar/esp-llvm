@@ -16,7 +16,6 @@
 #define LLVM_TARGET_RISCV_ISELLOWERING_H
 
 #include "RISCV.h"
-#include "RISCVSubtarget.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Function.h"
@@ -92,52 +91,46 @@ namespace RISCVISD {
 }
 
 class RISCVSubtarget;
-class RISCVTargetMachine;
 
 class RISCVTargetLowering : public TargetLowering {
 public:
-  explicit RISCVTargetLowering(RISCVTargetMachine &TM);
+  explicit RISCVTargetLowering(const TargetMachine &TM);
 
   // Override TargetLowering.
-  virtual MVT getScalarShiftAmountTy(EVT LHSTy) const LLVM_OVERRIDE {
+  MVT getScalarShiftAmountTy(EVT LHSTy) const override {
     return LHSTy.getSizeInBits() <= 32 ? MVT::i32 : MVT::i64;
   }
-  virtual EVT getSetCCResultType(EVT VT) const {
+  EVT getSetCCResultType(LLVMContext &Context, EVT VT) const override {
     return MVT::i32;
   }
-  virtual bool isFMAFasterThanMulAndAdd(EVT) const LLVM_OVERRIDE {
+  bool isFMAFasterThanFMulAndFAdd(EVT) const override {
     return true;
   }
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
-  virtual bool isFPImmLegal(const APFloat &Imm, EVT VT) const;
-  virtual const char *getTargetNodeName(unsigned Opcode) const LLVM_OVERRIDE;
-  virtual std::pair<unsigned, const TargetRegisterClass *>
-    getRegForInlineAsmConstraint(const std::string &Constraint,
-                                 EVT VT) const LLVM_OVERRIDE;
-  virtual TargetLowering::ConstraintType
-    getConstraintType(const std::string &Constraint) const LLVM_OVERRIDE;
-  virtual TargetLowering::ConstraintWeight
-    getSingleConstraintMatchWeight(AsmOperandInfo &info,
-                                   const char *constraint) const LLVM_OVERRIDE;
-  virtual void
-    LowerAsmOperandForConstraint(SDValue Op,
-                                 std::string &Constraint,
-                                 std::vector<SDValue> &Ops,
-                                 SelectionDAG &DAG) const LLVM_OVERRIDE;
-  virtual MachineBasicBlock *
-    EmitInstrWithCustomInserter(MachineInstr *MI,
-                                MachineBasicBlock *BB) const LLVM_OVERRIDE;
-  virtual SDValue LowerOperation(SDValue Op,
-                                 SelectionDAG &DAG) const LLVM_OVERRIDE;
-  virtual SDValue
-    LowerFormalArguments(SDValue Chain,
-                         CallingConv::ID CallConv, bool isVarArg,
-                         const SmallVectorImpl<ISD::InputArg> &Ins,
-                         DebugLoc DL, SelectionDAG &DAG,
-                         SmallVectorImpl<SDValue> &InVals) const LLVM_OVERRIDE;
-  virtual SDValue
-    LowerCall(CallLoweringInfo &CLI,
-              SmallVectorImpl<SDValue> &InVals) const LLVM_OVERRIDE;
+  bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
+  const char *getTargetNodeName(unsigned Opcode) const override;
+  std::pair<unsigned, const TargetRegisterClass *>
+  getRegForInlineAsmConstraint(const std::string &Constraint,
+                               MVT VT) const override;
+  TargetLowering::ConstraintType
+  getConstraintType(const std::string &Constraint) const override;
+  TargetLowering::ConstraintWeight
+  getSingleConstraintMatchWeight(AsmOperandInfo &info,
+                                 const char *constraint) const override;
+  void LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
+                                    std::vector<SDValue> &Ops,
+                                    SelectionDAG &DAG) const override;
+  MachineBasicBlock *
+  EmitInstrWithCustomInserter(MachineInstr *MI,
+                              MachineBasicBlock *BB) const override;
+  SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
+  SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
+                               bool isVarArg,
+                               const SmallVectorImpl<ISD::InputArg> &Ins,
+                               SDLoc DL, SelectionDAG &DAG,
+                               SmallVectorImpl<SDValue> &InVals) const override;
+  SDValue LowerCall(CallLoweringInfo &CLI,
+                    SmallVectorImpl<SDValue> &InVals) const override;
 
   virtual bool
     CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
@@ -145,12 +138,10 @@ public:
                    const SmallVectorImpl<ISD::OutputArg> &Outs,
                    LLVMContext &Context) const;
 
-  virtual SDValue
-    LowerReturn(SDValue Chain,
-                CallingConv::ID CallConv, bool IsVarArg,
-                const SmallVectorImpl<ISD::OutputArg> &Outs,
-                const SmallVectorImpl<SDValue> &OutVals,
-                DebugLoc DL, SelectionDAG &DAG) const LLVM_OVERRIDE;
+  SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
+                      const SmallVectorImpl<ISD::OutputArg> &Outs,
+                      const SmallVectorImpl<SDValue> &OutVals, SDLoc DL,
+                      SelectionDAG &DAG) const override;
 
     struct LTStr {
       bool operator()(const char *S1, const char *S2) const {
@@ -197,9 +188,7 @@ public:
       unsigned regSize() const { return IsRV32 ? 4 : 8; }
 
       /// regSize - Size (in number of bytes) of fp registers.
-      unsigned fpRegSize() const { return Subtarget.hasD() ? 8 : 
-                                        Subtarget.hasF() ? 4 :
-                                        regSize(); }
+      unsigned fpRegSize() const;
 
       /// numIntArgRegs - Number of integer registers available for calls.
       unsigned numIntArgRegs() const;
@@ -261,7 +250,6 @@ public:
 
 private:
   const RISCVSubtarget &Subtarget;
-  const RISCVTargetMachine &TM;
 public:
   bool IsRV32;
 private:
@@ -296,24 +284,24 @@ private:
   // copyByValArg - Copy argument registers which were used to pass a byval
   // argument to the stack. Create a stack frame object for the byval
   // argument.
-  void copyByValRegs(SDValue Chain, DebugLoc DL,
+  void copyByValRegs(SDValue Chain, SDLoc DL,
                      std::vector<SDValue> &OutChains, SelectionDAG &DAG,
                      const ISD::ArgFlagsTy &Flags,
                      SmallVectorImpl<SDValue> &InVals,
                      const Argument *FuncArg,
                      const RISCVCC &CC, const ByValArgInfo &ByVal) const;
-    /// passByValArg - Pass a byval argument in registers or on stack.
-    void passByValArg(SDValue Chain, DebugLoc DL,
-                      std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
-                      SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
-                      MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
-                      const RISCVCC &CC, const ByValArgInfo &ByVal,
-                      const ISD::ArgFlagsTy &Flags, bool isLittle) const;
+  /// passByValArg - Pass a byval argument in registers or on stack.
+  void passByValArg(SDValue Chain, SDLoc DL,
+                    std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
+                    SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
+                    MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
+                    const RISCVCC &CC, const ByValArgInfo &ByVal,
+                    const ISD::ArgFlagsTy &Flags, bool isLittle) const;
   // writeVarArgRegs - Write variable function arguments passed in registers
   // to the stack. Also create a stack frame object for the first variable
   // argument.
   void writeVarArgRegs(std::vector<SDValue> &OutChains, const RISCVCC &CC,
-                       SDValue Chain, DebugLoc DL, SelectionDAG &DAG) const;
+                       SDValue Chain, SDLoc DL, SelectionDAG &DAG) const;
 };
 } // end namespace llvm
 

@@ -10,7 +10,6 @@
 #ifndef RISCVFRAMELOWERING_H
 #define RISCVFRAMELOWERING_H
 
-#include "RISCVSubtarget.h"
 #include "llvm/Target/TargetFrameLowering.h"
 
 namespace llvm {
@@ -18,16 +17,8 @@ class RISCVTargetMachine;
 class RISCVSubtarget;
 
 class RISCVFrameLowering : public TargetFrameLowering {
-protected:
-  const RISCVTargetMachine &TM;
-  const RISCVSubtarget &STI;
-
 public:
-  RISCVFrameLowering(const RISCVTargetMachine &tm,
-                       const RISCVSubtarget &sti);
-
-  static const RISCVFrameLowering *create(RISCVTargetMachine &TM,
-                                         const RISCVSubtarget &ST);
+  RISCVFrameLowering();
 
   bool hasFP(const MachineFunction &MF) const;
 

@@ -19,36 +19,31 @@
 
 namespace llvm {
 
-class RISCVSubtarget;
 class RISCVInstrInfo;
+class RISCVSubtarget;
 
 struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
-private:
-  RISCVTargetMachine &TM;
-  const RISCVInstrInfo &TII;
-
 public:
-  RISCVRegisterInfo(RISCVTargetMachine &tm, const RISCVInstrInfo &tii);
+  const RISCVSubtarget &Subtarget;
+  
+  RISCVRegisterInfo(const RISCVSubtarget &STI);
 
   // Override TargetRegisterInfo.h.
-  virtual bool requiresRegisterScavenging(const MachineFunction &MF) const
-    LLVM_OVERRIDE {
+  bool requiresRegisterScavenging(const MachineFunction &MF) const override {
     return true;
   }
-  virtual bool requiresFrameIndexScavenging(const MachineFunction &MF) const
-    LLVM_OVERRIDE {
+  bool requiresFrameIndexScavenging(const MachineFunction &MF) const override {
     return true;
   }
-  virtual const uint16_t *getCalleeSavedRegs(const MachineFunction *MF = 0)
-    const LLVM_OVERRIDE;
+  const uint16_t *
+  getCalleeSavedRegs(const MachineFunction *MF = 0) const override;
   const uint32_t *getCallPreservedMask(CallingConv::ID) const;
-  virtual BitVector getReservedRegs(const MachineFunction &MF)
-    const LLVM_OVERRIDE;
-  virtual void eliminateFrameIndex(MachineBasicBlock::iterator MI,
-                                   int SPAdj, unsigned FIOperandNum,
-                                   RegScavenger *RS) const LLVM_OVERRIDE;
-  virtual unsigned getFrameRegister(const MachineFunction &MF) const
-    LLVM_OVERRIDE;
+  BitVector getReservedRegs(const MachineFunction &MF) const override;
+  void eliminateFrameIndex(MachineBasicBlock::iterator MI, int SPAdj,
+                           unsigned FIOperandNum,
+                           RegScavenger *RS) const override;
+  unsigned getFrameRegister(const MachineFunction &MF) const override;
+
 private:
   virtual void eliminateFI(MachineBasicBlock::iterator II, unsigned OpNo,
                            int FrameIndex, uint64_t StackSize,

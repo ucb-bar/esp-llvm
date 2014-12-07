@@ -10,8 +10,9 @@
 #include "RISCVFrameLowering.h"
 #include "RISCVCallingConv.h"
 #include "RISCVInstrBuilder.h"
+#include "RISCVInstrInfo.h"
 #include "RISCVMachineFunctionInfo.h"
-#include "RISCVTargetMachine.h"
+#include "RISCVSubtarget.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
@@ -19,11 +20,8 @@
 
 using namespace llvm;
 
-RISCVFrameLowering::RISCVFrameLowering(const RISCVTargetMachine &tm,
-                                           const RISCVSubtarget &sti)
-  : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 16, 0),
-    TM(tm),
-    STI(sti) {}
+RISCVFrameLowering::RISCVFrameLowering()
+    : TargetFrameLowering(TargetFrameLowering::StackGrowsDown, 16, 0) {}
 /*   RISCV stack frames look like:
 
     +-------------------------------+
@@ -89,7 +87,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
     *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-  //TODO:switch based on subtarget
+  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
   unsigned SP = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
@@ -102,19 +100,17 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
   if (StackSize == 0 && !MFI->adjustsStack()) return;
 
   MachineModuleInfo &MMI = MF.getMMI();
-  std::vector<MachineMove> &Moves = MMI.getFrameMoves();
+  const MCRegisterInfo *MRI = MMI.getContext().getRegisterInfo();
   MachineLocation DstML, SrcML;
 
   // Adjust stack.
   TII.adjustStackPtr(SP, -StackSize, MBB, MBBI);
 
   // emit ".cfi_def_cfa_offset StackSize"
-  MCSymbol *AdjustSPLabel = MMI.getContext().CreateTempSymbol();
-  BuildMI(MBB, MBBI, dl,
-          TII.get(TargetOpcode::PROLOG_LABEL)).addSym(AdjustSPLabel);
-  DstML = MachineLocation(MachineLocation::VirtualFP);
-  SrcML = MachineLocation(MachineLocation::VirtualFP, -StackSize);
-  Moves.push_back(MachineMove(AdjustSPLabel, DstML, SrcML));
+  unsigned CFIIndex = MMI.addFrameInst(
+      MCCFIInstruction::createDefCfaOffset(nullptr, -StackSize));
+  BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
+      .addCFIIndex(CFIIndex);
 
   const std::vector<CalleeSavedInfo> &CSI = MFI->getCalleeSavedInfo();
 
@@ -126,19 +122,16 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
 
     // Iterate over list of callee-saved registers and emit .cfi_offset
     // directives.
-    MCSymbol *CSLabel = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, dl,
-            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(CSLabel);
-
     for (std::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
            E = CSI.end(); I != E; ++I) {
       int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
       unsigned Reg = I->getReg();
 
       // Reg is either in CPURegs or FGR32.
-      DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
-      SrcML = MachineLocation(Reg);
-      Moves.push_back(MachineMove(CSLabel, DstML, SrcML));
+      unsigned CFIIndex = MMI.addFrameInst(MCCFIInstruction::createOffset(
+          nullptr, MRI->getDwarfRegNum(Reg, 1), Offset));
+      BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
+          .addCFIIndex(CFIIndex);
     }
   }
 
@@ -154,29 +147,29 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
     }
 
     // Emit .cfi_offset directives for eh data registers.
-    MCSymbol *CSLabel2 = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, dl,
-            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(CSLabel2);
     for (int I = 0; I < 4; ++I) {
       int64_t Offset = MFI->getObjectOffset(RISCVFI->getEhDataRegFI(I));
-      DstML = MachineLocation(MachineLocation::VirtualFP, Offset);
-      SrcML = MachineLocation(ehDataReg(I));
-      Moves.push_back(MachineMove(CSLabel2, DstML, SrcML));
+      unsigned Reg = MRI->getDwarfRegNum(ehDataReg(I), true);
+      unsigned CFIIndex = MMI.addFrameInst(
+          MCCFIInstruction::createOffset(nullptr, Reg, Offset));
+      BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
+          .addCFIIndex(CFIIndex);
     }
   }
 
   // if framepointer enabled, set it to point to the stack pointer.
   if (hasFP(MF)) {
     // Insert instruction "move $fp, $sp" at this location.
-    BuildMI(MBB, MBBI, dl, TII.get(ADDu), FP).addReg(SP).addReg(ZERO);
+    BuildMI(MBB, MBBI, dl, TII.get(ADDu), FP)
+        .addReg(SP)
+        .addReg(ZERO)
+        .setMIFlag(MachineInstr::FrameSetup);
 
     // emit ".cfi_def_cfa_register $fp"
-    MCSymbol *SetFPLabel = MMI.getContext().CreateTempSymbol();
-    BuildMI(MBB, MBBI, dl,
-            TII.get(TargetOpcode::PROLOG_LABEL)).addSym(SetFPLabel);
-    DstML = MachineLocation(FP);
-    SrcML = MachineLocation(MachineLocation::VirtualFP);
-    Moves.push_back(MachineMove(SetFPLabel, DstML, SrcML));
+    unsigned CFIIndex = MMI.addFrameInst(MCCFIInstruction::createDefCfaRegister(
+        nullptr, MRI->getDwarfRegNum(FP, true)));
+    BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::CFI_INSTRUCTION))
+        .addCFIIndex(CFIIndex);
   }
 }
 
@@ -190,6 +183,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   const RISCVInstrInfo &TII =
     *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
+  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
   unsigned SP   = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
   unsigned FP   = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
@@ -281,6 +275,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
   const RISCVInstrInfo &TII =
     *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
 
   if (!hasReservedCallFrame(MF)) {
     int64_t Amount = I->getOperand(0).getImm();
@@ -301,6 +296,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   MachineRegisterInfo &MRI = MF.getRegInfo();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
 
   // Mark $fp as used if function has dedicated frame pointer.

@@ -8,26 +8,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVRegisterInfo.h"
-#include "RISCVTargetMachine.h"
+#include "RISCVSubtarget.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/DebugInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+
+#define DEBUG_TYPE "riscv-reg-info"
 
 #define GET_REGINFO_TARGET_DESC
 #include "RISCVGenRegisterInfo.inc"
 
 using namespace llvm;
 
-RISCVRegisterInfo::RISCVRegisterInfo(RISCVTargetMachine &tm,
-                                         const RISCVInstrInfo &tii)
-  : RISCVGenRegisterInfo(RISCV::ra), TM(tm), TII(tii) {}
+RISCVRegisterInfo::RISCVRegisterInfo(const RISCVSubtarget &STI)
+    : RISCVGenRegisterInfo(RISCV::ra), Subtarget(STI) {}
 
 const uint16_t*
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
   if(Subtarget.isRV64())
     if(Subtarget.hasD())
       return CSR_RV64D_SaveList;
@@ -46,7 +45,6 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 
 const uint32_t*
 RISCVRegisterInfo::getCallPreservedMask(CallingConv::ID) const {
-  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
   if(Subtarget.isRV64())
     if(Subtarget.hasD())
       return CSR_RV64D_RegMask;
@@ -125,7 +123,7 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   unsigned FrameReg;
 
   if ((FrameIndex >= MinCSFI && FrameIndex <= MaxCSFI) || EhDataRegFI)
-    FrameReg = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::sp_64 : RISCV::sp;
+    FrameReg = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
   else
     FrameReg = getFrameRegister(MF);
 
@@ -149,8 +147,11 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   if (!MI.isDebugValue() && !isInt<12>(Offset)) {
     MachineBasicBlock &MBB = *MI.getParent();
     DebugLoc DL = II->getDebugLoc();
-    unsigned ADD = TM.getSubtarget<RISCVSubtarget>().isRV64() ? RISCV::ADD64 : RISCV::ADD;
+    unsigned ADD = Subtarget.isRV64() ? RISCV::ADD64 : RISCV::ADD;
     unsigned Reg;
+    const RISCVInstrInfo &TII =
+        *static_cast<const RISCVInstrInfo *>(
+            MBB.getParent()->getTarget().getInstrInfo());
 
     TII.loadImmediate(MBB, II, &Reg, Offset);
     BuildMI(MBB, II, DL, TII.get(ADD), Reg).addReg(FrameReg)
@@ -189,7 +190,6 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 unsigned
 RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
-  const RISCVSubtarget &Subtarget = TM.getSubtarget<RISCVSubtarget>();
   return TFI->hasFP(MF) ? 
       (Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp) : 
       (Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp);

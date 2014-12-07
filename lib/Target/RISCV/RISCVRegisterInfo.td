@@ -22,15 +22,15 @@ class RISCVRegWithSubRegs<string n, list<Register> subregs>
 
 //Subreg defs
 let Namespace = "RISCV" in {
-  def sub_32       : SubRegIndex;
-  def sub_32even   : SubRegIndex;
-  def sub_32odd    : SubRegIndex;
-  def sub_64even   : SubRegIndex;
-  def sub_64odd    : SubRegIndex;
-  def sub_fp32even : SubRegIndex;
-  def sub_fp32odd  : SubRegIndex;
-  def sub_fp64even : SubRegIndex;
-  def sub_fp64odd  : SubRegIndex;
+  def sub_32       : SubRegIndex<32>;
+  def sub_32even   : SubRegIndex<32>;
+  def sub_32odd    : SubRegIndex<32>;
+  def sub_64even   : SubRegIndex<64>;
+  def sub_64odd    : SubRegIndex<64>;
+  def sub_fp32even : SubRegIndex<32>;
+  def sub_fp32odd  : SubRegIndex<32>;
+  def sub_fp64even : SubRegIndex<64>;
+  def sub_fp64odd  : SubRegIndex<64>;
 }
 
 

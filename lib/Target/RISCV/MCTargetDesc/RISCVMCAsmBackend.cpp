@@ -54,29 +54,22 @@ public:
     : OSABI(osABI) {}
 
   // Override MCAsmBackend
-  virtual unsigned getNumFixupKinds() const LLVM_OVERRIDE {
+  unsigned getNumFixupKinds() const override {
     return RISCV::NumTargetFixupKinds;
   }
-  virtual const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const
-    LLVM_OVERRIDE;
-  virtual void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
-                          uint64_t Value) const LLVM_OVERRIDE;
-  virtual bool mayNeedRelaxation(const MCInst &Inst) const LLVM_OVERRIDE;
-  virtual bool fixupNeedsRelaxation(const MCFixup &Fixup,
-                                    uint64_t Value,
-                                    const MCRelaxableFragment *Fragment,
-                                    const MCAsmLayout &Layout) const
-    LLVM_OVERRIDE;
-  virtual void relaxInstruction(const MCInst &Inst,
-                                MCInst &Res) const LLVM_OVERRIDE;
-  virtual bool writeNopData(uint64_t Count,
-                            MCObjectWriter *OW) const LLVM_OVERRIDE;
-  virtual MCObjectWriter *createObjectWriter(raw_ostream &OS) const
-    LLVM_OVERRIDE {
+  const MCFixupKindInfo &getFixupKindInfo(MCFixupKind Kind) const override;
+  void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
+                  uint64_t Value, bool IsPCRel) const override;
+  bool mayNeedRelaxation(const MCInst &Inst) const override;
+  bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
+                            const MCRelaxableFragment *Fragment,
+                            const MCAsmLayout &Layout) const override;
+  void relaxInstruction(const MCInst &Inst, MCInst &Res) const override;
+  bool writeNopData(uint64_t Count, MCObjectWriter *OW) const override;
+  MCObjectWriter *createObjectWriter(raw_ostream &OS) const override {
     return createRISCVObjectWriter(OS, OSABI);
   }
-  virtual bool doesSectionRequireSymbols(const MCSection &Section) const
-    LLVM_OVERRIDE {
+  bool doesSectionRequireSymbols(const MCSection &Section) const override {
     return false;
   }
 };
@@ -101,7 +94,8 @@ RISCVMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 }
 
 void RISCVMCAsmBackend::applyFixup(const MCFixup &Fixup, char *Data,
-                                     unsigned DataSize, uint64_t Value) const {
+                                   unsigned DataSize, uint64_t Value,
+                                   bool IsPCRel) const {
   MCFixupKind Kind = Fixup.getKind();
   unsigned Offset = Fixup.getOffset();
   unsigned Size = (getFixupKindInfo(Kind).TargetSize + 7) / 8;
@@ -146,8 +140,9 @@ bool RISCVMCAsmBackend::writeNopData(uint64_t Count,
   return true;
 }
 
-MCAsmBackend *llvm::createRISCVMCAsmBackend(const Target &T, StringRef TT,
-                                              StringRef CPU) {
+MCAsmBackend *llvm::createRISCVMCAsmBackend(const Target &T,
+                                            const MCRegisterInfo &MRI,
+                                            StringRef TT, StringRef CPU) {
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(Triple(TT).getOS());
   return new RISCVMCAsmBackend(OSABI);
 }

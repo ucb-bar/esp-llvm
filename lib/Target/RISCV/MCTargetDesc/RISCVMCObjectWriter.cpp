@@ -24,14 +24,8 @@ public:
 
 protected:
   // Override MCELFObjectTargetWriter.
-  virtual unsigned GetRelocType(const MCValue &Target, const MCFixup &Fixup,
-                                bool IsPCRel, bool IsRelocWithSymbol,
-                                int64_t Addend) const LLVM_OVERRIDE;
-  virtual const MCSymbol *ExplicitRelSym(const MCAssembler &Asm,
-                                         const MCValue &Target,
-                                         const MCFragment &F,
-                                         const MCFixup &Fixup,
-                                         bool IsPCRel) const LLVM_OVERRIDE;
+  unsigned GetRelocType(const MCValue &Target, const MCFixup &Fixup,
+                        bool IsPCRel) const override;
 };
 } // end anonymouse namespace
 
@@ -88,10 +82,8 @@ static unsigned getPLTReloc(unsigned Kind) {
 }
 
 unsigned RISCVObjectWriter::GetRelocType(const MCValue &Target,
-                                           const MCFixup &Fixup,
-                                           bool IsPCRel,
-                                           bool IsRelocWithSymbol,
-                                           int64_t Addend) const {
+                                         const MCFixup &Fixup,
+                                         bool IsPCRel) const {
   MCSymbolRefExpr::VariantKind Modifier = (Target.isAbsolute() ?
                                            MCSymbolRefExpr::VK_None :
                                            Target.getSymA()->getKind());
@@ -118,21 +110,6 @@ unsigned RISCVObjectWriter::GetRelocType(const MCValue &Target,
   default:
     llvm_unreachable("Modifier not supported");
   }
-}
-
-const MCSymbol *RISCVObjectWriter::ExplicitRelSym(const MCAssembler &Asm,
-                                                    const MCValue &Target,
-                                                    const MCFragment &F,
-                                                    const MCFixup &Fixup,
-                                                    bool IsPCRel) const {
-  // The addend in a PC-relative R_390_* relocation is always applied to
-  // the PC-relative part of the address.  If some kind of indirection
-  // is applied to the symbol first, we can't use an addend there too.
-  if (!Target.isAbsolute() &&
-      Target.getSymA()->getKind() != MCSymbolRefExpr::VK_None &&
-      IsPCRel)
-    return &Target.getSymA()->getSymbol().AliasedSymbol();
-  return NULL;
 }
 
 MCObjectWriter *llvm::createRISCVObjectWriter(raw_ostream &OS,

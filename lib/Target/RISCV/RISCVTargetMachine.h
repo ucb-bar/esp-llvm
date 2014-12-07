@@ -15,25 +15,15 @@
 #ifndef RISCVTARGETMACHINE_H
 #define RISCVTARGETMACHINE_H
 
-#include "RISCVFrameLowering.h"
-#include "RISCVISelLowering.h"
-#include "RISCVInstrInfo.h"
-#include "RISCVRegisterInfo.h"
 #include "RISCVSubtarget.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/Target/TargetFrameLowering.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetSelectionDAGInfo.h"
 
 namespace llvm {
 
+class TargetFrameLowering;
+
 class RISCVTargetMachine : public LLVMTargetMachine {
-  RISCVSubtarget        Subtarget;
-  const DataLayout        DL;
-  RISCVInstrInfo        InstrInfo;
-  RISCVTargetLowering   TLInfo;
-  TargetSelectionDAGInfo  TSInfo;
-  RISCVFrameLowering    FrameLowering;
+  RISCVSubtarget Subtarget;
 
 public:
   RISCVTargetMachine(const Target &T, StringRef TT, StringRef CPU,
@@ -42,31 +32,28 @@ public:
                        CodeGenOpt::Level OL);
 
   // Override TargetMachine.
-  virtual const TargetFrameLowering *getFrameLowering() const LLVM_OVERRIDE {
-    return &FrameLowering;
+  const TargetFrameLowering *getFrameLowering() const override {
+    return getSubtargetImpl()->getFrameLowering();
   }
-  virtual const RISCVInstrInfo *getInstrInfo() const LLVM_OVERRIDE {
-    return &InstrInfo;
+  const RISCVInstrInfo *getInstrInfo() const override {
+    return getSubtargetImpl()->getInstrInfo();
   }
-  virtual const RISCVSubtarget *getSubtargetImpl() const LLVM_OVERRIDE {
-    return &Subtarget;
+  const RISCVSubtarget *getSubtargetImpl() const override { return &Subtarget; }
+  const DataLayout *getDataLayout() const override {
+    return getSubtargetImpl()->getDataLayout();
   }
-  virtual const DataLayout *getDataLayout() const LLVM_OVERRIDE {
-    return &DL;
+  const RISCVRegisterInfo *getRegisterInfo() const override {
+    return getSubtargetImpl()->getRegisterInfo();
   }
-  virtual const RISCVRegisterInfo *getRegisterInfo() const LLVM_OVERRIDE {
-    return &InstrInfo.getRegisterInfo();
+  const RISCVTargetLowering *getTargetLowering() const override {
+    return getSubtargetImpl()->getTargetLowering();
   }
-  virtual const RISCVTargetLowering *getTargetLowering() const LLVM_OVERRIDE {
-    return &TLInfo;
-  }
-  virtual const TargetSelectionDAGInfo *getSelectionDAGInfo() const
-    LLVM_OVERRIDE {
-    return &TSInfo;
+  const TargetSelectionDAGInfo *getSelectionDAGInfo() const override {
+    return getSubtargetImpl()->getSelectionDAGInfo();
   }
 
   // Override LLVMTargetMachine
-  virtual TargetPassConfig *createPassConfig(PassManagerBase &PM) LLVM_OVERRIDE;
+  TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 };
 
 } // end namespace llvm

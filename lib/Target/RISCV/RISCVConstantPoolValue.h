@@ -39,11 +39,11 @@ public:
     Create(const GlobalValue *GV, RISCVCP::RISCVCPModifier Modifier);
 
   // Override MachineConstantPoolValue.
-  virtual unsigned getRelocationInfo() const LLVM_OVERRIDE;
-  virtual int getExistingMachineCPValue(MachineConstantPool *CP,
-                                        unsigned Alignment) LLVM_OVERRIDE;
-  virtual void addSelectionDAGCSEId(FoldingSetNodeID &ID) LLVM_OVERRIDE;
-  virtual void print(raw_ostream &O) const LLVM_OVERRIDE;
+  unsigned getRelocationInfo() const override;
+  int getExistingMachineCPValue(MachineConstantPool *CP,
+                                unsigned Alignment) override;
+  void addSelectionDAGCSEId(FoldingSetNodeID &ID) override;
+  void print(raw_ostream &O) const override;
 
   // Access RISCV-specific fields.
   const GlobalValue *getGlobalValue() const { return GV; }

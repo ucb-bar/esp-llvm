@@ -20,16 +20,16 @@
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/TargetRegistry.h"
-#include "llvm/Target/Mangler.h"
 
 using namespace llvm;
 
 void RISCVAsmPrinter::EmitInstruction(const MachineInstr *MI) {
-  RISCVMCInstLower Lower(Mang, MF->getContext(), *this);
+  RISCVMCInstLower Lower(MF->getContext(), *this);
   MCInst LoweredMI;
   Lower.lower(MI, LoweredMI);
-  OutStreamer.EmitInstruction(LoweredMI);
+  EmitToStreamer(OutStreamer, LoweredMI);
 }
 
 // Convert a RISCV-specific constant pool modifier into the associated
@@ -47,10 +47,9 @@ EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
   RISCVConstantPoolValue *ZCPV =
     static_cast<RISCVConstantPoolValue*>(MCPV);
 
-  const MCExpr *Expr =
-    MCSymbolRefExpr::Create(Mang->getSymbol(ZCPV->getGlobalValue()),
-                            getModifierVariantKind(ZCPV->getModifier()),
-                            OutContext);
+  const MCExpr *Expr = MCSymbolRefExpr::Create(
+      getSymbol(ZCPV->getGlobalValue()),
+      getModifierVariantKind(ZCPV->getModifier()), OutContext);
   uint64_t Size = TM.getDataLayout()->getTypeAllocSize(ZCPV->getType());
 
   OutStreamer.EmitValue(Expr, Size);
@@ -68,13 +67,13 @@ void RISCVAsmPrinter::printOperand(const MachineInstr *MI, int OpNo, raw_ostream
  switch (MO.getType()) {
     case MachineOperand::MO_Register:
     case MachineOperand::MO_Immediate: {
-      RISCVMCInstLower Lower(Mang, MF->getContext(), *this);
+      RISCVMCInstLower Lower(MF->getContext(), *this);
       MCOperand MC(Lower.lowerOperand(MI->getOperand(OpNo)));
       RISCVInstPrinter::printOperand(MC, O);
       break;
       }
     case MachineOperand::MO_GlobalAddress:
-      O << Mang->getSymbol(MO.getGlobal());
+      O << *getSymbol(MO.getGlobal());
       break;
     default:
       llvm_unreachable("<unknown operand type>");
