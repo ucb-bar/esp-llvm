@@ -13,8 +13,11 @@ class CCIfExtend<CCAction A>
   : CCIf<"ArgFlags.isSExt() || ArgFlags.isZExt()", A>;
 
 /// CCIfSubtarget - Match if the current subtarget has a feature F.
-class CCIfSubtarget<string F, CCAction A>:
-  CCIf<!strconcat("State.getTarget().getSubtarget<RISCVSubtarget>().", F), A>;
+class CCIfSubtarget<string F, CCAction A>
+    : CCIf<!strconcat("!static_cast<const RISCVSubtarget&>"
+		      "(State.getMachineFunction().getSubtarget()).",
+		     F),
+          A>;
 
 //===----------------------------------------------------------------------===//
 // RV32 return value calling convention

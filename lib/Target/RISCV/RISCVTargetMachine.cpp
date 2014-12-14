@@ -9,6 +9,7 @@
 
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
@@ -24,6 +25,7 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
                                        Reloc::Model RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
     : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
+      TLOF(make_unique<TargetLoweringObjectFileELF>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }
@@ -39,8 +41,8 @@ public:
     return getTM<RISCVTargetMachine>();
   }
 
-  virtual bool addInstSelector();
-  virtual bool addPreEmitPass();
+  bool addInstSelector() override;
+  void addPreEmitPass() override;
 };
 } // end anonymous namespace
 
@@ -49,9 +51,8 @@ bool RISCVPassConfig::addInstSelector() {
   return false;
 }
 
-bool RISCVPassConfig::addPreEmitPass(){
+void RISCVPassConfig::addPreEmitPass(){
   addPass(createRISCVBranchSelectionPass());
-  return false;
 }
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {

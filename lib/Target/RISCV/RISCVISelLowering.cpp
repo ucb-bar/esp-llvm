@@ -50,7 +50,7 @@ static const uint16_t FPDRegs[8] = {
 };
 
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
-    : TargetLowering(tm, new TargetLoweringObjectFileELF()),
+    : TargetLowering(tm),
       Subtarget(tm.getSubtarget<RISCVSubtarget>()), IsRV32(Subtarget.isRV32()) {
   MVT PtrVT = getPointerTy();
 
@@ -882,7 +882,7 @@ passByValArg(SDValue Chain, SDLoc DL,
         SDValue LoadVal =
           DAG.getExtLoad(ISD::ZEXTLOAD, DL, RegTy, Chain, LoadPtr,
                          MachinePointerInfo(), MVT::getIntegerVT(LoadSize * 8),
-                         false, false, Alignment);
+                         false, false, false, Alignment);
         MemOpChains.push_back(LoadVal.getValue(1));
 
         // Shift the loaded value.
@@ -1049,8 +1049,8 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
 
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
-  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(),
-                 getTargetMachine(), ArgLocs, *DAG.getContext());
+  CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
+		 *DAG.getContext());
   
   RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo, Subtarget);
   Function::const_arg_iterator FuncArg =
@@ -1225,8 +1225,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
-  CCState ArgCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), ArgLocs,
-                    *DAG.getContext());
+  CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
   RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo, Subtarget);
   RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, getTargetMachine().Options.UseSoftFloat,
                                    Callee.getNode(), CLI.Args);
@@ -1342,8 +1341,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RetLocs;
-  CCState RetCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), RetLocs,
-                    *DAG.getContext());
+  CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
   if(Subtarget.isRV64())
     RetCCInfo.AnalyzeCallResult(Ins, RetCC_RISCV64);
   else
@@ -1376,8 +1374,7 @@ RISCVTargetLowering::CanLowerReturn(CallingConv::ID CallConv,
                                    const SmallVectorImpl<ISD::OutputArg> &Outs,
                                    LLVMContext &Context) const {
   SmallVector<CCValAssign, 16> RVLocs;
-  CCState CCInfo(CallConv, IsVarArg, MF, getTargetMachine(),
-                 RVLocs, Context);
+  CCState CCInfo(CallConv, IsVarArg, MF, RVLocs, Context);
   return CCInfo.CheckReturn(Outs, Subtarget.isRV64() ? RetCC_RISCV64 : RetCC_RISCV32);
 }
 
@@ -1391,8 +1388,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
 
   // Assign locations to each returned value.
   SmallVector<CCValAssign, 16> RetLocs;
-  CCState RetCCInfo(CallConv, IsVarArg, MF, DAG.getTarget(), RetLocs,
-                    *DAG.getContext());
+  CCState RetCCInfo(CallConv, IsVarArg, MF, RetLocs, *DAG.getContext());
   if(Subtarget.isRV64())
     RetCCInfo.AnalyzeReturn(Outs, RetCC_RISCV64);
   else
@@ -1717,7 +1713,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
 MachineBasicBlock *RISCVTargetLowering::
 emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
-  const TargetInstrInfo *TII = getTargetMachine().getInstrInfo();
+  const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
 
   // To "insert" a SELECT_CC instruction, we actually have to insert the
@@ -1751,7 +1747,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   BB->addSuccessor(copy0MBB);
   BB->addSuccessor(sinkMBB);
 
-  const TargetRegisterInfo *TRI = getTargetMachine().getRegisterInfo();
+  const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl()->getRegisterInfo();
   const TargetRegisterClass *RC = MI->getRegClassConstraint(1, TII, TRI);
   unsigned bne = RC == &RISCV::GR64BitRegClass ? RISCV::BNE64 : RISCV::BNE;
   unsigned zero = RC == &RISCV::GR64BitRegClass ? RISCV::zero_64 : RISCV::zero;

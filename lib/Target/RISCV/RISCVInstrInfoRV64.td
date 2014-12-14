@@ -34,11 +34,11 @@ def SRLIW64: InstI<"srliw", 0b0011011, 0b101       , srl, GR32, GR32, imm64sx12>
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAIW: InstI<"sraiw", 0b0011011, 0b101       , sra, GR32, GR32, imm32sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b0000010; 
+  let IMM{11-6} = 0b000010;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAIW64: InstI<"sraiw", 0b0011011, 0b101       , sra, GR32, GR32, imm64sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b0000010; 
+  let IMM{11-6} = 0b000010;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 

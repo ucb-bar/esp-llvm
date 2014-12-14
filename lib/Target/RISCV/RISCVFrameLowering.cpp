@@ -82,9 +82,9 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
   MachineFrameInfo *MFI    = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
   const RISCVRegisterInfo *RegInfo =
-    static_cast<const RISCVRegisterInfo*>(MF.getTarget().getRegisterInfo());
+    static_cast<const RISCVRegisterInfo*>(MF.getSubtarget().getRegisterInfo());
   const RISCVInstrInfo &TII =
-    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+    *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
@@ -179,9 +179,9 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   MachineFrameInfo *MFI            = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
   const RISCVRegisterInfo *RegInfo =
-    static_cast<const RISCVRegisterInfo*>(MF.getTarget().getRegisterInfo());
+    static_cast<const RISCVRegisterInfo*>(MF.getSubtarget().getRegisterInfo());
   const RISCVInstrInfo &TII =
-    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+    *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
   const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
   unsigned SP   = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
@@ -233,7 +233,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           const TargetRegisterInfo *TRI) const {
   MachineFunction *MF = MBB.getParent();
   MachineBasicBlock *EntryBlock = MF->begin();
-  const TargetInstrInfo &TII = *MF->getTarget().getInstrInfo();
+  const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
 
   for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
     // Add the callee-saved register as live-in. Do not add if the register is
@@ -274,7 +274,7 @@ void RISCVFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
   const RISCVInstrInfo &TII =
-    *static_cast<const RISCVInstrInfo*>(MF.getTarget().getInstrInfo());
+    *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
   const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
 
   if (!hasReservedCallFrame(MF)) {

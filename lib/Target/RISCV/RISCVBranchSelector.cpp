@@ -22,6 +22,7 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/Support/MathExtras.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Target/TargetMachine.h"
 using namespace llvm;
 
@@ -61,8 +62,8 @@ FunctionPass *llvm::createRISCVBranchSelectionPass() {
 }
 
 bool RISCVBSel::runOnMachineFunction(MachineFunction &Fn) {
-  const RISCVInstrInfo *TII =
-                static_cast<const RISCVInstrInfo*>(Fn.getTarget().getInstrInfo());
+  const RISCVInstrInfo *TII = static_cast<const RISCVInstrInfo *>(
+      Fn.getTarget().getSubtargetImpl()->getInstrInfo());
   // Give the blocks of the function a dense, in-order, numbering.
   Fn.RenumberBlocks();
   BlockSizes.resize(Fn.getNumBlockIDs());

@@ -344,7 +344,7 @@ public:
                         SMLoc NameLoc, OperandVector &Operands) override;
   bool MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                OperandVector &Operands, MCStreamer &Out,
-                               unsigned &ErrorInfo,
+                               uint64_t &ErrorInfo,
                                bool MatchingInlineAsm) override;
 
   // Used by the TableGen code to parse particular operand types.
@@ -667,7 +667,7 @@ bool RISCVAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
 bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                              OperandVector &Operands,
                                              MCStreamer &Out,
-                                             unsigned &ErrorInfo,
+                                             uint64_t &ErrorInfo,
                                              bool MatchingInlineAsm) {
   MCInst Inst;
   unsigned MatchResult;

@@ -205,7 +205,7 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
 public:
   RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
     : SelectionDAGISel(TM, OptLevel),
-      Lowering(*TM.getTargetLowering()),
+      Lowering(*TM.getSubtargetImpl()->getTargetLowering()),
       Subtarget(*TM.getSubtargetImpl()) { }
 
   // Override MachineFunctionPass.

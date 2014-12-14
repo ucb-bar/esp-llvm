@@ -106,7 +106,7 @@ class InstLR<string mnemonic, bits<3> funct3,
   let Inst{31-27} = 0b00010;
   let Inst{26} = 0;//aq
   let Inst{25} = 0;//rl
-  let Inst{24-20} = 0b0000;
+  let Inst{24-20} = 0b00000;
   let Inst{19-15} = RS1;
   let Inst{14-12} = funct3;
   let Inst{11- 7} = RD;

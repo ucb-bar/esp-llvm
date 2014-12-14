@@ -65,7 +65,7 @@ RISCVRegisterInfo::getCallPreservedMask(CallingConv::ID) const {
 BitVector
 RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
 
   // zero is reserved so llvm doesn't store things there
   Reserved.set(RISCV::zero);
@@ -151,7 +151,7 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     unsigned Reg;
     const RISCVInstrInfo &TII =
         *static_cast<const RISCVInstrInfo *>(
-            MBB.getParent()->getTarget().getInstrInfo());
+            MBB.getParent()->getSubtarget().getInstrInfo());
 
     TII.loadImmediate(MBB, II, &Reg, Offset);
     BuildMI(MBB, II, DL, TII.get(ADD), Reg).addReg(FrameReg)
@@ -189,7 +189,7 @@ RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
 unsigned
 RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = MF.getTarget().getFrameLowering();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
   return TFI->hasFP(MF) ? 
       (Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp) : 
       (Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp);
