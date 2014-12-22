@@ -15,7 +15,6 @@ TARGET = RISCV
 BUILT_SOURCES = RISCVGenRegisterInfo.inc \
 		RISCVGenAsmWriter.inc \
 		RISCVGenAsmMatcher.inc \
-		RISCVGenCodeEmitter.inc \
 		RISCVGenInstrInfo.inc \
 		RISCVGenDAGISel.inc \
 		RISCVGenSubtargetInfo.inc \
