@@ -70,6 +70,11 @@ def ADDI64: InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, 
 def XORI64: InstI<"xori", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def ORI64 : InstI<"ori" , 0b0010011, 0b110       , or , GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def ANDI64: InstI<"andi", 0b0010011, 0b111       , and, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
+//Pseudo-Op for ADDI Rd, Rs1, 0x00
+def MV64:   InstIp<"mv",   0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, Requires<[IsRV64]>{
+  let IMM{11-6} = 0b000000;
+}
+
 //TODO: check 64bit shifr constraints
 //TODO: enforce constraints here or up on level?
 def SLLI64: InstI<"slli", 0b0010011, 0b001       , shl, GR64, GR64, imm64sx12>, Requires<[IsRV64]> {
