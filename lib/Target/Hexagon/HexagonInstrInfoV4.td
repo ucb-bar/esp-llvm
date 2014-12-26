@@ -412,71 +412,71 @@ def : Pat <(i64 (zext (i32 IntRegs:$src1))),
       Requires<[HasV4T]>;
 // zext i8->i64
 def:  Pat <(i64 (zextloadi8 ADDRriS11_0:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDriub ADDRriS11_0:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrub_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 20 in
 def:  Pat <(i64 (zextloadi8 (add (i32 IntRegs:$src1),
                                 s11_0ExtPred:$offset))),
-      (i64 (COMBINE_Ir_V4 0, (LDriub_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrub_io IntRegs:$src1,
                                   s11_0ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
 // zext i1->i64
 def:  Pat <(i64 (zextloadi1 ADDRriS11_0:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDriub ADDRriS11_0:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrub_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 20 in
 def:  Pat <(i64 (zextloadi1 (add (i32 IntRegs:$src1),
                                 s11_0ExtPred:$offset))),
-      (i64 (COMBINE_Ir_V4 0, (LDriub_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrub_io IntRegs:$src1,
                                   s11_0ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
 // zext i16->i64
 def:  Pat <(i64 (zextloadi16 ADDRriS11_1:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDriuh ADDRriS11_1:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadruh_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 20 in
 def:  Pat <(i64 (zextloadi16 (add (i32 IntRegs:$src1),
                                   s11_1ExtPred:$offset))),
-      (i64 (COMBINE_Ir_V4 0, (LDriuh_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadruh_io IntRegs:$src1,
                                   s11_1ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
 // anyext i16->i64
 def:  Pat <(i64 (extloadi16 ADDRriS11_2:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDrih ADDRriS11_2:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrh_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 20 in
 def:  Pat <(i64 (extloadi16 (add (i32 IntRegs:$src1),
                                   s11_1ExtPred:$offset))),
-      (i64 (COMBINE_Ir_V4 0, (LDrih_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadrh_io IntRegs:$src1,
                                   s11_1ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
 // zext i32->i64
 def:  Pat <(i64 (zextloadi32 ADDRriS11_2:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDriw ADDRriS11_2:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadri_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 100 in
 def:  Pat <(i64 (zextloadi32 (i32 (add IntRegs:$src1, s11_2ExtPred:$offset)))),
-      (i64 (COMBINE_Ir_V4 0, (LDriw_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadri_io IntRegs:$src1,
                                   s11_2ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
 // anyext i32->i64
 def:  Pat <(i64 (extloadi32 ADDRriS11_2:$src1)),
-      (i64 (COMBINE_Ir_V4 0, (LDriw ADDRriS11_2:$src1)))>,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadri_io AddrFI:$src1, 0)))>,
       Requires<[HasV4T]>;
 
 let AddedComplexity = 100 in
 def:  Pat <(i64 (extloadi32 (i32 (add IntRegs:$src1, s11_2ExtPred:$offset)))),
-      (i64 (COMBINE_Ir_V4 0, (LDriw_indexed IntRegs:$src1,
+      (i64 (COMBINE_Ir_V4 0, (L2_loadri_io IntRegs:$src1,
                                   s11_2ExtPred:$offset)))>,
       Requires<[HasV4T]>;
 
