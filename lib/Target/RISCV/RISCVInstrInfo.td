@@ -43,6 +43,10 @@ def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Re
 def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
 def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, GR32, imm32sx12>;
 def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, GR32, imm32sx12>;
+//Pseudo-Op for ADDI Rd, Rs1, 0x00
+def MV:   InstIp<"mv",   0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
+  let IMM{11-6} = 0b000000; 
+}
 //TODO: enforce constraints here or up on level?
 def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
   let IMM{11-6} = 0b000000; 
