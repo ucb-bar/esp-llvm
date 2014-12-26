@@ -500,7 +500,7 @@ RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
                                 const unsigned *Regs, bool IsAddress) {
   if (parseRegister(Reg))
     return MatchOperand_NoMatch;
-  if (Reg.Prefix != Prefix || Reg.Number > 15 || Regs[Reg.Number] == 0) {
+  if (Reg.Prefix != Prefix || Reg.Number > 31 || Regs[Reg.Number] == 0) {
     Error(Reg.StartLoc, "invalid register");
     return MatchOperand_ParseFail;
   }
