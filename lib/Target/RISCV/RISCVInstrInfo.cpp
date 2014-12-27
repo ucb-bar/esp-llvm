@@ -377,6 +377,23 @@ RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, Mach
       BuildMI(MBB, I, DL, get(RISCV::BGEU)).addMBB(TBB).addReg(Cond[2].getReg())
           .addReg(Cond[3].getReg());
       break;
+    //synth
+    case RISCV::CCMASK_CMP_GT:
+      BuildMI(MBB, I, DL, get(RISCV::BGT)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE:
+      BuildMI(MBB, I, DL, get(RISCV::BLE)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_GT | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BGTU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
+    case RISCV::CCMASK_CMP_LE | RISCV::CCMASK_CMP_UO:
+      BuildMI(MBB, I, DL, get(RISCV::BLEU)).addMBB(TBB).addReg(Cond[2].getReg())
+          .addReg(Cond[3].getReg());
+      break;
     default:
       llvm_unreachable("Invalid branch condition code!");
   }
