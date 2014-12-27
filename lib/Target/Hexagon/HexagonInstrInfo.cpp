@@ -78,11 +78,11 @@ unsigned HexagonInstrInfo::isLoadFromStackSlot(const MachineInstr *MI,
 
   switch (MI->getOpcode()) {
   default: break;
-  case Hexagon::LDriw:
-  case Hexagon::LDrid:
-  case Hexagon::LDrih:
-  case Hexagon::LDrib:
-  case Hexagon::LDriub:
+  case Hexagon::L2_loadri_io:
+  case Hexagon::L2_loadrd_io:
+  case Hexagon::L2_loadrh_io:
+  case Hexagon::L2_loadrb_io:
+  case Hexagon::L2_loadrub_io:
     if (MI->getOperand(2).isFI() &&
         MI->getOperand(1).isImm() && (MI->getOperand(1).getImm() == 0)) {
       FrameIndex = MI->getOperand(2).getIndex();
@@ -533,10 +533,10 @@ loadRegFromStackSlot(MachineBasicBlock &MBB, MachineBasicBlock::iterator I,
                       MFI.getObjectSize(FI),
                       Align);
   if (RC == &Hexagon::IntRegsRegClass) {
-    BuildMI(MBB, I, DL, get(Hexagon::LDriw), DestReg)
+    BuildMI(MBB, I, DL, get(Hexagon::L2_loadri_io), DestReg)
           .addFrameIndex(FI).addImm(0).addMemOperand(MMO);
   } else if (RC == &Hexagon::DoubleRegsRegClass) {
-    BuildMI(MBB, I, DL, get(Hexagon::LDrid), DestReg)
+    BuildMI(MBB, I, DL, get(Hexagon::L2_loadrd_io), DestReg)
           .addFrameIndex(FI).addImm(0).addMemOperand(MMO);
   } else if (RC == &Hexagon::PredRegsRegClass) {
     BuildMI(MBB, I, DL, get(Hexagon::LDriw_pred), DestReg)
@@ -670,24 +670,18 @@ bool HexagonInstrInfo::isPredicable(MachineInstr *MI) const {
   case Hexagon::STrib_nv_V4:
     return isUInt<6>(MI->getOperand(1).getImm());
 
-  case Hexagon::LDrid:
-  case Hexagon::LDrid_indexed:
+  case Hexagon::L2_loadrd_io:
     return isShiftedUInt<6,3>(MI->getOperand(2).getImm());
 
-  case Hexagon::LDriw:
-  case Hexagon::LDriw_indexed:
+  case Hexagon::L2_loadri_io:
     return isShiftedUInt<6,2>(MI->getOperand(2).getImm());
 
-  case Hexagon::LDrih:
-  case Hexagon::LDriuh:
-  case Hexagon::LDrih_indexed:
-  case Hexagon::LDriuh_indexed:
+  case Hexagon::L2_loadrh_io:
+  case Hexagon::L2_loadruh_io:
     return isShiftedUInt<6,1>(MI->getOperand(2).getImm());
 
-  case Hexagon::LDrib:
-  case Hexagon::LDriub:
-  case Hexagon::LDrib_indexed:
-  case Hexagon::LDriub_indexed:
+  case Hexagon::L2_loadrb_io:
+  case Hexagon::L2_loadrub_io:
     return isUInt<6>(MI->getOperand(2).getImm());
 
   case Hexagon::POST_LDrid:
@@ -1107,8 +1101,7 @@ isValidOffset(const int Opcode, const int Offset) const {
 
   switch(Opcode) {
 
-  case Hexagon::LDriw:
-  case Hexagon::LDriw_indexed:
+  case Hexagon::L2_loadri_io:
   case Hexagon::LDriw_f:
   case Hexagon::STriw_indexed:
   case Hexagon::STriw:
@@ -1116,8 +1109,7 @@ isValidOffset(const int Opcode, const int Offset) const {
     return (Offset >= Hexagon_MEMW_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMW_OFFSET_MAX);
 
-  case Hexagon::LDrid:
-  case Hexagon::LDrid_indexed:
+  case Hexagon::L2_loadrd_io:
   case Hexagon::LDrid_f:
   case Hexagon::STrid:
   case Hexagon::STrid_indexed:
@@ -1125,15 +1117,15 @@ isValidOffset(const int Opcode, const int Offset) const {
     return (Offset >= Hexagon_MEMD_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMD_OFFSET_MAX);
 
-  case Hexagon::LDrih:
-  case Hexagon::LDriuh:
+  case Hexagon::L2_loadrh_io:
+  case Hexagon::L2_loadruh_io:
   case Hexagon::STrih:
     return (Offset >= Hexagon_MEMH_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMH_OFFSET_MAX);
 
-  case Hexagon::LDrib:
+  case Hexagon::L2_loadrb_io:
   case Hexagon::STrib:
-  case Hexagon::LDriub:
+  case Hexagon::L2_loadrub_io:
     return (Offset >= Hexagon_MEMB_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMB_OFFSET_MAX);
 
@@ -1352,30 +1344,18 @@ isConditionalLoad (const MachineInstr* MI) const {
   switch (MI->getOpcode())
   {
     default: return false;
-    case Hexagon::LDrid_cPt :
-    case Hexagon::LDrid_cNotPt :
-    case Hexagon::LDrid_indexed_cPt :
-    case Hexagon::LDrid_indexed_cNotPt :
-    case Hexagon::LDriw_cPt :
-    case Hexagon::LDriw_cNotPt :
-    case Hexagon::LDriw_indexed_cPt :
-    case Hexagon::LDriw_indexed_cNotPt :
-    case Hexagon::LDrih_cPt :
-    case Hexagon::LDrih_cNotPt :
-    case Hexagon::LDrih_indexed_cPt :
-    case Hexagon::LDrih_indexed_cNotPt :
-    case Hexagon::LDrib_cPt :
-    case Hexagon::LDrib_cNotPt :
-    case Hexagon::LDrib_indexed_cPt :
-    case Hexagon::LDrib_indexed_cNotPt :
-    case Hexagon::LDriuh_cPt :
-    case Hexagon::LDriuh_cNotPt :
-    case Hexagon::LDriuh_indexed_cPt :
-    case Hexagon::LDriuh_indexed_cNotPt :
-    case Hexagon::LDriub_cPt :
-    case Hexagon::LDriub_cNotPt :
-    case Hexagon::LDriub_indexed_cPt :
-    case Hexagon::LDriub_indexed_cNotPt :
+    case Hexagon::L2_ploadrdt_io :
+    case Hexagon::L2_ploadrdf_io:
+    case Hexagon::L2_ploadrit_io:
+    case Hexagon::L2_ploadrif_io:
+    case Hexagon::L2_ploadrht_io:
+    case Hexagon::L2_ploadrhf_io:
+    case Hexagon::L2_ploadrbt_io:
+    case Hexagon::L2_ploadrbf_io:
+    case Hexagon::L2_ploadruht_io:
+    case Hexagon::L2_ploadruhf_io:
+    case Hexagon::L2_ploadrubt_io:
+    case Hexagon::L2_ploadrubf_io:
       return true;
     case Hexagon::POST_LDrid_cPt :
     case Hexagon::POST_LDrid_cNotPt :
