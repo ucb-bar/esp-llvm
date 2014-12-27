@@ -73,6 +73,7 @@ def RISCVInstrInfo : InstrInfo {}
 
 def RISCVAsmParser : AsmParser {
   let ShouldEmitMatchRegisterName = 0;
+  let MnemonicContainsDot = 1;
 }
 
 //===----------------------------------------------------------------------===//

@@ -15,7 +15,13 @@ def SRLW : InstR<"srlw" , 0b0111011, 0b0000000101, srl   , GR32, GR32>, Requires
 def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR32, GR32>, Requires<[IsRV64]>;
 
 //Integer arithmetic register-immediate
-def ADDIW: InstI<"addiw", 0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>;
+def ADDIW:  InstI<"addiw",   0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>;
+
+//Pseudo-Op for ADDIW Rd, Rs1, 0
+def SEXT_W: InstIp<"sext.w", 0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>{
+  let IMM{11-6} = 0b000000;
+}
+
 //TODO: enforce constraints here or up on level?
 def SLLIW: InstI<"slliw", 0b0011011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV64]> {
   let IMM{11-5} = 0b0000000; 
@@ -74,6 +80,16 @@ def ANDI64: InstI<"andi", 0b0010011, 0b111       , and, GR64, GR64, imm64sx12>, 
 def MV64:   InstIp<"mv",   0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, Requires<[IsRV64]>{
   let IMM{11-6} = 0b000000;
 }
+//Pseudo-Op for ADDI x0, x0, 0x00
+def NOP64: InstIpn<"nop", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>{
+  let RS1 = 0b00000;
+  let RD = 0b00000;
+  let IMM{11-6} = 0b000000;
+}
+//Pseudo-Op for XORI Rd, Rs1, -1
+def NOT64: InstIp<"not", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>{
+  let IMM{11-6} = 0b111111;
+}
 
 //TODO: check 64bit shifr constraints
 //TODO: enforce constraints here or up on level?
@@ -91,6 +107,10 @@ def SRAI64: InstI<"srai", 0b0010011, 0b101       , sra, GR64, GR64, imm64sx12>, 
 }
 def SLTI64 : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR64, imm64sx12>, Requires<[IsRV64]>;
 def SLTIU64: InstI<"sltiu",0b0010011, 0b011, setult,GR32, GR64, imm64sx12>, Requires<[IsRV64]>;
+//Pseudo-Op for sltiu Rd, Rs1, 1
+def SEQZ64: InstI<"seqz",0b0010011, 0b011, setult,GR32, GR64, imm64sx12>, Requires<[IsRV64]>{
+  let IMM{11-6} = 0b000001; 
+}
 
 //Synthesized set operators
 defm : SeteqPats<GR64, SLTIU64, XOR64, SLTU64, zero_64>, Requires<[IsRV64]>;
