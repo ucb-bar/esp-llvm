@@ -224,7 +224,7 @@ public:
 // an invalid register.  We don't use register class directly because that
 // specifies the allocation order.
 static const unsigned GR32Regs[] = {
-  RISCV::zero, RISCV::ra  , RISCV::fp  ,
+  RISCV::zero, RISCV::ra  ,
   RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
   RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
   RISCV::s10 , RISCV::s11 , 
@@ -236,7 +236,7 @@ static const unsigned GR32Regs[] = {
 };
 
 static const unsigned GR64Regs[] = {
-  RISCV::zero_64, RISCV::ra_64  , RISCV::fp_64  ,
+  RISCV::zero_64, RISCV::ra_64  ,
   RISCV::s0_64  , RISCV::s1_64  , RISCV::s2_64  , RISCV::s3_64  , RISCV::s4_64 ,
   RISCV::s5_64  , RISCV::s6_64  , RISCV::s7_64  , RISCV::s8_64  , RISCV::s9_64 ,
   RISCV::s10_64 , RISCV::s11_64 , 
