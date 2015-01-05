@@ -268,9 +268,8 @@ Instruction *InstCombiner::visitAllocaInst(AllocaInst &AI) {
     // is only subsequently read.
     SmallVector<Instruction *, 4> ToDelete;
     if (MemTransferInst *Copy = isOnlyCopiedFromConstantGlobal(&AI, ToDelete)) {
-      unsigned SourceAlign = getOrEnforceKnownAlignment(Copy->getSource(),
-                                                        AI.getAlignment(),
-                                                        DL, AT, &AI, DT);
+      unsigned SourceAlign = getOrEnforceKnownAlignment(
+          Copy->getSource(), AI.getAlignment(), DL, AC, &AI, DT);
       if (AI.getAlignment() <= SourceAlign) {
         DEBUG(dbgs() << "Found alloca equal to global: " << AI << '\n');
         DEBUG(dbgs() << "  memcpy = " << *Copy << '\n');
@@ -395,9 +394,8 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
 
   // Attempt to improve the alignment.
   if (DL) {
-    unsigned KnownAlign =
-      getOrEnforceKnownAlignment(Op, DL->getPrefTypeAlignment(LI.getType()),
-                                 DL, AT, &LI, DT);
+    unsigned KnownAlign = getOrEnforceKnownAlignment(
+        Op, DL->getPrefTypeAlignment(LI.getType()), DL, AC, &LI, DT);
     unsigned LoadAlign = LI.getAlignment();
     unsigned EffectiveLoadAlign = LoadAlign != 0 ? LoadAlign :
       DL->getABITypeAlignment(LI.getType());
@@ -474,18 +472,18 @@ Instruction *InstCombiner::visitLoadInst(LoadInst &LI) {
       }
 
       // load (select (cond, null, P)) -> load P
-      if (Constant *C = dyn_cast<Constant>(SI->getOperand(1)))
-        if (C->isNullValue()) {
-          LI.setOperand(0, SI->getOperand(2));
-          return &LI;
-        }
+      if (isa<ConstantPointerNull>(SI->getOperand(1)) && 
+          LI.getPointerAddressSpace() == 0) {
+        LI.setOperand(0, SI->getOperand(2));
+        return &LI;
+      }
 
       // load (select (cond, P, null)) -> load P
-      if (Constant *C = dyn_cast<Constant>(SI->getOperand(2)))
-        if (C->isNullValue()) {
-          LI.setOperand(0, SI->getOperand(1));
-          return &LI;
-        }
+      if (isa<ConstantPointerNull>(SI->getOperand(2)) &&
+          LI.getPointerAddressSpace() == 0) {
+        LI.setOperand(0, SI->getOperand(1));
+        return &LI;
+      }
     }
   }
   return nullptr;
@@ -607,9 +605,8 @@ Instruction *InstCombiner::visitStoreInst(StoreInst &SI) {
 
   // Attempt to improve the alignment.
   if (DL) {
-    unsigned KnownAlign =
-      getOrEnforceKnownAlignment(Ptr, DL->getPrefTypeAlignment(Val->getType()),
-                                 DL, AT, &SI, DT);
+    unsigned KnownAlign = getOrEnforceKnownAlignment(
+        Ptr, DL->getPrefTypeAlignment(Val->getType()), DL, AC, &SI, DT);
     unsigned StoreAlign = SI.getAlignment();
     unsigned EffectiveStoreAlign = StoreAlign != 0 ? StoreAlign :
       DL->getABITypeAlignment(Val->getType());

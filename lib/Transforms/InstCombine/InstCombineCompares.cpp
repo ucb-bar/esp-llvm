@@ -2588,7 +2588,7 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
     Changed = true;
   }
 
-  if (Value *V = SimplifyICmpInst(I.getPredicate(), Op0, Op1, DL, TLI, DT, AT))
+  if (Value *V = SimplifyICmpInst(I.getPredicate(), Op0, Op1, DL, TLI, DT, AC))
     return ReplaceInstUsesWith(I, V);
 
   // comparing -val or val with non-zero is the same as just comparing val
@@ -2691,6 +2691,26 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
       // (icmp cond A B) if cond is equality
       return new ICmpInst(I.getPredicate(), A, B);
     }
+
+    // (icmp sgt (sub nsw A B), -1) -> (icmp sge A, B)
+    if (I.getPredicate() == ICmpInst::ICMP_SGT && CI->isAllOnesValue() &&
+        match(Op0, m_NSWSub(m_Value(A), m_Value(B))))
+      return new ICmpInst(ICmpInst::ICMP_SGE, A, B);
+
+    // (icmp sgt (sub nsw A B), 0) -> (icmp sgt A, B)
+    if (I.getPredicate() == ICmpInst::ICMP_SGT && CI->isZero() &&
+        match(Op0, m_NSWSub(m_Value(A), m_Value(B))))
+      return new ICmpInst(ICmpInst::ICMP_SGT, A, B);
+
+    // (icmp slt (sub nsw A B), 0) -> (icmp slt A, B)
+    if (I.getPredicate() == ICmpInst::ICMP_SLT && CI->isZero() &&
+        match(Op0, m_NSWSub(m_Value(A), m_Value(B))))
+      return new ICmpInst(ICmpInst::ICMP_SLT, A, B);
+
+    // (icmp slt (sub nsw A B), 1) -> (icmp sle A, B)
+    if (I.getPredicate() == ICmpInst::ICMP_SLT && CI->isOne() &&
+        match(Op0, m_NSWSub(m_Value(A), m_Value(B))))
+      return new ICmpInst(ICmpInst::ICMP_SLE, A, B);
 
     // If we have an icmp le or icmp ge instruction, turn it into the
     // appropriate icmp lt or icmp gt instruction.  This allows us to rely on
@@ -3401,9 +3421,8 @@ Instruction *InstCombiner::visitICmpInst(ICmpInst &I) {
     // and       (A & ~B) != 0 --> (A & B) == 0
     // if A is a power of 2.
     if (match(Op0, m_And(m_Value(A), m_Not(m_Value(B)))) &&
-        match(Op1, m_Zero()) && isKnownToBeAPowerOfTwo(A, false,
-                                                       0, AT, &I, DT) &&
-                                I.isEquality())
+        match(Op1, m_Zero()) &&
+        isKnownToBeAPowerOfTwo(A, false, 0, AC, &I, DT) && I.isEquality())
       return new ICmpInst(I.getInversePredicate(),
                           Builder->CreateAnd(A, B),
                           Op1);
@@ -3808,7 +3827,7 @@ Instruction *InstCombiner::visitFCmpInst(FCmpInst &I) {
 
   Value *Op0 = I.getOperand(0), *Op1 = I.getOperand(1);
 
-  if (Value *V = SimplifyFCmpInst(I.getPredicate(), Op0, Op1, DL, TLI, DT, AT))
+  if (Value *V = SimplifyFCmpInst(I.getPredicate(), Op0, Op1, DL, TLI, DT, AC))
     return ReplaceInstUsesWith(I, V);
 
   // Simplify 'fcmp pred X, X'

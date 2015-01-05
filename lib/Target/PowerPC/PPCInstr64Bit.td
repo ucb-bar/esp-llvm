@@ -591,6 +591,11 @@ def POPCNTD : XForm_11<31, 506, (outs g8rc:$rA), (ins g8rc:$rS),
                        "popcntd $rA, $rS", IIC_IntGeneral,
                        [(set i64:$rA, (ctpop i64:$rS))]>;
 
+let isCodeGenOnly = 1, isCommutable = 1 in
+def CMPB8 : XForm_6<31, 508, (outs g8rc:$rA), (ins g8rc:$rS, g8rc:$rB),
+                    "cmpb $rA, $rS, $rB", IIC_IntGeneral,
+                    [(set i64:$rA, (PPCcmpb i64:$rS, i64:$rB))]>;
+
 // popcntw also does a population count on the high 32 bits (storing the
 // results in the high 32-bits of the output). We'll ignore that here (which is
 // safe because we never separately use the high part of the 64-bit registers).
@@ -617,13 +622,11 @@ def MULLI8 : DForm_2<7, (outs g8rc:$rD), (ins g8rc:$rA, s16imm64:$imm),
 }
 
 let hasSideEffects = 0 in {
-let isCommutable = 1 in {
 defm RLDIMI : MDForm_1r<30, 3, (outs g8rc:$rA),
                         (ins g8rc:$rSi, g8rc:$rS, u6imm:$SH, u6imm:$MBE),
                         "rldimi", "$rA, $rS, $SH, $MBE", IIC_IntRotateDI,
                         []>, isPPC64, RegConstraint<"$rSi = $rA">,
                         NoEncode<"$rSi">;
-}
 
 // Rotate instructions.
 defm RLDCL  : MDSForm_1r<30, 8,
@@ -839,6 +842,13 @@ def LDX  : XForm_1<31,  21, (outs g8rc:$rD), (ins memrr:$src),
 def LDBRX : XForm_1<31,  532, (outs g8rc:$rD), (ins memrr:$src),
                    "ldbrx $rD, $src", IIC_LdStLoad,
                    [(set i64:$rD, (PPClbrx xoaddr:$src, i64))]>, isPPC64;
+
+let mayLoad = 1, hasSideEffects = 0, isCodeGenOnly = 1 in {
+def LHBRX8 : XForm_1<31, 790, (outs g8rc:$rD), (ins memrr:$src),
+                   "lhbrx $rD, $src", IIC_LdStLoad, []>;
+def LWBRX8 : XForm_1<31,  534, (outs g8rc:$rD), (ins memrr:$src),
+                   "lwbrx $rD, $src", IIC_LdStLoad, []>;
+}
 
 let mayLoad = 1, hasSideEffects = 0 in {
 def LDU  : DSForm_1<58, 1, (outs g8rc:$rD, ptr_rc_nor0:$ea_result), (ins memrix:$addr),
