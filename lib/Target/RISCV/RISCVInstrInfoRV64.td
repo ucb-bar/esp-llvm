@@ -99,7 +99,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
           [(br bb:$target)]>, Requires<[IsRV64]>;
 }
 let isCall = 1 in {
-  let Defs = [ra_64, v0_64, v1_64, fv0, fv1, fv0_64, fv1_64, //after call return addr and values are defined
+  let Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64, //after call return addr and values are defined
            a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
            t0_64, t1_64, t2_64, t3_64, t4_64, gp_64] in {
   //let Defs = [ra_64] in { //after call return addr and values are defined
@@ -109,7 +109,7 @@ let isCall = 1 in {
 }
 let isCall = 1 in {
   //TODO: fix jalr and write test
-  let Defs = [ra_64, v0_64, v1_64, fv0, fv1, fv0_64, fv1_64,
+  let Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64,
            a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
            t0_64, t1_64, t2_64, t3_64, t4_64] in {
     def JALR64: InstRISCV<4, (outs), (ins jalrmem64:$target), "jalr\t$target", 
@@ -346,7 +346,7 @@ def FENCE64: InstRISCV<4, (outs), (ins fenceImm64:$pred, fenceImm64:$succ), "fen
       }
 
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
-    isCodeGenOnly = 1, Defs = [v0_64, v1_64] in {
+    isCodeGenOnly = 1, Defs = [a0_64, a1_64] in {
   def RET64 : InstRISCV<4, (outs), (ins), "ret", 
           []>, Requires<[IsRV64]>{
             field bits<32> Inst;
