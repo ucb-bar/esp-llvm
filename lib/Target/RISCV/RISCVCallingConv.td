@@ -24,16 +24,16 @@ class CCIfSubtarget<string F, CCAction A>
 //===----------------------------------------------------------------------===//
 def RetCC_RISCV32 : CallingConv<[
 
-  //First two return values go in v0,v1
-  CCIfType<[i32], CCAssignToReg<[v0, v1]>>,
+  //First two return values go in a0,a1
+  CCIfType<[i32], CCAssignToReg<[a0, a1]>>,
 
-  //Floating points go in their respective fv0,fv1
-  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
+  //Floating points go in their respective fa0,fa1
+  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fa0, fa1]>>>,
   CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
-  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
-  CCIfType<[f64], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0_p64]>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fa0_64, fa1_64]>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasF()", CCAssignToReg<[fa0_p64]>>>,
 
-  CCIfType<[f32], CCAssignToReg<[v0, v1]>>
+  CCIfType<[f32], CCAssignToReg<[a0, a1]>>
   //Falling off the end of allocation here leads to SRet demotion
 ]>;
 
@@ -86,16 +86,16 @@ def RetCC_RISCV64 : CallingConv<[
   CCIfType<[i8,i16], CCPromoteToType<i32>>,
 
   //return the values in the correct size register class if possible
-  CCIfType<[i32], CCAssignToReg<[v0, v1]>>,
-  CCIfType<[i64], CCAssignToReg<[v0_64, v1_64]>>,
+  CCIfType<[i32], CCAssignToReg<[a0, a1]>>,
+  CCIfType<[i64], CCAssignToReg<[a0_64, a1_64]>>,
 
   //use the best register class for floats as well
-  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fv0, fv1]>>>,
+  CCIfType<[f32], CCIfSubtarget<"hasF()", CCAssignToReg<[fa0, fa1]>>>,
   CCIfType<[f32], CCIfSubtarget<"hasD()", CCPromoteToType<f64>>>,
-  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fv0_64, fv1_64]>>>,
+  CCIfType<[f64], CCIfSubtarget<"hasD()", CCAssignToReg<[fa0_64, fa1_64]>>>,
 
   CCIfType<[f32], CCPromoteToType<f64>>,
-  CCIfType<[f64], CCAssignToReg<[v0_64, v1_64]>>
+  CCIfType<[f64], CCAssignToReg<[a0_64, a1_64]>>
 
   //Falling off the end of allocation here leads to SRet demotion
 ]>;
@@ -152,14 +152,14 @@ def CC_RISCV64_VAR : CallingConv<[
 // Callee-saved register lists.
 //===----------------------------------------------------------------------===//
 
-def CSR_RV32  : CalleeSavedRegs<(add ra, sp, tp, (sequence "s%u", 11, 0))>;
-def CSR_RV32F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), ra, sp, tp, gp,
+def CSR_RV32  : CalleeSavedRegs<(add ra, sp, tp, gp, (sequence "s%u", 11, 0))>;
+def CSR_RV32F : CalleeSavedRegs<(add (sequence "fs%u", 11, 0), ra, sp, tp, gp,
                                      (sequence "s%u", 11, 0))>;
-def CSR_RV32D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), ra, sp, tp, gp,
+def CSR_RV32D : CalleeSavedRegs<(add (sequence "fs%u_64", 11, 0), ra, sp, tp, gp,
                                      (sequence "s%u", 11, 0))>;
 
-def CSR_RV64  : CalleeSavedRegs<(add ra_64, sp_64, tp_64, (sequence "s%u_64", 11, 0))>;
-def CSR_RV64F : CalleeSavedRegs<(add (sequence "fs%u", 15, 0), ra_64, sp_64, tp_64, gp_64,
+def CSR_RV64  : CalleeSavedRegs<(add ra_64, sp_64, tp_64, gp_64, (sequence "s%u_64", 11, 0))>;
+def CSR_RV64F : CalleeSavedRegs<(add (sequence "fs%u", 11, 0), ra_64, sp_64, tp_64, gp_64,
                                      (sequence "s%u_64", 11, 0))>;
-def CSR_RV64D : CalleeSavedRegs<(add (sequence "fs%u_64", 15, 0), ra_64, sp_64, tp_64, gp_64,
+def CSR_RV64D : CalleeSavedRegs<(add (sequence "fs%u_64", 11, 0), ra_64, sp_64, tp_64, gp_64,
                                      (sequence "s%u_64", 11, 0))>;

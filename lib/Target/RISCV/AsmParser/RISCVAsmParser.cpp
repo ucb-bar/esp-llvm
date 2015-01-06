@@ -224,27 +224,21 @@ public:
 // an invalid register.  We don't use register class directly because that
 // specifies the allocation order.
 static const unsigned GR32Regs[] = {
-  RISCV::zero, RISCV::ra  ,
-  RISCV::s0  , RISCV::s1  , RISCV::s2  , RISCV::s3  , RISCV::s4,
-  RISCV::s5  , RISCV::s6  , RISCV::s7  , RISCV::s8  , RISCV::s9,
-  RISCV::s10 , RISCV::s11 , 
-  RISCV::sp  , RISCV::tp  , RISCV::v0  , RISCV::v1,
-  RISCV::a0  , RISCV::a1  , RISCV::a2  , RISCV::a3  , RISCV::a4,
-  RISCV::a5  , RISCV::a6  , RISCV::a7  ,
-  RISCV::t0  , RISCV::t1  , RISCV::t2  , RISCV::t3  , RISCV::t4 , 
-  RISCV::gp 
+  RISCV::zero, RISCV::ra, RISCV::sp, RISCV::gp, RISCV::tp,
+  RISCV::t0, RISCV::t1, RISCV::t2,
+  RISCV::s0, RISCV::s1,
+  RISCV::a0, RISCV::a1, RISCV::a2, RISCV::a3, RISCV::a4, RISCV::a5, RISCV::a6, RISCV::a7, 
+  RISCV::s2, RISCV::s3, RISCV::s4, RISCV::s5, RISCV::s6, RISCV::s7, RISCV::s8, RISCV::s9, RISCV::s10, RISCV::s11,
+  RISCV::t3, RISCV::t4, RISCV::t5, RISCV::t6
 };
 
 static const unsigned GR64Regs[] = {
-  RISCV::zero_64, RISCV::ra_64  ,
-  RISCV::s0_64  , RISCV::s1_64  , RISCV::s2_64  , RISCV::s3_64  , RISCV::s4_64 ,
-  RISCV::s5_64  , RISCV::s6_64  , RISCV::s7_64  , RISCV::s8_64  , RISCV::s9_64 ,
-  RISCV::s10_64 , RISCV::s11_64 , 
-  RISCV::sp_64  , RISCV::tp_64  , RISCV::v0_64  , RISCV::v1_64  ,
-  RISCV::a0_64  , RISCV::a1_64  , RISCV::a2_64  , RISCV::a3_64  , RISCV::a4_64 ,
-  RISCV::a5_64  , RISCV::a6_64  , RISCV::a7_64  ,
-  RISCV::t0_64  , RISCV::t1_64  , RISCV::t2_64  , RISCV::t3_64  , RISCV::t4_64 , 
-  RISCV::gp_64 
+  RISCV::zero_64, RISCV::ra_64, RISCV::sp_64, RISCV::gp_64, RISCV::tp_64,
+  RISCV::t0_64, RISCV::t1_64, RISCV::t2_64,
+  RISCV::s0_64, RISCV::s1_64,
+  RISCV::a0_64, RISCV::a1_64, RISCV::a2_64, RISCV::a3_64, RISCV::a4_64, RISCV::a5_64, RISCV::a6_64, RISCV::a7_64, 
+  RISCV::s2_64, RISCV::s3_64, RISCV::s4_64, RISCV::s5_64, RISCV::s6_64, RISCV::s7_64, RISCV::s8_64, RISCV::s9_64, RISCV::s10_64, RISCV::s11_64,
+  RISCV::t3_64, RISCV::t4_64, RISCV::t5_64, RISCV::t6_64
 };
 
 static const unsigned PairGR64Regs[] = {
@@ -258,25 +252,19 @@ static const unsigned PairGR128Regs[] = {
 static const unsigned PCReg[] = { RISCV::PC };
 
 static const unsigned FP32Regs[] = {
-  RISCV::fs0  , RISCV::fs1  , RISCV::fs2  , RISCV::fs3  , RISCV::fs4,
-  RISCV::fs5  , RISCV::fs6  , RISCV::fs7  , RISCV::fs8  , RISCV::fs9,
-  RISCV::fs10 , RISCV::fs11 , RISCV::fs12 , RISCV::fs13 , RISCV::fs14,
-  RISCV::fs15 ,
-  RISCV::fv0  , RISCV::fv1  ,
-  RISCV::fa0  , RISCV::fa1  , RISCV::fa2  , RISCV::fa3  , RISCV::fa4,
-  RISCV::fa5  , RISCV::fa6  , RISCV::fa7  ,
-  RISCV::ft0  , RISCV::ft1  , RISCV::ft2  , RISCV::ft3  , RISCV::ft4  , RISCV::ft5 
+  RISCV::ft0, RISCV::ft1, RISCV::ft2, RISCV::ft3, RISCV::ft4, RISCV::ft5, RISCV::ft6, RISCV::ft7,
+  RISCV::fs0, RISCV::fs1, 
+  RISCV::fa0, RISCV::fa1, RISCV::fa2, RISCV::fa3, RISCV::fa4, RISCV::fa5, RISCV::fa6, RISCV::fa7,
+  RISCV::fs2, RISCV::fs3, RISCV::fs4, RISCV::fs5, RISCV::fs6, RISCV::fs7, RISCV::fs8, RISCV::fs9, RISCV::fs10, RISCV::fs11,
+  RISCV::ft8, RISCV::ft9, RISCV::ft10, RISCV::ft11
 };
 
 static const unsigned FP64Regs[] = {
-  RISCV::fs0_64  , RISCV::fs1_64  , RISCV::fs2_64  , RISCV::fs3_64  , RISCV::fs4_64,
-  RISCV::fs5_64  , RISCV::fs6_64  , RISCV::fs7_64  , RISCV::fs8_64  , RISCV::fs9_64,
-  RISCV::fs10_64 , RISCV::fs11_64 , RISCV::fs12_64 , RISCV::fs13_64 , RISCV::fs14_64 ,
-  RISCV::fs15_64 ,
-  RISCV::fv0_64  , RISCV::fv1_64  ,
-  RISCV::fa0_64  , RISCV::fa1_64  , RISCV::fa2_64  , RISCV::fa3_64  , RISCV::fa4_64  ,
-  RISCV::fa5_64  , RISCV::fa6_64  , RISCV::fa7_64  ,
-  RISCV::ft0_64  , RISCV::ft1_64  , RISCV::ft2_64  , RISCV::ft3_64  , RISCV::ft4_64  , RISCV::ft5_64 
+  RISCV::ft0_64, RISCV::ft1_64, RISCV::ft2_64, RISCV::ft3_64, RISCV::ft4_64, RISCV::ft5_64, RISCV::ft6_64, RISCV::ft7_64,
+  RISCV::fs0_64, RISCV::fs1_64, 
+  RISCV::fa0_64, RISCV::fa1_64, RISCV::fa2_64, RISCV::fa3_64, RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64,
+  RISCV::fs2_64, RISCV::fs3_64, RISCV::fs4_64, RISCV::fs5_64, RISCV::fs6_64, RISCV::fs7_64, RISCV::fs8_64, RISCV::fs9_64, RISCV::fs10_64, RISCV::fs11_64,
+  RISCV::ft8_64, RISCV::ft9_64, RISCV::ft10_64, RISCV::ft11_64
 };
 
 static const unsigned PairFP64Regs[] = {
