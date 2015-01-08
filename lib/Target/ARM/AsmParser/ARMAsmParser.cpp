@@ -8575,7 +8575,6 @@ bool ARMAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   MatchResult = MatchInstructionImpl(Operands, Inst, ErrorInfo,
                                      MatchingInlineAsm);
   switch (MatchResult) {
-  default: break;
   case Match_Success:
     // Context sensitive operand constraints aren't handled by the matcher,
     // so check them here.
@@ -9131,8 +9130,13 @@ bool ARMAsmParser::parseDirectiveEabiAttr(SMLoc L) {
   if (Tag == ARMBuildAttrs::compatibility) {
     if (Parser.getTok().isNot(AsmToken::Comma))
       IsStringValue = false;
-    else
-      Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::Comma)) {
+      Error(Parser.getTok().getLoc(), "comma expected");
+      Parser.eatToEndOfStatement();
+      return false;
+    } else {
+       Parser.Lex();
+    }
   }
 
   if (IsStringValue) {

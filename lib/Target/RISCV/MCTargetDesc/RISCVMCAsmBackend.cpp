@@ -69,9 +69,6 @@ public:
   MCObjectWriter *createObjectWriter(raw_ostream &OS) const override {
     return createRISCVObjectWriter(OS, OSABI);
   }
-  bool doesSectionRequireSymbols(const MCSection &Section) const override {
-    return false;
-  }
 };
 } // end anonymous namespace
 

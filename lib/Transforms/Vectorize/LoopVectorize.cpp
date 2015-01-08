@@ -55,7 +55,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AliasSetTracker.h"
-#include "llvm/Analysis/AssumptionTracker.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/CodeMetrics.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -908,11 +908,11 @@ public:
                              LoopVectorizationLegality *Legal,
                              const TargetTransformInfo &TTI,
                              const DataLayout *DL, const TargetLibraryInfo *TLI,
-                             AssumptionTracker *AT, const Function *F,
+                             AssumptionCache *AC, const Function *F,
                              const LoopVectorizeHints *Hints)
       : TheLoop(L), SE(SE), LI(LI), Legal(Legal), TTI(TTI), DL(DL), TLI(TLI),
         TheFunction(F), Hints(Hints) {
-    CodeMetrics::collectEphemeralValues(L, AT, EphValues);
+    CodeMetrics::collectEphemeralValues(L, AC, EphValues);
   }
 
   /// Information about vectorization costs
@@ -1267,7 +1267,7 @@ struct LoopVectorize : public FunctionPass {
   BlockFrequencyInfo *BFI;
   TargetLibraryInfo *TLI;
   AliasAnalysis *AA;
-  AssumptionTracker *AT;
+  AssumptionCache *AC;
   bool DisableUnrolling;
   bool AlwaysVectorize;
 
@@ -1283,7 +1283,7 @@ struct LoopVectorize : public FunctionPass {
     BFI = &getAnalysis<BlockFrequencyInfo>();
     TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
     AA = &getAnalysis<AliasAnalysis>();
-    AT = &getAnalysis<AssumptionTracker>();
+    AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
 
     // Compute some weights outside of the loop over the loops. Compute this
     // using a BranchProbability to re-use its scaling math.
@@ -1402,7 +1402,7 @@ struct LoopVectorize : public FunctionPass {
     }
 
     // Use the cost model.
-    LoopVectorizationCostModel CM(L, SE, LI, &LVL, *TTI, DL, TLI, AT, F,
+    LoopVectorizationCostModel CM(L, SE, LI, &LVL, *TTI, DL, TLI, AC, F,
                                   &Hints);
 
     // Check the function attributes to find out if this function should be
@@ -1490,7 +1490,7 @@ struct LoopVectorize : public FunctionPass {
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<AssumptionTracker>();
+    AU.addRequired<AssumptionCacheTracker>();
     AU.addRequiredID(LoopSimplifyID);
     AU.addRequiredID(LCSSAID);
     AU.addRequired<BlockFrequencyInfo>();
@@ -1852,6 +1852,7 @@ void InnerLoopVectorizer::vectorizeMemoryInstruction(Instruction *Instr) {
     Ptr = Builder.CreateExtractElement(PtrVal[0], Zero);
   }
 
+  VectorParts Mask = createBlockInMask(Instr->getParent());
   // Handle Stores:
   if (SI) {
     assert(!Legal->isUniform(SI->getPointerOperand()) &&
@@ -1860,7 +1861,7 @@ void InnerLoopVectorizer::vectorizeMemoryInstruction(Instruction *Instr) {
     // We don't want to update the value in the map as it might be used in
     // another expression. So don't use a reference type for "StoredVal".
     VectorParts StoredVal = getVectorValue(SI->getValueOperand());
-
+    
     for (unsigned Part = 0; Part < UF; ++Part) {
       // Calculate the pointer for the specific unroll-part.
       Value *PartPtr = Builder.CreateGEP(Ptr, Builder.getInt32(Part * VF));
@@ -1879,15 +1880,9 @@ void InnerLoopVectorizer::vectorizeMemoryInstruction(Instruction *Instr) {
                                             DataTy->getPointerTo(AddressSpace));
 
       Instruction *NewSI;
-      if (Legal->isMaskRequired(SI)) {
-        VectorParts Cond = createBlockInMask(SI->getParent());
-        SmallVector <Value *, 8> Ops;
-        Ops.push_back(StoredVal[Part]);
-        Ops.push_back(VecPtr);
-        Ops.push_back(Builder.getInt32(Alignment));
-        Ops.push_back(Cond[Part]);
-        NewSI = Builder.CreateMaskedStore(Ops);
-      }
+      if (Legal->isMaskRequired(SI))
+        NewSI = Builder.CreateMaskedStore(StoredVal[Part], VecPtr, Alignment,
+                                          Mask[Part]);
       else 
         NewSI = Builder.CreateAlignedStore(StoredVal[Part], VecPtr, Alignment);
       propagateMetadata(NewSI, SI);
@@ -1912,18 +1907,12 @@ void InnerLoopVectorizer::vectorizeMemoryInstruction(Instruction *Instr) {
     Instruction* NewLI;
     Value *VecPtr = Builder.CreateBitCast(PartPtr,
                                           DataTy->getPointerTo(AddressSpace));
-    if (Legal->isMaskRequired(LI)) {
-      VectorParts SrcMask = createBlockInMask(LI->getParent());
-      SmallVector <Value *, 8> Ops;
-      Ops.push_back(VecPtr);
-      Ops.push_back(Builder.getInt32(Alignment));
-      Ops.push_back(SrcMask[Part]);
-      Ops.push_back(UndefValue::get(DataTy));
-      NewLI = Builder.CreateMaskedLoad(Ops);
-    }
-    else {
+    if (Legal->isMaskRequired(LI))
+      NewLI = Builder.CreateMaskedLoad(VecPtr, Alignment, Mask[Part],
+                                       UndefValue::get(DataTy),
+                                       "wide.masked.load");
+    else
       NewLI = Builder.CreateAlignedLoad(VecPtr, Alignment, "wide.load");
-    }
     propagateMetadata(NewLI, LI);
     Entry[Part] = Reverse ? reverseVector(NewLI) :  NewLI;
   }
@@ -4279,57 +4268,66 @@ void AccessAnalysis::processMemAccesses() {
       bool UseDeferred = SetIteration > 0;
       PtrAccessSet &S = UseDeferred ? DeferredAccesses : Accesses;
 
-      for (auto A : AS) {
-        Value *Ptr = A.getValue();
-        bool IsWrite = S.count(MemAccessInfo(Ptr, true));
+      for (auto AV : AS) {
+        Value *Ptr = AV.getValue();
 
-        // If we're using the deferred access set, then it contains only reads.
-        bool IsReadOnlyPtr = ReadOnlyPtr.count(Ptr) && !IsWrite;
-        if (UseDeferred && !IsReadOnlyPtr)
-          continue;
-        // Otherwise, the pointer must be in the PtrAccessSet, either as a read
-        // or a write.
-        assert(((IsReadOnlyPtr && UseDeferred) || IsWrite ||
-                 S.count(MemAccessInfo(Ptr, false))) &&
-               "Alias-set pointer not in the access set?");
+        // For a single memory access in AliasSetTracker, Accesses may contain
+        // both read and write, and they both need to be handled for CheckDeps.
+        for (auto AC : S) {
+          if (AC.getPointer() != Ptr)
+            continue;
 
-        MemAccessInfo Access(Ptr, IsWrite);
-        DepCands.insert(Access);
+          bool IsWrite = AC.getInt();
 
-        // Memorize read-only pointers for later processing and skip them in the
-        // first round (they need to be checked after we have seen all write
-        // pointers). Note: we also mark pointer that are not consecutive as
-        // "read-only" pointers (so that we check "a[b[i]] +="). Hence, we need
-        // the second check for "!IsWrite".
-        if (!UseDeferred && IsReadOnlyPtr) {
-          DeferredAccesses.insert(Access);
-          continue;
-        }
+          // If we're using the deferred access set, then it contains only
+          // reads.
+          bool IsReadOnlyPtr = ReadOnlyPtr.count(Ptr) && !IsWrite;
+          if (UseDeferred && !IsReadOnlyPtr)
+            continue;
+          // Otherwise, the pointer must be in the PtrAccessSet, either as a
+          // read or a write.
+          assert(((IsReadOnlyPtr && UseDeferred) || IsWrite ||
+                  S.count(MemAccessInfo(Ptr, false))) &&
+                 "Alias-set pointer not in the access set?");
 
-        // If this is a write - check other reads and writes for conflicts.  If
-        // this is a read only check other writes for conflicts (but only if
-        // there is no other write to the ptr - this is an optimization to
-        // catch "a[i] = a[i] + " without having to do a dependence check).
-        if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
-          CheckDeps.insert(Access);
-          IsRTCheckNeeded = true;
-        }
+          MemAccessInfo Access(Ptr, IsWrite);
+          DepCands.insert(Access);
 
-        if (IsWrite)
-          SetHasWrite = true;
+          // Memorize read-only pointers for later processing and skip them in
+          // the first round (they need to be checked after we have seen all
+          // write pointers). Note: we also mark pointer that are not
+          // consecutive as "read-only" pointers (so that we check
+          // "a[b[i]] +="). Hence, we need the second check for "!IsWrite".
+          if (!UseDeferred && IsReadOnlyPtr) {
+            DeferredAccesses.insert(Access);
+            continue;
+          }
 
-        // Create sets of pointers connected by a shared alias set and
-        // underlying object.
-        typedef SmallVector<Value *, 16> ValueVector;
-        ValueVector TempObjects;
-        GetUnderlyingObjects(Ptr, TempObjects, DL);
-        for (Value *UnderlyingObj : TempObjects) {
-          UnderlyingObjToAccessMap::iterator Prev =
-            ObjToLastAccess.find(UnderlyingObj);
-          if (Prev != ObjToLastAccess.end())
-            DepCands.unionSets(Access, Prev->second);
+          // If this is a write - check other reads and writes for conflicts. If
+          // this is a read only check other writes for conflicts (but only if
+          // there is no other write to the ptr - this is an optimization to
+          // catch "a[i] = a[i] + " without having to do a dependence check).
+          if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
+            CheckDeps.insert(Access);
+            IsRTCheckNeeded = true;
+          }
 
-          ObjToLastAccess[UnderlyingObj] = Access;
+          if (IsWrite)
+            SetHasWrite = true;
+
+          // Create sets of pointers connected by a shared alias set and
+          // underlying object.
+          typedef SmallVector<Value *, 16> ValueVector;
+          ValueVector TempObjects;
+          GetUnderlyingObjects(Ptr, TempObjects, DL);
+          for (Value *UnderlyingObj : TempObjects) {
+            UnderlyingObjToAccessMap::iterator Prev =
+                ObjToLastAccess.find(UnderlyingObj);
+            if (Prev != ObjToLastAccess.end())
+              DepCands.unionSets(Access, Prev->second);
+
+            ObjToLastAccess[UnderlyingObj] = Access;
+          }
         }
       }
     }
@@ -6156,7 +6154,7 @@ static const char lv_name[] = "Loop Vectorization";
 INITIALIZE_PASS_BEGIN(LoopVectorize, LV_NAME, lv_name, false, false)
 INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
-INITIALIZE_PASS_DEPENDENCY(AssumptionTracker)
+INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(BlockFrequencyInfo)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)

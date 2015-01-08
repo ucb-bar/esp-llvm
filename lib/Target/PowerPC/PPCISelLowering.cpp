@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -679,6 +680,24 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM)
   if (Subtarget.isDarwin())
     setPrefFunctionAlignment(4);
 
+  switch (Subtarget.getDarwinDirective()) {
+  default: break;
+  case PPC::DIR_970:
+  case PPC::DIR_A2:
+  case PPC::DIR_E500mc:
+  case PPC::DIR_E5500:
+  case PPC::DIR_PWR4:
+  case PPC::DIR_PWR5:
+  case PPC::DIR_PWR5X:
+  case PPC::DIR_PWR6:
+  case PPC::DIR_PWR6X:
+  case PPC::DIR_PWR7:
+  case PPC::DIR_PWR8:
+    setPrefFunctionAlignment(4);
+    setPrefLoopAlignment(4);
+    break;
+  }
+
   setInsertFencesForAtomic(true);
 
   if (Subtarget.enableMachineScheduler())
@@ -688,8 +707,8 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM)
 
   computeRegisterProperties();
 
-  // The Freescale cores does better with aggressive inlining of memcpy and
-  // friends. Gcc uses same threshold of 128 bytes (= 32 word stores).
+  // The Freescale cores do better with aggressive inlining of memcpy and
+  // friends. GCC uses same threshold of 128 bytes (= 32 word stores).
   if (Subtarget.getDarwinDirective() == PPC::DIR_E500mc ||
       Subtarget.getDarwinDirective() == PPC::DIR_E5500) {
     MaxStoresPerMemset = 32;
@@ -698,8 +717,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM)
     MaxStoresPerMemcpyOptSize = 8;
     MaxStoresPerMemmove = 32;
     MaxStoresPerMemmoveOptSize = 8;
-
-    setPrefFunctionAlignment(4);
   }
 }
 
@@ -759,6 +776,7 @@ const char *PPCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case PPCISD::VMADDFP:         return "PPCISD::VMADDFP";
   case PPCISD::VNMSUBFP:        return "PPCISD::VNMSUBFP";
   case PPCISD::VPERM:           return "PPCISD::VPERM";
+  case PPCISD::CMPB:            return "PPCISD::CMPB";
   case PPCISD::Hi:              return "PPCISD::Hi";
   case PPCISD::Lo:              return "PPCISD::Lo";
   case PPCISD::TOC_ENTRY:       return "PPCISD::TOC_ENTRY";
@@ -9032,6 +9050,40 @@ void PPCTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
   }
 }
 
+unsigned PPCTargetLowering::getPrefLoopAlignment(MachineLoop *ML) const {
+  switch (Subtarget.getDarwinDirective()) {
+  default: break;
+  case PPC::DIR_970:
+  case PPC::DIR_PWR4:
+  case PPC::DIR_PWR5:
+  case PPC::DIR_PWR5X:
+  case PPC::DIR_PWR6:
+  case PPC::DIR_PWR6X:
+  case PPC::DIR_PWR7:
+  case PPC::DIR_PWR8: {
+    if (!ML)
+      break;
+
+    const PPCInstrInfo *TII =
+      static_cast<const PPCInstrInfo *>(getTargetMachine().getSubtargetImpl()->
+                                          getInstrInfo());
+
+    // For small loops (between 5 and 8 instructions), align to a 32-byte
+    // boundary so that the entire loop fits in one instruction-cache line.
+    uint64_t LoopSize = 0;
+    for (auto I = ML->block_begin(), IE = ML->block_end(); I != IE; ++I)
+      for (auto J = (*I)->begin(), JE = (*I)->end(); J != JE; ++J)
+        LoopSize += TII->GetInstSizeInBytes(J);
+
+    if (LoopSize > 16 && LoopSize <= 32)
+      return 5;
+
+    break;
+  }
+  }
+
+  return TargetLowering::getPrefLoopAlignment(ML);
+}
 
 /// getConstraintType - Given a constraint, return the type of
 /// constraint it is for this target.

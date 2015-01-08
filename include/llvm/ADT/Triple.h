@@ -378,6 +378,8 @@ public:
     return getOS() == Triple::FreeBSD;
   }
 
+  bool isOSDragonFly() const { return getOS() == Triple::DragonFly; }
+
   bool isOSSolaris() const {
     return getOS() == Triple::Solaris;
   }

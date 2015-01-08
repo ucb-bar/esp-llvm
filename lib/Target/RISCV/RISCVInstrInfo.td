@@ -120,7 +120,7 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
           [(br bb:$target)]>, Requires<[IsRV32]>;
 }
 let isCall = 1 in {
-  let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
+  let Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64, gp] in { //after call return addr and values are defined
     def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
           [(r_call pcrel32call:$target)]>, Requires<[IsRV32]>;
   }
@@ -128,7 +128,7 @@ let isCall = 1 in {
 let isCall = 1 in {
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
-  let Defs = [ra, v0, v1, fv0, fv1, fv0_64, fv1_64, gp] in { //after call return addr and values are defined
+  let Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64, gp] in { //after call return addr and values are defined
     def JALR: InstRISCV<4, (outs), (ins jalrmem:$target), "jalr\t$target", 
           [(r_call addr:$target)]>, Requires<[IsRV32]>{//, (r_call addr:$target))]>{
           //[]>{
@@ -320,7 +320,7 @@ def ADJCALLSTACKUP   : Pseudo<(outs), (ins i64imm:$amt1, i64imm:$amt2),
 
 //hardcoded JALR to be return
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
-    isCodeGenOnly = 1, Defs = [v0, v1] in {
+    isCodeGenOnly = 1, Defs = [a0, a1] in {
   def RET : InstRISCV<4, (outs), (ins), "ret", 
           []>{
             field bits<32> Inst;
