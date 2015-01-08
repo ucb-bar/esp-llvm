@@ -5,7 +5,6 @@
 
 # CHECK64: addi    x0, x0, 0               # encoding: [0x00,0x00,0x00,0x13]
 # CHECK64: addi    x1, x0, 0               # encoding: [0x08,0x00,0x00,0x13]
-# CHECK64: addi    x1, x0, 0               # encoding: [0x08,0x00,0x00,0x13]
 # CHECK64: addi    x2, x1, 0               # encoding: [0x10,0x40,0x00,0x13]
 # CHECK64: addi    x3, x2, 0               # encoding: [0x18,0x80,0x00,0x13]
 # CHECK64: addi    x4, x3, 0               # encoding: [0x20,0xc0,0x00,0x13]
@@ -57,8 +56,8 @@
 # CHECK64: auipc   x15, 4                  # encoding: [0x78,0x20,0x00,0x37]
 
 # CHECK64: addiw	x4, x3, 1023       # encoding: [0x20,0xcf,0xfc,0x1b]
-# CHECK64: addiw	x6, x7, 0          # encoding: [0x29,0x80,0x00,0x1b]
-# CHECK64: sext.w	x6, x7             # encoding: [0x29,0x80,0x00,0x1b]
+# CHECK64: addiw	x5, x6, 0          # encoding: [0x29,0x80,0x00,0x1b]
+# CHECK64: sext.w	x5, x6             # encoding: [0x29,0x80,0x00,0x1b]
 # CHECK64: slliw	x11, x9, 32        # encoding: [0x5a,0x40,0x00,0x9b]
 # CHECK64: srliw	x12, x11, 33       # encoding: [0x62,0xc0,0x06,0x9b]
 # CHECK64: sraiw	x13, x12, 34       # encoding: [0x6b,0x02,0x8a,0x9b]
@@ -154,7 +153,7 @@
 	slt	x19, x18, x17
 	sltu	x20, x19, x18
 	and	x21, x20, x19
-	or	x22, x21, x20
+	or	x21, x20, x19
 	xor	x23, x22, x21
 	sll	x24, x23, x22
 	srl	x25, x24, x23
