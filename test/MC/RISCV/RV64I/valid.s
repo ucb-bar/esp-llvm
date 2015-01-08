@@ -36,7 +36,7 @@
 # CHECK64: addi    x30, x29, 0             # encoding: [0xf7,0x40,0x00,0x13]
 # CHECK64: addi    x31, x30, 0             # encoding: [0xff,0x80,0x00,0x13]
 
-# CHECK64: addi x0, x0, 0		   # encoding: [0x00,0x00,0x00,0x13]
+# CHECK64: nop				   # encoding: [0x00,0x00,0x00,0x13]
 
 # CHECK64: addi	x3, x2, 1023               # encoding: [0x18,0x8f,0xfc,0x13]
 # CHECK64: addi	x4, x3, -1023              # encoding: [0x20,0xf0,0x04,0x13]
@@ -81,7 +81,7 @@
 # CHECK64: srlw	x6, x7, x8                 # encoding: [0x32,0x0e,0x02,0xbb]
 # CHECK64: sraw	x9, x10, x11               # encoding: [0x4a,0xd5,0x02,0xbb]
 
-# CHECK64: addi x2, x0, 0                  # encoding: [0x10,0x00,0x00,0x13]
+# CHECK64: mv      x2, x0                  # encoding: [0x10,0x00,0x00,0x13]
 
 #-- register encodings: x0-x31
 #--                     x0 == $0
@@ -155,7 +155,7 @@
 	slt	x19, x18, x17
 	sltu	x20, x19, x18
 	and	x21, x20, x19
-	or	x22, x21, x20
+	or	x21, x20, x19
 	xor	x23, x22, x21
 	sll	x24, x23, x22
 	srl	x25, x24, x23

@@ -123,7 +123,7 @@
 	xori	x10, x9, 17
 	xori	x11, x10, -1
 	not	x11, x10		#-- pseudo-op for xori x11, x10, -1
-	slli	x12, x10, 5	
+	slli	x12, x10, 5
 	srli	x13, x12, 31
 	srai	x14, x13, 2
 	lui	x15, 1048575
@@ -145,14 +145,14 @@
 	mv 	x2, x0
 	jal	x27
 	jal	x0			#-- unconditional jump
-	jalr	x28, x27, 8	
+	jalr	x28, x27, 8
 	beq	x28,x27, target_beq
 target_beq:
 	bne	x28,x27, target_bne
 target_bne:
 	blt	x29, x28, target_blt
 target_blt:
-	bltu	x30, x29, target_bltu	
+	bltu	x30, x29, target_blt	
 target_bltu:
 	bge	x31, x30, target_bge
 target_bge:
@@ -162,24 +162,25 @@ target_bgeu:
 
 #-- LOAD AND STORE INSTRUCTIONS	
 
-	sw x5, 0(x3)
-	sh x6, 0(x3)
-	sb x7, 0(x3)
-	sw x5, -4(x3)
-	sh x6, -4(x3)
-	sb x7, -4(x3)
-	sw x5, 4(x3)
-	sh x6, 4(x3)
-	sb x7, 4(x3)
 	lw x5, 0(x3)
-	lh x6, 0(x3)
-	lb x7, 0(x3)
-	lw x5, -4(x3)
-	lh x6, -4(x3)
-	lb x7, -4(x3)
-	lw x5, 4(x3)
-	lh x6, 4(x3)
-	lb x7, 4(x3)
+	sw x5, x3, 0
+	sh x6, x3, 0
+	sb x7, x3, 0
+	sw x5, x3, -4
+	sh x6, x3, -4
+	sb x7, x3, -4
+	sw x5, x3, 4
+	sh x6, x3, 4
+	sb x7, x3, 4
+	lw x5, x3, 0
+	lh x6, x3, 0
+	lb x7, x3, 0
+	lw x5, x3, -4
+	lh x6, x3, -4
+	lb x7, x3, -4
+	lw x5, x3, 4
+	lh x6, x3, 4
+	lb x7, x3, 4
 
 #-- MEMORY MODEL
 	fence
