@@ -19,6 +19,8 @@
 
 using namespace llvm;
 
+#define DEBUG_TYPE "riscv-asm-parser"
+
 // Return true if Expr is in the range [MinValue, MaxValue].
 static bool inRange(const MCExpr *Expr, int64_t MinValue, int64_t MaxValue) {
   if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr)) {
@@ -298,6 +300,7 @@ private:
   };
 
   bool parseRegister(Register &Reg);
+  bool parseParenSuffix(StringRef Name, OperandVector &Operands);
 
   OperandMatchResultTy parseRegister(Register &Reg, char Prefix,
                                      const unsigned *Regs,
@@ -479,6 +482,37 @@ bool RISCVAsmParser::parseRegister(Register &Reg) {
   return false;
 }
 
+/// Sometimes (i.e. load/stores) the operand may be followed immediately by
+/// either this.
+/// ::= '(', register, ')'
+/// handle it before we iterate so we don't get tripped up by the lack of
+/// a comma.
+bool RISCVAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
+
+  if (getLexer().is(AsmToken::LParen)) {
+
+    Operands.push_back(
+      RISCVOperand::createToken("(", getLexer().getLoc()));
+    Parser.Lex();
+
+    if (parseOperand(Operands, Name)) {
+      SMLoc Loc = getLexer().getLoc();
+      Parser.eatToEndOfStatement();
+      return Error(Loc, "unexpected token in argument list" );
+    }
+    if (Parser.getTok().isNot(AsmToken::RParen)) {
+      SMLoc Loc = getLexer().getLoc();
+      Parser.eatToEndOfStatement();
+      return Error(Loc, "unexpected token, expected ')'" );
+    }
+    Operands.push_back(
+      RISCVOperand::createToken(")", getLexer().getLoc()) );
+    Parser.Lex();
+  }
+
+  return false;
+}
+
 // Parse a register with prefix Prefix and convert it to LLVM numbering.
 // Regs maps asm register numbers to LLVM register numbers, with zero
 // entries indicating an invalid register.  IsAddress says whether the
@@ -597,34 +631,56 @@ bool RISCVAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
 bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
                                       StringRef Name, SMLoc NameLoc,
                                       OperandVector &Operands) {
+
+  // Check if we have valid mnemonic
+  if (!mnemonicIsValid(Name, 0)) {
+    Parser.eatToEndOfStatement();
+    return Error(NameLoc, "unknown instruction");
+  }
+
+  // First operand in MCInst is instruction mnemonic.
   Operands.push_back(RISCVOperand::createToken(Name, NameLoc));
 
-  // Read the remaining operands.
+  // Read the remaining operands
   if (getLexer().isNot(AsmToken::EndOfStatement)) {
-    // Read the first operand.
-    if (parseOperand(Operands, Name)) {
-      Parser.eatToEndOfStatement();
-      return true;
-    }
 
-    // Read any subsequent operands.
-    while (getLexer().is(AsmToken::Comma)) {
-      Parser.Lex();
-      if (parseOperand(Operands, Name)) {
-        Parser.eatToEndOfStatement();
-        return true;
-      }
-    }
-    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+    // Read the first operand
+    if( parseOperand(Operands,Name)) {
       SMLoc Loc = getLexer().getLoc();
       Parser.eatToEndOfStatement();
       return Error(Loc, "unexpected token in argument list");
     }
+
+    if( getLexer().is(AsmToken::LBrac) )
+      return true;
+
+    while (getLexer().is(AsmToken::Comma)) {
+
+      Parser.Lex(); // Eat the comma.
+
+      // Parse and remember the operand
+      if( parseOperand(Operands, Name )){
+        SMLoc Loc = getLexer().getLoc();
+        Parser.eatToEndOfStatement();
+        return Error(Loc, "unexpected token in argument list");
+      }
+
+      // Parse parenthesis suffixes before we iterate
+      if( getLexer().is(AsmToken::LParen) &&
+                 parseParenSuffix(Name,Operands))
+        return true;
+    }
   }
 
-  // Consume the EndOfStatement.
-  Parser.Lex();
+  if( getLexer().isNot(AsmToken::EndOfStatement)) {
+
+    SMLoc Loc = getLexer().getLoc();
+    Parser.eatToEndOfStatement();
+    return Error(Loc, "unexpected token in argument list" );
+  }
+  Parser.Lex(); // Consume the EndOfStatement.
   return false;
+
 }
 
 bool RISCVAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
@@ -664,11 +720,20 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
                                      MatchingInlineAsm);
   switch (MatchResult) {
   default: break;
-  case Match_Success:
+  case Match_Success:{
+#if 0
+    if(processInstruction(Inst,IDLoc, Instructions))
+      return true;
+    for(unsigned i=0; i< Instructions.size(); i++ ){ 
+      Out.EmitInstruction(Inst,STI);
+    }
+    return false;
+  }
+#endif
     Inst.setLoc(IDLoc);
     Out.EmitInstruction(Inst, STI);
     return false;
-
+  }
   case Match_MissingFeature: {
     assert(ErrorInfo && "Unknown missing feature!");
     // Special case the error message for the very common case where only
