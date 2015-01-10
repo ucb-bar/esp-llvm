@@ -358,6 +358,30 @@ def FENCE: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence",
         let Inst{6 - 0} = 0b0001111;
       }
 
+//Fence.I
+def FENCE_I: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence.i", 
+      [(r_fence fenceImm:$pred, fenceImm:$succ)]>{
+        field bits<32> Inst;
+
+        bits<4> pred;
+        bits<4> succ;
+
+        let Inst{31-28} = 0b0000;
+        let Inst{27   } = 0b0;
+        let Inst{26   } = 0b0;
+        let Inst{25   } = 0b0;
+        let Inst{24   } = 0b0;
+        let Inst{23   } = 0b0;
+        let Inst{22   } = 0b0;
+        let Inst{21   } = 0b0;
+        let Inst{20   } = 0b0;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b001;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b0001111;
+      }
+
+
 //===----------------------------------------------------------------------===//
 // Subtarget features
 //===----------------------------------------------------------------------===//

@@ -370,6 +370,29 @@ def FENCE64: InstRISCV<4, (outs), (ins fenceImm64:$pred, fenceImm64:$succ), "fen
         let Inst{6 - 0} = 0b0001111;
       }
 
+//Fence.I
+def FENCE64_I: InstRISCV<4, (outs), (ins fenceImm64:$pred, fenceImm64:$succ), "fence.i", 
+      [(r_fence64 fenceImm64:$pred, fenceImm64:$succ)]>, Requires<[IsRV64]>{
+        field bits<32> Inst;
+
+        bits<4> pred;
+        bits<4> succ;
+
+        let Inst{31-28} = 0b0000;
+        let Inst{27   } = 0b0;
+        let Inst{26   } = 0b0;
+        let Inst{25   } = 0b0;
+        let Inst{24   } = 0b0;
+        let Inst{23   } = 0b0;
+        let Inst{22   } = 0b0;
+        let Inst{21   } = 0b0;
+        let Inst{20   } = 0b0;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b001;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b0001111;
+      }
+
 let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
     isCodeGenOnly = 1, Defs = [a0_64, a1_64] in {
   def RET64 : InstRISCV<4, (outs), (ins), "ret", 
