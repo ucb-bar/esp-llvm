@@ -242,6 +242,24 @@ class InstI<string mnemonic, bits<7> op, bits<3> funct3,
   let Inst{6 - 0} = op;
 }
 
+//ISYS-Type
+class InstISYS<string mnemonic, bits<12> funct12,
+             RegisterOperand cls1>
+  : InstRISCV<4, (outs cls1:$dst), (ins), 
+                mnemonic#"\t$dst", 
+                []> {
+  field bits<32> Inst;
+
+  bits<5> RD;
+
+  let Inst{31-20} = funct12;
+  let Inst{19-15} = 0b00000;
+  let Inst{14-12} = 0b010;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = 0b1110011;
+}
+
+
 //Ip-Type: Pseudo-Ops for Type-I; used for MV
 class InstIp<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,

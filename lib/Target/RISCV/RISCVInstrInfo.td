@@ -397,7 +397,29 @@ def SCALL: InstRISCV<4, (outs), (ins), "scall", []>{
         let Inst{6 - 0} = 0b1110011;
       }
 
+//sbreak
+def SBREAK: InstRISCV<4, (outs), (ins), "sbreak", []>{
+        field bits<32> Inst;
 
+        let Inst{31-20} = 0b000000000001;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b000;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b1110011;
+      }
+
+//rdcycle Rd
+def RDCYCLE: InstISYS<"rdcycle", 0b110000000000, GR32>;
+//rdcycleh Rd
+def RDCYCLEH: InstISYS<"rdcycleh", 0b110010000000, GR32>;
+//rdtime Rd
+def RDTIME: InstISYS<"rdtime", 0b110000000001, GR32>;
+//rdtimeh Rd
+def RDTIMEH: InstISYS<"rdtimeh", 0b110010000001, GR32>;
+//rdinstret Rd
+def RDINSTRET: InstISYS<"rdinstret", 0b110000000010, GR32>;
+//rdinstreth Rd
+def RDINSTRETH: InstISYS<"rdinstreth", 0b110010000010, GR32>;
 
 //===----------------------------------------------------------------------===//
 // Subtarget features
