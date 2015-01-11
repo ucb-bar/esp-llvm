@@ -43,20 +43,10 @@ def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Re
 def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
 def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, GR32, imm32sx12>;
 def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, GR32, imm32sx12>;
-//Pseudo-Op for ADDI x0, x0, 0x00
-def NOP: InstIpn<"nop", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
-  let RS1 = 0b00000;
-  let RD = 0b00000;
-  let IMM{11-6} = 0b000000; 
-}
-//Pseudo-Op for ADDI Rd, Rs1, 0x00
-def MV:   InstIp<"mv",   0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
-  let IMM{11-6} = 0b000000; 
-}
-//Pseudo-Op for XORI Rd, Rs1, -1
-def NOT: InstIp<"not", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>{
-  let IMM{11-6} = 0b111111; 
-}
+
+def NOP : InstAlias<"nop", (ADDI zero, zero, 0)>, Requires<[IsRV32]>;
+def MV  : InstAlias<"mv $dst, $src", (ADDI GR32:$dst, GR32:$src, 0)>, Requires<[IsRV32]>;
+def NOT : InstAlias<"not $dst, $src", (XORI GR32:$dst, GR32:$src, -1)>;
 
 //TODO: enforce constraints here or up on level?
 def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
@@ -73,10 +63,8 @@ def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, GR32, imm32sx12>, Re
 }
 def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR32, imm32sx12>;
 def SLTIU: InstI<"sltiu",0b0010011, 0b011, setult,GR32, GR32, imm32sx12>;
-//Pseudo-Op for sltiu Rd,Rs1,1
-def SEQZ: InstIp<"seqz",0b0010011, 0b011, setult,GR32, GR32, imm32sx12>{
-  let IMM{11-6} = 0b000001; 
-}
+
+def SEQZ : InstAlias<"seqz $dst, $src", (SLTIU GR32:$dst, GR32:$src, 1)>;
 
 //Synthesized set operators
 //patterns to be used for 32 and 64bit

@@ -36,23 +36,23 @@
 # CHECK32: addi    x30, x29, 0             # encoding: [0xf7,0x40,0x00,0x13]
 # CHECK32: addi    x31, x30, 0             # encoding: [0xff,0x80,0x00,0x13]
 
-# CHECK32: nop				   # encoding: [0x00,0x00,0x00,0x13]
+# CHECK32: addi x0, x0, 0		   # encoding: [0x00,0x00,0x00,0x13]
 
 # CHECK32: addi	x3, x2, 1023               # encoding: [0x18,0x8f,0xfc,0x13]
 # CHECK32: addi	x4, x3, -1023              # encoding: [0x20,0xf0,0x04,0x13]
 # CHECK32: addi    x31, x0, 0              # encoding: [0xf8,0x00,0x00,0x13]
-# CHECK32: mv      x31, x0                 # encoding: [0xf8,0x00,0x00,0x13]
+# CHECK32: addi x31, x0, 0                 # encoding: [0xf8,0x00,0x00,0x13]
 
 # CHECK32: slti	x5, x4, 0                  # encoding: [0x29,0x00,0x01,0x13]
 # CHECK32: slti	x6, x5, 1023               # encoding: [0x31,0x4f,0xfd,0x13]
 # CHECK32: sltiu x7, x0, 1                 # encoding: [0x38,0x00,0x05,0x93]
-# CHECK32: seqz    x7, x0                  # encoding: [0x38,0x01,0x01,0x93]
+# CHECK32: sltiu x7, x0, 1                 # encoding: [0x38,0x00,0x05,0x93]
 
 # CHECK32: andi	x8, x7, 12                 # encoding: [0x41,0xc0,0x33,0x93]
 # CHECK32: ori	x9, x8, -24                # encoding: [0x4a,0x3f,0xa3,0x13]
 # CHECK32: xori	x10, x9, 17                # encoding: [0x52,0x40,0x46,0x13]
 # CHECK32: xori	x11, x10, -1               # encoding: [0x5a,0xbf,0xfe,0x13]
-# CHECK32: not     x11, x10                # encoding: [0x5a,0xbf,0x02,0x13]
+# CHECK32: xori x11, x10, -1               # encoding: [0x5a,0xbf,0xfe,0x13]
 
 # CHECK32: slli	x12, x10, 5                # encoding: [0x62,0x80,0x14,0x93]
 # CHECK32: srli	x13, x12, 31               # encoding: [0x6b,0x00,0x7e,0x93]
@@ -70,7 +70,7 @@
 # CHECK32: sll     x24, x23, x22           # encoding: [0xc5,0xaf,0x00,0xb3]
 # CHECK32: srl     x25, x24, x23           # encoding: [0xcd,0xf0,0x02,0xb3]
 # CHECK32: sra     x26, x25, x24           # encoding: [0xd6,0x33,0x02,0xb3]
-# CHECK32: mv      x2, x0                  # encoding: [0x10,0x00,0x00,0x13]
+# CHECK32: addi    x2, x0, 0               # encoding: [0x10,0x00,0x00,0x13]
 
 #-- register encodings: x0-x31
 #--                     x0 == $0

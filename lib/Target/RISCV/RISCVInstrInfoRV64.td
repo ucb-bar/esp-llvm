@@ -17,10 +17,7 @@ def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR32, GR32>, Requires
 //Integer arithmetic register-immediate
 def ADDIW:  InstI<"addiw",   0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>;
 
-//Pseudo-Op for ADDIW Rd, Rs1, 0
-def SEXT_W: InstIp<"sext.w", 0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>{
-  let IMM{11-6} = 0b000000;
-}
+def SEXT_W  : InstAlias<"sext.w $dst, $src", (ADDIW GR32:$dst, GR32:$src, 0)>, Requires<[IsRV64]>;
 
 //TODO: enforce constraints here or up on level?
 def SLLIW: InstI<"slliw", 0b0011011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV64]> {
@@ -76,20 +73,10 @@ def ADDI64: InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, 
 def XORI64: InstI<"xori", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def ORI64 : InstI<"ori" , 0b0010011, 0b110       , or , GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def ANDI64: InstI<"andi", 0b0010011, 0b111       , and, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
-//Pseudo-Op for ADDI Rd, Rs1, 0x00
-def MV64:   InstIp<"mv",   0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, Requires<[IsRV64]>{
-  let IMM{11-6} = 0b000000;
-}
-//Pseudo-Op for ADDI x0, x0, 0x00
-def NOP64: InstIpn<"nop", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>{
-  let RS1 = 0b00000;
-  let RD = 0b00000;
-  let IMM{11-6} = 0b000000;
-}
-//Pseudo-Op for XORI Rd, Rs1, -1
-def NOT64: InstIp<"not", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>{
-  let IMM{11-6} = 0b111111;
-}
+
+def NOP64 : InstAlias<"nop", (ADDI64 zero_64, zero_64, 0)>, Requires<[IsRV64]>;
+def MV64  : InstAlias<"mv $dst, $src", (ADDI64 GR64:$dst, GR64:$src, 0)>, Requires<[IsRV64]>;
+def NOT64 : InstAlias<"not $dst, $src", (XORI64 GR64:$dst, GR64:$src, -1)>, Requires<[IsRV64]>;
 
 //TODO: check 64bit shifr constraints
 //TODO: enforce constraints here or up on level?
@@ -107,10 +94,8 @@ def SRAI64: InstI<"srai", 0b0010011, 0b101       , sra, GR64, GR64, imm64sx12>, 
 }
 def SLTI64 : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR64, imm64sx12>, Requires<[IsRV64]>;
 def SLTIU64: InstI<"sltiu",0b0010011, 0b011, setult,GR32, GR64, imm64sx12>, Requires<[IsRV64]>;
-//Pseudo-Op for sltiu Rd, Rs1, 1
-def SEQZ64: InstI<"seqz",0b0010011, 0b011, setult,GR32, GR64, imm64sx12>, Requires<[IsRV64]>{
-  let IMM{11-6} = 0b000001; 
-}
+
+def SEQZ64 : InstAlias<"seqz $dst, $src", (SLTIU64 GR32:$dst, GR64:$src, 1)>, Requires<[IsRV64]>;
 
 //Synthesized set operators
 defm : SeteqPats<GR64, SLTIU64, XOR64, SLTU64, zero_64>, Requires<[IsRV64]>;
