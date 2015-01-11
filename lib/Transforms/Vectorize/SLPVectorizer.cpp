@@ -1031,11 +1031,11 @@ void BoUpSLP::buildTree_rec(ArrayRef<Value *> VL, unsigned Depth) {
     }
   }
 
-  // If any of the scalars appears in the table OR it is marked as a value that
-  // needs to stat scalar then we need to gather the scalars.
+  // If any of the scalars is marked as a value that needs to stay scalar then
+  // we need to gather the scalars.
   for (unsigned i = 0, e = VL.size(); i != e; ++i) {
-    if (ScalarToTreeEntry.count(VL[i]) || MustGather.count(VL[i])) {
-      DEBUG(dbgs() << "SLP: Gathering due to gathered scalar. \n");
+    if (MustGather.count(VL[i])) {
+      DEBUG(dbgs() << "SLP: Gathering due to gathered scalar.\n");
       newTreeEntry(VL, false);
       return;
     }
@@ -3502,11 +3502,10 @@ private:
   /// \brief Emit a horizontal reduction of the vectorized value.
   Value *emitReduction(Value *VectorizedValue, IRBuilder<> &Builder) {
     assert(VectorizedValue && "Need to have a vectorized tree node");
-    Instruction *ValToReduce = dyn_cast<Instruction>(VectorizedValue);
     assert(isPowerOf2_32(ReduxWidth) &&
            "We only handle power-of-two reductions for now");
 
-    Value *TmpVec = ValToReduce;
+    Value *TmpVec = VectorizedValue;
     for (unsigned i = ReduxWidth / 2; i != 0; i >>= 1) {
       if (IsPairwiseReduction) {
         Value *LeftMask =

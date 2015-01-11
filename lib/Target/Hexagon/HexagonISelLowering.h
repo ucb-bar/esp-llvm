@@ -52,7 +52,8 @@ bool isPositiveHalfWord(SDNode *N);
       CALL,        // A call instruction.
       RET_FLAG,    // Return with a flag operand.
       BR_JT,       // Jump table.
-      BARRIER,     // Memory barrier.
+      BARRIER,     // Memory barrier
+      POPCOUNT,
       COMBINE,
       WrapperJT,
       WrapperCP,
@@ -68,7 +69,8 @@ bool isPositiveHalfWord(SDNode *N);
       WrapperShuffOB,
       WrapperShuffOH,
       TC_RETURN,
-      EH_RETURN
+      EH_RETURN,
+      DCFETCH
     };
   }
 

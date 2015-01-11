@@ -203,8 +203,9 @@ NVPTXTargetLowering::NVPTXTargetLowering(const NVPTXTargetMachine &TM)
   setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
 
   // Turn FP extload into load/fextend
-  setLoadExtAction(ISD::EXTLOAD, MVT::f16, Expand);
-  setLoadExtAction(ISD::EXTLOAD, MVT::f32, Expand);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f32, MVT::f16, Expand);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f16, Expand);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f32, Expand);
   // Turn FP truncstore into trunc + store.
   setTruncStoreAction(MVT::f32, MVT::f16, Expand);
   setTruncStoreAction(MVT::f64, MVT::f16, Expand);
@@ -214,12 +215,11 @@ NVPTXTargetLowering::NVPTXTargetLowering(const NVPTXTargetMachine &TM)
   setOperationAction(ISD::LOAD, MVT::i1, Custom);
   setOperationAction(ISD::STORE, MVT::i1, Custom);
 
-  setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::i1, Promote);
-  setTruncStoreAction(MVT::i64, MVT::i1, Expand);
-  setTruncStoreAction(MVT::i32, MVT::i1, Expand);
-  setTruncStoreAction(MVT::i16, MVT::i1, Expand);
-  setTruncStoreAction(MVT::i8, MVT::i1, Expand);
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
+    setTruncStoreAction(VT, MVT::i1, Expand);
+  }
 
   // This is legal in NVPTX
   setOperationAction(ISD::ConstantFP, MVT::f64, Legal);
@@ -232,9 +232,7 @@ NVPTXTargetLowering::NVPTXTargetLowering(const NVPTXTargetMachine &TM)
   setOperationAction(ISD::ADDE, MVT::i64, Expand);
 
   // Register custom handling for vector loads/stores
-  for (int i = MVT::FIRST_VECTOR_VALUETYPE; i <= MVT::LAST_VECTOR_VALUETYPE;
-       ++i) {
-    MVT VT = (MVT::SimpleValueType) i;
+  for (MVT VT : MVT::vector_valuetypes()) {
     if (IsPTXVectorType(VT)) {
       setOperationAction(ISD::LOAD, VT, Custom);
       setOperationAction(ISD::STORE, VT, Custom);

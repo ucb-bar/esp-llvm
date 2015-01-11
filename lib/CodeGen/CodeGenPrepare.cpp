@@ -261,9 +261,9 @@ bool CodeGenPrepare::runOnFunction(Function &F) {
   if (!DisableBranchOpts) {
     MadeChange = false;
     SmallPtrSet<BasicBlock*, 8> WorkList;
-    for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
-      SmallVector<BasicBlock*, 2> Successors(succ_begin(BB), succ_end(BB));
-      MadeChange |= ConstantFoldTerminator(BB, true);
+    for (BasicBlock &BB : F) {
+      SmallVector<BasicBlock *, 2> Successors(succ_begin(&BB), succ_end(&BB));
+      MadeChange |= ConstantFoldTerminator(&BB, true);
       if (!MadeChange) continue;
 
       for (SmallVectorImpl<BasicBlock*>::iterator
@@ -3432,7 +3432,7 @@ bool CodeGenPrepare::MoveExtToFormExtLoad(Instruction *&I) {
     assert(isa<SExtInst>(I) && "Unexpected ext type!");
     LType = ISD::SEXTLOAD;
   }
-  if (TLI && !TLI->isLoadExtLegal(LType, LoadVT)) {
+  if (TLI && !TLI->isLoadExtLegal(LType, VT, LoadVT)) {
     I = OldExt;
     TPT.rollback(LastKnownGood);
     return false;
@@ -4008,15 +4008,41 @@ static bool OptimizeBranchInst(BranchInst *BrInst, const TargetLowering &TLI) {
   // See if ThenBB contains only one instruction (excluding the
   // terminator and DbgInfoIntrinsic calls).
   IntrinsicInst *II = nullptr;
+  CastInst *CI = nullptr;
   for (BasicBlock::iterator I = ThenBB->begin(),
                             E = std::prev(ThenBB->end()); I != E; ++I) {
     // Skip debug info.
     if (isa<DbgInfoIntrinsic>(I))
       continue;
 
-    if (II)
-      // Avoid speculating more than one instruction.
-      return false;
+    // Check if this is a zero extension or a truncate of a previously
+    // matched call to intrinsic cttz/ctlz.
+    if (II) {
+      // Early exit if we already found a "free" zero extend/truncate.
+      if (CI)
+        return false;
+
+      Type *SrcTy = II->getType();
+      Type *DestTy = I->getType();
+      Value *V;
+ 
+      if (match(cast<Instruction>(I), m_ZExt(m_Value(V))) && V == II) {
+        // Speculate this zero extend only if it is "free" for the target.
+        if (TLI.isZExtFree(SrcTy, DestTy)) {
+          CI = cast<CastInst>(I);
+          continue;
+        }
+      } else if (match(cast<Instruction>(I), m_Trunc(m_Value(V))) && V == II) {
+        // Speculate this truncate only if it is "free" for the target.
+        if (TLI.isTruncateFree(SrcTy, DestTy)) {
+          CI = cast<CastInst>(I);
+          continue;
+        }
+      } else {
+        // Avoid speculating more than one instruction.
+        return false;
+      }
+    }
 
     // See if this is a call to intrinsic cttz/ctlz.
     if (match(cast<Instruction>(I), m_Intrinsic<Intrinsic::cttz>())) {
@@ -4041,11 +4067,14 @@ static bool OptimizeBranchInst(BranchInst *BrInst, const TargetLowering &TLI) {
     Value *ThenV = PN->getIncomingValueForBlock(ThenBB);
     Value *OrigV = PN->getIncomingValueForBlock(EntryBB);
 
-    if (!OrigV || ThenV != II)
+    if (!OrigV)
       return false;
 
+    if (ThenV != II && (!CI || ThenV != CI))
+      return false;
+    
     if (ConstantInt *CInt = dyn_cast<ConstantInt>(OrigV)) {
-      unsigned BitWidth = ThenV->getType()->getIntegerBitWidth();
+      unsigned BitWidth = II->getType()->getIntegerBitWidth();
 
       // Don't try to simplify this phi node if 'ThenV' is a cttz/ctlz
       // intrinsic call, but 'OrigV' is not equal to the 'size-of' in bits
@@ -4070,7 +4099,7 @@ static bool OptimizeBranchInst(BranchInst *BrInst, const TargetLowering &TLI) {
                           ConstantInt::getFalse(II->getContext()) };
         Module *M = EntryBB->getParent()->getParent();
         Value *IF = Intrinsic::getDeclaration(M, II->getIntrinsicID(), Ty);
-        IRBuilder<> Builder(BrInst);
+        IRBuilder<> Builder(II);
         Instruction *NewI = Builder.CreateCall(IF, Args);
 
         // Replace the old call to cttz/ctlz.
@@ -4298,10 +4327,10 @@ bool CodeGenPrepare::OptimizeBlock(BasicBlock &BB, bool& ModifiedDT) {
 // find a node corresponding to the value.
 bool CodeGenPrepare::PlaceDbgValues(Function &F) {
   bool MadeChange = false;
-  for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I) {
+  for (BasicBlock &BB : F) {
     Instruction *PrevNonDbgInst = nullptr;
-    for (BasicBlock::iterator BI = I->begin(), BE = I->end(); BI != BE;) {
-      Instruction *Insn = BI; ++BI;
+    for (BasicBlock::iterator BI = BB.begin(), BE = BB.end(); BI != BE;) {
+      Instruction *Insn = BI++;
       DbgValueInst *DVI = dyn_cast<DbgValueInst>(Insn);
       // Leave dbg.values that refer to an alloca alone. These
       // instrinsics describe the address of a variable (= the alloca)

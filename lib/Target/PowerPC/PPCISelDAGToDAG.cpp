@@ -217,6 +217,7 @@ private:
     void PeepholeCROps();
 
     SDValue combineToCMPB(SDNode *N);
+    void foldBoolExts(SDValue &Res, SDNode *&N);
 
     bool AllUsersSelectZero(SDNode *N);
     void SwapAllSelectUsers(SDNode *N);
@@ -306,6 +307,7 @@ SDNode *PPCDAGToDAGISel::getGlobalBaseReg() {
         if (M->getPICLevel() == PICLevel::Small) {
           BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MoveGOTtoLR));
           BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MFLR), GlobalBaseReg);
+          MF->getInfo<PPCFunctionInfo>()->setUsesPICBase(true);
         } else {
           BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MovePCtoLR));
           BuildMI(FirstMBB, MBBI, dl, TII.get(PPC::MFLR), GlobalBaseReg);
@@ -3173,6 +3175,73 @@ SDValue PPCDAGToDAGISel::combineToCMPB(SDNode *N) {
   return Res;
 }
 
+// When CR bit registers are enabled, an extension of an i1 variable to a i32
+// or i64 value is lowered in terms of a SELECT_I[48] operation, and thus
+// involves constant materialization of a 0 or a 1 or both. If the result of
+// the extension is then operated upon by some operator that can be constant
+// folded with a constant 0 or 1, and that constant can be materialized using
+// only one instruction (like a zero or one), then we should fold in those
+// operations with the select.
+void PPCDAGToDAGISel::foldBoolExts(SDValue &Res, SDNode *&N) {
+  if (!PPCSubTarget->useCRBits())
+    return;
+
+  if (N->getOpcode() != ISD::ZERO_EXTEND &&
+      N->getOpcode() != ISD::SIGN_EXTEND &&
+      N->getOpcode() != ISD::ANY_EXTEND)
+    return;
+
+  if (N->getOperand(0).getValueType() != MVT::i1)
+    return;
+
+  if (!N->hasOneUse())
+    return;
+
+  SDLoc dl(N);
+  EVT VT = N->getValueType(0);
+  SDValue Cond = N->getOperand(0);
+  SDValue ConstTrue =
+    CurDAG->getConstant(N->getOpcode() == ISD::SIGN_EXTEND ? -1 : 1, VT);
+  SDValue ConstFalse = CurDAG->getConstant(0, VT);
+
+  do {
+    SDNode *User = *N->use_begin();
+    if (User->getNumOperands() != 2)
+      break;
+
+    auto TryFold = [this, N, User](SDValue Val) {
+      SDValue UserO0 = User->getOperand(0), UserO1 = User->getOperand(1);
+      SDValue O0 = UserO0.getNode() == N ? Val : UserO0;
+      SDValue O1 = UserO1.getNode() == N ? Val : UserO1;
+
+      return CurDAG->FoldConstantArithmetic(User->getOpcode(),
+                                            User->getValueType(0),
+                                            O0.getNode(), O1.getNode());
+    };
+
+    SDValue TrueRes = TryFold(ConstTrue);
+    if (!TrueRes)
+      break;
+    SDValue FalseRes = TryFold(ConstFalse);
+    if (!FalseRes)
+      break;
+
+    // For us to materialize these using one instruction, we must be able to
+    // represent them as signed 16-bit integers.
+    uint64_t True  = cast<ConstantSDNode>(TrueRes)->getZExtValue(),
+             False = cast<ConstantSDNode>(FalseRes)->getZExtValue();
+    if (!isInt<16>(True) || !isInt<16>(False))
+      break;
+
+    // We can replace User with a new SELECT node, and try again to see if we
+    // can fold the select with its user.
+    Res = CurDAG->getSelect(dl, User->getValueType(0), Cond, TrueRes, FalseRes);
+    N = User;
+    ConstTrue = TrueRes;
+    ConstFalse = FalseRes;
+  } while (N->hasOneUse());
+}
+
 void PPCDAGToDAGISel::PreprocessISelDAG() {
   SelectionDAG::allnodes_iterator Position(CurDAG->getRoot().getNode());
   ++Position;
@@ -3190,6 +3259,9 @@ void PPCDAGToDAGISel::PreprocessISelDAG() {
       Res = combineToCMPB(N);
       break;
     }
+
+    if (!Res)
+      foldBoolExts(Res, N);
 
     if (Res) {
       DEBUG(dbgs() << "PPC DAG preprocessing replacing:\nOld:    ");
@@ -3736,6 +3808,12 @@ static bool PeepholePPC64ZExtGather(SDValue Op32,
     return true;
   }
 
+  // CNTLZW always produces a 64-bit value in [0,32], and so is zero extended.
+  if (Op32.getMachineOpcode() == PPC::CNTLZW) {
+    ToPromote.insert(Op32.getNode());
+    return true;
+  }
+
   // Next, check for those instructions we can look through.
 
   // Assuming the mask does not wrap around, then the higher-order bits are
@@ -3925,6 +4003,7 @@ void PPCDAGToDAGISel::PeepholePPC64ZExt() {
       case PPC::LIS:       NewOpcode = PPC::LIS8; break;
       case PPC::LHBRX:     NewOpcode = PPC::LHBRX8; break;
       case PPC::LWBRX:     NewOpcode = PPC::LWBRX8; break;
+      case PPC::CNTLZW:    NewOpcode = PPC::CNTLZW8; break;
       case PPC::RLWIMI:    NewOpcode = PPC::RLWIMI8; break;
       case PPC::OR:        NewOpcode = PPC::OR8; break;
       case PPC::SELECT_I4: NewOpcode = PPC::SELECT_I8; break;

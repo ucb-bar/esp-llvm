@@ -557,18 +557,19 @@ public:
   /// Return how this load with extension should be treated: either it is legal,
   /// needs to be promoted to a larger size, needs to be expanded to some other
   /// code sequence, or the target has a custom expander for it.
-  LegalizeAction getLoadExtAction(unsigned ExtType, EVT VT) const {
-    if (VT.isExtended()) return Expand;
-    unsigned I = (unsigned) VT.getSimpleVT().SimpleTy;
-    assert(ExtType < ISD::LAST_LOADEXT_TYPE && I < MVT::LAST_VALUETYPE &&
-           "Table isn't big enough!");
-    return (LegalizeAction)LoadExtActions[I][ExtType];
+  LegalizeAction getLoadExtAction(unsigned ExtType, EVT ValVT, EVT MemVT) const {
+    if (ValVT.isExtended() || MemVT.isExtended()) return Expand;
+    unsigned ValI = (unsigned) ValVT.getSimpleVT().SimpleTy;
+    unsigned MemI = (unsigned) MemVT.getSimpleVT().SimpleTy;
+    assert(ExtType < ISD::LAST_LOADEXT_TYPE && ValI < MVT::LAST_VALUETYPE &&
+           MemI < MVT::LAST_VALUETYPE && "Table isn't big enough!");
+    return (LegalizeAction)LoadExtActions[ValI][MemI][ExtType];
   }
 
   /// Return true if the specified load with extension is legal on this target.
-  bool isLoadExtLegal(unsigned ExtType, EVT VT) const {
-    return VT.isSimple() &&
-      getLoadExtAction(ExtType, VT.getSimpleVT()) == Legal;
+  bool isLoadExtLegal(unsigned ExtType, EVT ValVT, EVT MemVT) const {
+    return ValVT.isSimple() && MemVT.isSimple() &&
+      getLoadExtAction(ExtType, ValVT, MemVT) == Legal;
   }
 
   /// Return how this store with truncation should be treated: either it is
@@ -595,7 +596,7 @@ public:
   /// sequence, or the target has a custom expander for it.
   LegalizeAction
   getIndexedLoadAction(unsigned IdxMode, MVT VT) const {
-    assert(IdxMode < ISD::LAST_INDEXED_MODE && VT < MVT::LAST_VALUETYPE &&
+    assert(IdxMode < ISD::LAST_INDEXED_MODE && VT.isValid() &&
            "Table isn't big enough!");
     unsigned Ty = (unsigned)VT.SimpleTy;
     return (LegalizeAction)((IndexedModeActions[Ty][IdxMode] & 0xf0) >> 4);
@@ -613,7 +614,7 @@ public:
   /// sequence, or the target has a custom expander for it.
   LegalizeAction
   getIndexedStoreAction(unsigned IdxMode, MVT VT) const {
-    assert(IdxMode < ISD::LAST_INDEXED_MODE && VT < MVT::LAST_VALUETYPE &&
+    assert(IdxMode < ISD::LAST_INDEXED_MODE && VT.isValid() &&
            "Table isn't big enough!");
     unsigned Ty = (unsigned)VT.SimpleTy;
     return (LegalizeAction)(IndexedModeActions[Ty][IdxMode] & 0x0f);
@@ -1237,19 +1238,18 @@ protected:
 
   /// Indicate that the specified load with extension does not work with the
   /// specified type and indicate what to do about it.
-  void setLoadExtAction(unsigned ExtType, MVT VT,
+  void setLoadExtAction(unsigned ExtType, MVT ValVT, MVT MemVT,
                         LegalizeAction Action) {
-    assert(ExtType < ISD::LAST_LOADEXT_TYPE && VT < MVT::LAST_VALUETYPE &&
-           "Table isn't big enough!");
-    LoadExtActions[VT.SimpleTy][ExtType] = (uint8_t)Action;
+    assert(ExtType < ISD::LAST_LOADEXT_TYPE && ValVT.isValid() &&
+           MemVT.isValid() && "Table isn't big enough!");
+    LoadExtActions[ValVT.SimpleTy][MemVT.SimpleTy][ExtType] = (uint8_t)Action;
   }
 
   /// Indicate that the specified truncating store does not work with the
   /// specified type and indicate what to do about it.
   void setTruncStoreAction(MVT ValVT, MVT MemVT,
                            LegalizeAction Action) {
-    assert(ValVT < MVT::LAST_VALUETYPE && MemVT < MVT::LAST_VALUETYPE &&
-           "Table isn't big enough!");
+    assert(ValVT.isValid() && MemVT.isValid() && "Table isn't big enough!");
     TruncStoreActions[ValVT.SimpleTy][MemVT.SimpleTy] = (uint8_t)Action;
   }
 
@@ -1260,7 +1260,7 @@ protected:
   /// TargetLowering.cpp
   void setIndexedLoadAction(unsigned IdxMode, MVT VT,
                             LegalizeAction Action) {
-    assert(VT < MVT::LAST_VALUETYPE && IdxMode < ISD::LAST_INDEXED_MODE &&
+    assert(VT.isValid() && IdxMode < ISD::LAST_INDEXED_MODE &&
            (unsigned)Action < 0xf && "Table isn't big enough!");
     // Load action are kept in the upper half.
     IndexedModeActions[(unsigned)VT.SimpleTy][IdxMode] &= ~0xf0;
@@ -1274,7 +1274,7 @@ protected:
   /// TargetLowering.cpp
   void setIndexedStoreAction(unsigned IdxMode, MVT VT,
                              LegalizeAction Action) {
-    assert(VT < MVT::LAST_VALUETYPE && IdxMode < ISD::LAST_INDEXED_MODE &&
+    assert(VT.isValid() && IdxMode < ISD::LAST_INDEXED_MODE &&
            (unsigned)Action < 0xf && "Table isn't big enough!");
     // Store action are kept in the lower half.
     IndexedModeActions[(unsigned)VT.SimpleTy][IdxMode] &= ~0x0f;
@@ -1285,8 +1285,7 @@ protected:
   /// target and indicate what to do about it.
   void setCondCodeAction(ISD::CondCode CC, MVT VT,
                          LegalizeAction Action) {
-    assert(VT < MVT::LAST_VALUETYPE &&
-           (unsigned)CC < array_lengthof(CondCodeActions) &&
+    assert(VT.isValid() && (unsigned)CC < array_lengthof(CondCodeActions) &&
            "Table isn't big enough!");
     /// The lower 5 bits of the SimpleTy index into Nth 2bit set from the 32-bit
     /// value and the upper 27 bits index into the second dimension of the array
@@ -1739,7 +1738,8 @@ private:
   /// For each load extension type and each value type, keep a LegalizeAction
   /// that indicates how instruction selection should deal with a load of a
   /// specific value type and extension type.
-  uint8_t LoadExtActions[MVT::LAST_VALUETYPE][ISD::LAST_LOADEXT_TYPE];
+  uint8_t LoadExtActions[MVT::LAST_VALUETYPE][MVT::LAST_VALUETYPE]
+                        [ISD::LAST_LOADEXT_TYPE];
 
   /// For each value type pair keep a LegalizeAction that indicates whether a
   /// truncating store of a specific value type and truncating type is legal.

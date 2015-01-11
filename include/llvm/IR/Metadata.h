@@ -186,7 +186,7 @@ class ValueAsMetadata : public Metadata, ReplaceableMetadataImpl {
   Value *V;
 
 protected:
-  ValueAsMetadata(LLVMContext &Context, unsigned ID, Value *V)
+  ValueAsMetadata(unsigned ID, Value *V)
       : Metadata(ID), V(V) {
     assert(V && "Expected valid value");
   }
@@ -236,8 +236,8 @@ public:
 class ConstantAsMetadata : public ValueAsMetadata {
   friend class ValueAsMetadata;
 
-  ConstantAsMetadata(LLVMContext &Context, Constant *C)
-      : ValueAsMetadata(Context, ConstantAsMetadataKind, C) {}
+  ConstantAsMetadata(Constant *C)
+      : ValueAsMetadata(ConstantAsMetadataKind, C) {}
 
 public:
   static ConstantAsMetadata *get(Constant *C) {
@@ -259,8 +259,8 @@ public:
 class LocalAsMetadata : public ValueAsMetadata {
   friend class ValueAsMetadata;
 
-  LocalAsMetadata(LLVMContext &Context, Value *Local)
-      : ValueAsMetadata(Context, LocalAsMetadataKind, Local) {
+  LocalAsMetadata(Value *Local)
+      : ValueAsMetadata(LocalAsMetadataKind, Local) {
     assert(!isa<Constant>(Local) && "Expected local value");
   }
 
@@ -616,15 +616,15 @@ public:
   static MDNode *get(LLVMContext &Context, ArrayRef<Metadata *> MDs) {
     return getMDNode(Context, MDs, true);
   }
-  static MDNode *getWhenValsUnresolved(LLVMContext &Context,
-                                       ArrayRef<Metadata *> MDs) {
-    // TODO: Remove this.
-    return get(Context, MDs);
-  }
 
   static MDNode *getIfExists(LLVMContext &Context, ArrayRef<Metadata *> MDs) {
     return getMDNode(Context, MDs, false);
   }
+
+  /// \brief Return a distinct node.
+  ///
+  /// Return a distinct node -- i.e., a node that is not uniqued.
+  static MDNode *getDistinct(LLVMContext &Context, ArrayRef<Metadata *> MDs);
 
   /// \brief Return a temporary MDNode
   ///
@@ -646,6 +646,12 @@ public:
 
   /// \brief Check if node is fully resolved.
   bool isResolved() const;
+
+  /// \brief Check if node is distinct.
+  ///
+  /// Distinct nodes are not uniqued, and will not be returned by \a
+  /// MDNode::get().
+  bool isDistinct() const { return IsDistinctInContext; }
 
 protected:
   /// \brief Set an operand.
@@ -698,9 +704,6 @@ public:
 /// Although nodes are uniqued by default, \a GenericMDNode has no support for
 /// RAUW.  If an operand change (due to RAUW or otherwise) causes a uniquing
 /// collision, the uniquing bit is dropped.
-///
-/// TODO: Make uniquing opt-out (status: mandatory, sometimes dropped).
-/// TODO: Drop support for RAUW.
 class GenericMDNode : public MDNode {
   friend class Metadata;
   friend class MDNode;
@@ -717,7 +720,12 @@ class GenericMDNode : public MDNode {
   /// LLVMContext, and adding an LLVMContext reference to RMI.
   std::unique_ptr<ReplaceableMetadataImpl> ReplaceableUses;
 
-  GenericMDNode(LLVMContext &C, ArrayRef<Metadata *> Vals);
+  /// \brief Create a new node.
+  ///
+  /// If \c AllowRAUW, then if any operands are unresolved support RAUW.  RAUW
+  /// will be dropped once all operands have been resolved (or if \a
+  /// resolveCycles() is called).
+  GenericMDNode(LLVMContext &C, ArrayRef<Metadata *> Vals, bool AllowRAUW);
   ~GenericMDNode();
 
   void setHash(unsigned Hash) { MDNodeSubclassData = Hash; }
@@ -853,6 +861,7 @@ public:
   MDNode *getOperand(unsigned i) const;
   unsigned getNumOperands() const;
   void addOperand(MDNode *M);
+  void setOperand(unsigned I, MDNode *New);
   StringRef getName() const;
   void print(raw_ostream &ROS) const;
   void dump() const;

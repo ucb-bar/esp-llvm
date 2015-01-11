@@ -526,6 +526,8 @@ namespace llvm {
     bool isTruncateFree(Type *Ty1, Type *Ty2) const override;
     bool isTruncateFree(EVT VT1, EVT VT2) const override;
 
+    bool isZExtFree(SDValue Val, EVT VT2) const override;
+
     /// \brief Returns true if it is beneficial to convert a load of a constant
     /// to just the constant itself.
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
@@ -591,6 +593,29 @@ namespace llvm {
     }
 
   private:
+
+    struct ReuseLoadInfo {
+      SDValue Ptr;
+      SDValue Chain;
+      SDValue ResChain;
+      MachinePointerInfo MPI;
+      bool IsInvariant;
+      unsigned Alignment;
+      AAMDNodes AAInfo;
+      const MDNode *Ranges;
+
+      ReuseLoadInfo() : IsInvariant(false), Alignment(0), Ranges(nullptr) {}
+    };
+
+    bool canReuseLoadAddress(SDValue Op, EVT MemVT, ReuseLoadInfo &RLI,
+                             SelectionDAG &DAG,
+                             ISD::LoadExtType ET = ISD::NON_EXTLOAD) const;
+    void spliceIntoChain(SDValue ResChain, SDValue NewResChain,
+                         SelectionDAG &DAG) const;
+
+    void LowerFP_TO_INTForReuse(SDValue Op, ReuseLoadInfo &RLI,
+                                SelectionDAG &DAG, SDLoc dl) const;
+
     SDValue getFramePointerFrameIndex(SelectionDAG & DAG) const;
     SDValue getReturnAddrFrameIndex(SelectionDAG & DAG) const;
 
@@ -748,6 +773,7 @@ namespace llvm {
 
     SDValue DAGCombineExtBoolTrunc(SDNode *N, DAGCombinerInfo &DCI) const;
     SDValue DAGCombineTruncBoolExt(SDNode *N, DAGCombinerInfo &DCI) const;
+    SDValue combineFPToIntToFP(SDNode *N, DAGCombinerInfo &DCI) const;
 
     SDValue getRsqrtEstimate(SDValue Operand, DAGCombinerInfo &DCI,
                              unsigned &RefinementSteps,

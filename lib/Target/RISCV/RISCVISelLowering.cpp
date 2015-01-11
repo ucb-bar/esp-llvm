@@ -275,10 +275,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::UMUL_LOHI, MVT::i64, Expand);
 
-  // No sign extend instructions
-  setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::i1, Promote);
-  setLoadExtAction(ISD::EXTLOAD,  MVT::i1, Promote);
+  // No sign extend instructions for i1
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1, Promote);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1, Promote);
+    setLoadExtAction(ISD::EXTLOAD,  VT, MVT::i1, Promote);
+  }
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i8, Expand);
   setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i16, Expand);
@@ -374,7 +376,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
   // Needed so that we don't try to implement f128 constant loads using
   // a load-and-extend of a f80 constant (in cases where the constant
   // would fit in an f80).
-  setLoadExtAction(ISD::EXTLOAD, MVT::f80, Expand);
+  for (MVT VT : MVT::fp_valuetypes())
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f80, Expand);
 
   // Floating-point truncation and stores need to be done separately.
   setTruncStoreAction(MVT::f64,  MVT::f32, Expand);

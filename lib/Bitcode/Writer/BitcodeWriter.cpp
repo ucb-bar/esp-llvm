@@ -477,17 +477,28 @@ static void WriteTypeTable(const ValueEnumerator &VE, BitstreamWriter &Stream) {
 
 static unsigned getEncodedLinkage(const GlobalValue &GV) {
   switch (GV.getLinkage()) {
-  case GlobalValue::ExternalLinkage:                 return 0;
-  case GlobalValue::WeakAnyLinkage:                  return 1;
-  case GlobalValue::AppendingLinkage:                return 2;
-  case GlobalValue::InternalLinkage:                 return 3;
-  case GlobalValue::LinkOnceAnyLinkage:              return 4;
-  case GlobalValue::ExternalWeakLinkage:             return 7;
-  case GlobalValue::CommonLinkage:                   return 8;
-  case GlobalValue::PrivateLinkage:                  return 9;
-  case GlobalValue::WeakODRLinkage:                  return 10;
-  case GlobalValue::LinkOnceODRLinkage:              return 11;
-  case GlobalValue::AvailableExternallyLinkage:      return 12;
+  case GlobalValue::ExternalLinkage:
+    return 0;
+  case GlobalValue::WeakAnyLinkage:
+    return 1;
+  case GlobalValue::AppendingLinkage:
+    return 2;
+  case GlobalValue::InternalLinkage:
+    return 3;
+  case GlobalValue::LinkOnceAnyLinkage:
+    return 4;
+  case GlobalValue::ExternalWeakLinkage:
+    return 7;
+  case GlobalValue::CommonLinkage:
+    return 8;
+  case GlobalValue::PrivateLinkage:
+    return 9;
+  case GlobalValue::WeakODRLinkage:
+    return 10;
+  case GlobalValue::LinkOnceODRLinkage:
+    return 11;
+  case GlobalValue::AvailableExternallyLinkage:
+    return 12;
   }
   llvm_unreachable("Invalid linkage");
 }
@@ -762,7 +773,9 @@ static void WriteMDNode(const MDNode *N,
     assert(!isa<LocalAsMetadata>(MD) && "Unexpected function-local metadata");
     Record.push_back(VE.getMetadataID(MD) + 1);
   }
-  Stream.EmitRecord(bitc::METADATA_NODE, Record);
+  Stream.EmitRecord(N->isDistinct() ? bitc::METADATA_DISTINCT_NODE
+                                    : bitc::METADATA_NODE,
+                    Record);
   Record.clear();
 }
 
