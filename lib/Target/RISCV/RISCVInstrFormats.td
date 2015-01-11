@@ -242,46 +242,21 @@ class InstI<string mnemonic, bits<7> op, bits<3> funct3,
   let Inst{6 - 0} = op;
 }
 
-//Ip-Type: Pseudo-Ops for Type-I; used for MV
-class InstIp<string mnemonic, bits<7> op, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
-            Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2), 
-                mnemonic#"\t$dst, $src1", 
-                [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
+//ISYS-Type
+class InstISYS<string mnemonic, bits<12> funct12,
+             RegisterOperand cls1>
+  : InstRISCV<4, (outs cls1:$dst), (ins), 
+                mnemonic#"\t$dst", 
+                []> {
   field bits<32> Inst;
 
   bits<5> RD;
-  bits<5> RS1;
-  bits<12> IMM;
 
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
-  let Inst{9 - 7} = funct3;
-  let Inst{6 - 0} = op;
-}
-
-//Ipn-Type: Pseudo-Ops for Type-I; used for NOP
-class InstIpn<string mnemonic, bits<7> op, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
-            Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2),
-                mnemonic#"\t",
-                [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
-  field bits<32> Inst;
-
-  bits<5> RD;
-  bits<5> RS1;
-  bits<12> IMM;
-
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
-  let Inst{9 - 7} = funct3;
-  let Inst{6 - 0} = op;
+  let Inst{31-20} = funct12;
+  let Inst{19-15} = 0b00000;
+  let Inst{14-12} = 0b010;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = 0b1110011;
 }
 
 //B-Type, too different to consolidate further

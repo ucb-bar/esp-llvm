@@ -43,20 +43,10 @@ def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Re
 def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
 def ORI : InstI<"ori" , 0b0010011, 0b110       , or , GR32, GR32, imm32sx12>;
 def ANDI: InstI<"andi", 0b0010011, 0b111       , and, GR32, GR32, imm32sx12>;
-//Pseudo-Op for ADDI x0, x0, 0x00
-def NOP: InstIpn<"nop", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
-  let RS1 = 0b00000;
-  let RD = 0b00000;
-  let IMM{11-6} = 0b000000; 
-}
-//Pseudo-Op for ADDI Rd, Rs1, 0x00
-def MV:   InstIp<"mv",   0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
-  let IMM{11-6} = 0b000000; 
-}
-//Pseudo-Op for XORI Rd, Rs1, -1
-def NOT: InstIp<"not", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>{
-  let IMM{11-6} = 0b111111; 
-}
+
+def NOP : InstAlias<"nop", (ADDI zero, zero, 0)>, Requires<[IsRV32]>;
+def MV  : InstAlias<"mv $dst, $src", (ADDI GR32:$dst, GR32:$src, 0)>, Requires<[IsRV32]>;
+def NOT : InstAlias<"not $dst, $src", (XORI GR32:$dst, GR32:$src, -1)>;
 
 //TODO: enforce constraints here or up on level?
 def SLLI: InstI<"slli", 0b0010011, 0b001       , shl, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
@@ -73,10 +63,8 @@ def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, GR32, imm32sx12>, Re
 }
 def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR32, imm32sx12>;
 def SLTIU: InstI<"sltiu",0b0010011, 0b011, setult,GR32, GR32, imm32sx12>;
-//Pseudo-Op for sltiu Rd,Rs1,1
-def SEQZ: InstIp<"seqz",0b0010011, 0b011, setult,GR32, GR32, imm32sx12>{
-  let IMM{11-6} = 0b000001; 
-}
+
+def SEQZ : InstAlias<"seqz $dst, $src", (SLTIU GR32:$dst, GR32:$src, 1)>;
 
 //Synthesized set operators
 //patterns to be used for 32 and 64bit
@@ -357,6 +345,69 @@ def FENCE: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence",
         let Inst{11- 7} = 0b00000;
         let Inst{6 - 0} = 0b0001111;
       }
+
+//Fence.I
+def FENCE_I: InstRISCV<4, (outs), (ins fenceImm:$pred, fenceImm:$succ), "fence.i", 
+      [(r_fence fenceImm:$pred, fenceImm:$succ)]>{
+        field bits<32> Inst;
+
+        bits<4> pred;
+        bits<4> succ;
+
+        let Inst{31-28} = 0b0000;
+        let Inst{27   } = 0b0;
+        let Inst{26   } = 0b0;
+        let Inst{25   } = 0b0;
+        let Inst{24   } = 0b0;
+        let Inst{23   } = 0b0;
+        let Inst{22   } = 0b0;
+        let Inst{21   } = 0b0;
+        let Inst{20   } = 0b0;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b001;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b0001111;
+      }
+
+
+//===----------------------------------------------------------------------===//
+// System Calls
+//===----------------------------------------------------------------------===//
+
+//scall
+def SCALL: InstRISCV<4, (outs), (ins), "scall", []>{
+        field bits<32> Inst;
+
+        let Inst{31-20} = 0b000000000000;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b000;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b1110011;
+      }
+
+//sbreak
+def SBREAK: InstRISCV<4, (outs), (ins), "sbreak", []>{
+        field bits<32> Inst;
+
+        let Inst{31-20} = 0b000000000001;
+        let Inst{19-15} = 0b00000;
+        let Inst{14-12} = 0b000;
+        let Inst{11- 7} = 0b00000;
+        let Inst{6 - 0} = 0b1110011;
+      }
+
+//rdcycle Rd
+def RDCYCLE: InstISYS<"rdcycle", 0b110000000000, GR32>;
+//rdcycleh Rd
+def RDCYCLEH: InstISYS<"rdcycleh", 0b110010000000, GR32>;
+//rdtime Rd
+def RDTIME: InstISYS<"rdtime", 0b110000000001, GR32>;
+//rdtimeh Rd
+def RDTIMEH: InstISYS<"rdtimeh", 0b110010000001, GR32>;
+//rdinstret Rd
+def RDINSTRET: InstISYS<"rdinstret", 0b110000000010, GR32>;
+//rdinstreth Rd
+def RDINSTRETH: InstISYS<"rdinstreth", 0b110010000010, GR32>;
 
 //===----------------------------------------------------------------------===//
 // Subtarget features
