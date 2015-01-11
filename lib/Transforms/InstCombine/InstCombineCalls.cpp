@@ -352,33 +352,11 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     break;
   case Intrinsic::uadd_with_overflow: {
     Value *LHS = II->getArgOperand(0), *RHS = II->getArgOperand(1);
-    IntegerType *IT = cast<IntegerType>(II->getArgOperand(0)->getType());
-    uint32_t BitWidth = IT->getBitWidth();
-    APInt LHSKnownZero(BitWidth, 0);
-    APInt LHSKnownOne(BitWidth, 0);
-    computeKnownBits(LHS, LHSKnownZero, LHSKnownOne, 0, II);
-    bool LHSKnownNegative = LHSKnownOne[BitWidth - 1];
-    bool LHSKnownPositive = LHSKnownZero[BitWidth - 1];
-
-    if (LHSKnownNegative || LHSKnownPositive) {
-      APInt RHSKnownZero(BitWidth, 0);
-      APInt RHSKnownOne(BitWidth, 0);
-      computeKnownBits(RHS, RHSKnownZero, RHSKnownOne, 0, II);
-      bool RHSKnownNegative = RHSKnownOne[BitWidth - 1];
-      bool RHSKnownPositive = RHSKnownZero[BitWidth - 1];
-      if (LHSKnownNegative && RHSKnownNegative) {
-        // The sign bit is set in both cases: this MUST overflow.
-        // Create a simple add instruction, and insert it into the struct.
-        return CreateOverflowTuple(II, Builder->CreateAdd(LHS, RHS), true,
-                                    /*ReUseName*/true);
-      }
-
-      if (LHSKnownPositive && RHSKnownPositive) {
-        // The sign bit is clear in both cases: this CANNOT overflow.
-        // Create a simple add instruction, and insert it into the struct.
-        return CreateOverflowTuple(II, Builder->CreateNUWAdd(LHS, RHS), false);
-      }
-    }
+    OverflowResult OR = computeOverflowForUnsignedAdd(LHS, RHS, II);
+    if (OR == OverflowResult::NeverOverflows)
+      return CreateOverflowTuple(II, Builder->CreateNUWAdd(LHS, RHS), false);
+    if (OR == OverflowResult::AlwaysOverflows)
+      return CreateOverflowTuple(II, Builder->CreateAdd(LHS, RHS), true);
   }
   // FALL THROUGH uadd into sadd
   case Intrinsic::sadd_with_overflow:
@@ -441,11 +419,10 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   case Intrinsic::umul_with_overflow: {
     Value *LHS = II->getArgOperand(0), *RHS = II->getArgOperand(1);
     OverflowResult OR = computeOverflowForUnsignedMul(LHS, RHS, II);
-    if (OR == OverflowResult::NeverOverflows) {
+    if (OR == OverflowResult::NeverOverflows)
       return CreateOverflowTuple(II, Builder->CreateNUWMul(LHS, RHS), false);
-    } else if (OR == OverflowResult::AlwaysOverflows) {
+    if (OR == OverflowResult::AlwaysOverflows)
       return CreateOverflowTuple(II, Builder->CreateMul(LHS, RHS), true);
-    }
   } // FALL THROUGH
   case Intrinsic::smul_with_overflow:
     // Canonicalize constants into the RHS.
@@ -1416,7 +1393,7 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
     if (NewRetTy->isStructTy())
       return false; // TODO: Handle multiple return values.
 
-    if (!CastInst::isBitCastable(NewRetTy, OldRetTy)) {
+    if (!CastInst::isBitOrNoopPointerCastable(NewRetTy, OldRetTy, DL)) {
       if (Callee->isDeclaration())
         return false;   // Cannot transform this return value.
 
@@ -1451,12 +1428,21 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
   unsigned NumActualArgs = CS.arg_size();
   unsigned NumCommonArgs = std::min(FT->getNumParams(), NumActualArgs);
 
+  // Prevent us turning:
+  // declare void @takes_i32_inalloca(i32* inalloca)
+  //  call void bitcast (void (i32*)* @takes_i32_inalloca to void (i32)*)(i32 0)
+  //
+  // into:
+  //  call void @takes_i32_inalloca(i32* null)
+  if (Callee->getAttributes().hasAttrSomewhere(Attribute::InAlloca))
+    return false;
+
   CallSite::arg_iterator AI = CS.arg_begin();
   for (unsigned i = 0, e = NumCommonArgs; i != e; ++i, ++AI) {
     Type *ParamTy = FT->getParamType(i);
     Type *ActTy = (*AI)->getType();
 
-    if (!CastInst::isBitCastable(ActTy, ParamTy))
+    if (!CastInst::isBitOrNoopPointerCastable(ActTy, ParamTy, DL))
       return false;   // Cannot transform this parameter value.
 
     if (AttrBuilder(CallerPAL.getParamAttributes(i + 1), i + 1).
@@ -1551,7 +1537,7 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
     if ((*AI)->getType() == ParamTy) {
       Args.push_back(*AI);
     } else {
-      Args.push_back(Builder->CreateBitCast(*AI, ParamTy));
+      Args.push_back(Builder->CreateBitOrPointerCast(*AI, ParamTy));
     }
 
     // Add any parameter attributes.
@@ -1622,7 +1608,7 @@ bool InstCombiner::transformConstExprCastCall(CallSite CS) {
   Value *NV = NC;
   if (OldRetTy != NV->getType() && !Caller->use_empty()) {
     if (!NV->getType()->isVoidTy()) {
-      NV = NC = CastInst::Create(CastInst::BitCast, NC, OldRetTy);
+      NV = NC = CastInst::CreateBitOrPointerCast(NC, OldRetTy);
       NC->setDebugLoc(Caller->getDebugLoc());
 
       // If this is an invoke instruction, we should insert it after the first

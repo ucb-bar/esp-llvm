@@ -148,6 +148,22 @@ unsigned ARMELFObjectWriter::GetRelocTypeInner(const MCValue &Target,
   } else {
     switch ((unsigned)Fixup.getKind()) {
     default: llvm_unreachable("invalid fixup kind!");
+    case FK_Data_1:
+      switch (Modifier) {
+      default: llvm_unreachable("unsupported Modifier");
+      case MCSymbolRefExpr::VK_None:
+        Type = ELF::R_ARM_ABS8;
+        break;
+      }
+      break;
+    case FK_Data_2:
+      switch (Modifier) {
+      default: llvm_unreachable("unsupported modifier");
+      case MCSymbolRefExpr::VK_None:
+        Type = ELF::R_ARM_ABS16;
+        break;
+      }
+      break;
     case FK_Data_4:
       switch (Modifier) {
       default: llvm_unreachable("Unsupported Modifier");

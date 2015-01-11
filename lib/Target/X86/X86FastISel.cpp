@@ -1362,7 +1362,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
       // X86 requires a second branch to handle UNE (and OEQ, which is mapped
       // to UNE above).
       if (NeedExtraBranch) {
-        BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(X86::JP_4))
+        BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(X86::JP_1))
           .addMBB(TrueMBB);
       }
 
@@ -1399,10 +1399,10 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(TestOpc))
           .addReg(OpReg).addImm(1);
 
-        unsigned JmpOpc = X86::JNE_4;
+        unsigned JmpOpc = X86::JNE_1;
         if (FuncInfo.MBB->isLayoutSuccessor(TrueMBB)) {
           std::swap(TrueMBB, FalseMBB);
-          JmpOpc = X86::JE_4;
+          JmpOpc = X86::JE_1;
         }
 
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(JmpOpc))
@@ -1444,7 +1444,7 @@ bool X86FastISel::X86SelectBranch(const Instruction *I) {
 
   BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(X86::TEST8ri))
     .addReg(OpReg).addImm(1);
-  BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(X86::JNE_4))
+  BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(X86::JNE_1))
     .addMBB(TrueMBB);
   fastEmitBranch(FalseMBB, DbgLoc);
   uint32_t BranchWeight = 0;
@@ -2370,19 +2370,16 @@ bool X86FastISel::fastLowerIntrinsicCall(const IntrinsicInst *II) {
     unsigned ResultReg = 0;
     // Check if we have an immediate version.
     if (const auto *CI = dyn_cast<ConstantInt>(RHS)) {
-      static const unsigned Opc[2][2][4] = {
-        { { X86::INC8r, X86::INC16r,    X86::INC32r,    X86::INC64r },
-          { X86::DEC8r, X86::DEC16r,    X86::DEC32r,    X86::DEC64r }  },
-        { { X86::INC8r, X86::INC64_16r, X86::INC64_32r, X86::INC64r },
-          { X86::DEC8r, X86::DEC64_16r, X86::DEC64_32r, X86::DEC64r }  }
+      static const unsigned Opc[2][4] = {
+        { X86::INC8r, X86::INC16r, X86::INC32r, X86::INC64r },
+        { X86::DEC8r, X86::DEC16r, X86::DEC32r, X86::DEC64r }
       };
 
       if (BaseOpc == X86ISD::INC || BaseOpc == X86ISD::DEC) {
         ResultReg = createResultReg(TLI.getRegClassFor(VT));
-        bool Is64Bit = Subtarget->is64Bit();
         bool IsDec = BaseOpc == X86ISD::DEC;
         BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
-                TII.get(Opc[Is64Bit][IsDec][VT.SimpleTy-MVT::i8]), ResultReg)
+                TII.get(Opc[IsDec][VT.SimpleTy-MVT::i8]), ResultReg)
           .addReg(LHSReg, getKillRegState(LHSIsKill));
       } else
         ResultReg = fastEmit_ri(VT, VT, BaseOpc, LHSReg, LHSIsKill,

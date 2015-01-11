@@ -618,8 +618,9 @@ bool LLParser::ParseStandaloneMetadata() {
   if (Lex.getKind() == lltok::Type)
     return TokError("unexpected type in metadata definition");
 
+  bool IsDistinct = EatIfPresent(lltok::kw_distinct);
   if (ParseToken(lltok::exclaim, "Expected '!' here") ||
-      ParseMDNode(Init))
+      ParseMDNode(Init, IsDistinct))
     return true;
 
   // See if this was forward referenced, if so, handle it.
@@ -850,7 +851,7 @@ bool LLParser::ParseGlobal(const std::string &Name, LocTy NameLoc,
       GV->setAlignment(Alignment);
     } else {
       Comdat *C;
-      if (parseOptionalComdat(C))
+      if (parseOptionalComdat(Name, C))
         return true;
       if (C)
         GV->setComdat(C);
@@ -2899,16 +2900,26 @@ bool LLParser::ParseGlobalTypeAndValue(Constant *&V) {
          ParseGlobalValue(Ty, V);
 }
 
-bool LLParser::parseOptionalComdat(Comdat *&C) {
+bool LLParser::parseOptionalComdat(StringRef GlobalName, Comdat *&C) {
   C = nullptr;
+
+  LocTy KwLoc = Lex.getLoc();
   if (!EatIfPresent(lltok::kw_comdat))
     return false;
-  if (Lex.getKind() != lltok::ComdatVar)
-    return TokError("expected comdat variable");
-  LocTy Loc = Lex.getLoc();
-  StringRef Name = Lex.getStrVal();
-  C = getComdat(Name, Loc);
-  Lex.Lex();
+
+  if (EatIfPresent(lltok::lparen)) {
+    if (Lex.getKind() != lltok::ComdatVar)
+      return TokError("expected comdat variable");
+    C = getComdat(Lex.getStrVal(), Lex.getLoc());
+    Lex.Lex();
+    if (ParseToken(lltok::rparen, "expected ')' after comdat var"))
+      return true;
+  } else {
+    if (GlobalName.empty())
+      return TokError("comdat cannot be unnamed");
+    C = getComdat(GlobalName, KwLoc);
+  }
+
   return false;
 }
 
@@ -2935,12 +2946,15 @@ bool LLParser::ParseGlobalValueVector(SmallVectorImpl<Constant *> &Elts) {
   return false;
 }
 
-bool LLParser::ParseMDNode(MDNode *&MD) {
+bool LLParser::ParseMDNode(MDNode *&MD, bool IsDistinct) {
   SmallVector<Metadata *, 16> Elts;
   if (ParseMDNodeVector(Elts))
     return true;
 
-  MD = MDNode::get(Context, Elts);
+  if (IsDistinct)
+    MD = MDNode::getDistinct(Context, Elts);
+  else
+    MD = MDNode::get(Context, Elts);
   return false;
 }
 
@@ -3262,7 +3276,7 @@ bool LLParser::ParseFunctionHeader(Function *&Fn, bool isDefine) {
                                  BuiltinLoc) ||
       (EatIfPresent(lltok::kw_section) &&
        ParseStringConstant(Section)) ||
-      parseOptionalComdat(C) ||
+      parseOptionalComdat(FunctionName, C) ||
       ParseOptionalAlignment(Alignment) ||
       (EatIfPresent(lltok::kw_gc) &&
        ParseStringConstant(GC)) ||

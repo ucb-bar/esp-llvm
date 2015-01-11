@@ -255,9 +255,9 @@ ValueAsMetadata *ValueAsMetadata::get(Value *V) {
            "Expected this to be the only metadata use");
     V->NameAndIsUsedByMD.setInt(true);
     if (auto *C = dyn_cast<Constant>(V))
-      Entry = new ConstantAsMetadata(Context, C);
+      Entry = new ConstantAsMetadata(C);
     else
-      Entry = new LocalAsMetadata(Context, V);
+      Entry = new LocalAsMetadata(V);
   }
 
   return Entry;
@@ -411,8 +411,12 @@ static bool isOperandUnresolved(Metadata *Op) {
   return false;
 }
 
-GenericMDNode::GenericMDNode(LLVMContext &C, ArrayRef<Metadata *> Vals)
+GenericMDNode::GenericMDNode(LLVMContext &C, ArrayRef<Metadata *> Vals,
+                             bool AllowRAUW)
     : MDNode(C, GenericMDNodeKind, Vals) {
+  if (!AllowRAUW)
+    return;
+
   // Check whether any operands are unresolved, requiring re-uniquing.
   for (const auto &Op : operands())
     if (isOperandUnresolved(Op))
@@ -515,13 +519,8 @@ void GenericMDNode::handleChangedOperand(void *Ref, Metadata *New) {
   Metadata *Old = getOperand(Op);
   setOperand(Op, New);
 
-  // Drop uniquing for self-reference cycles or if an operand drops to null.
-  //
-  // FIXME: Stop dropping uniquing when an operand drops to null.  The original
-  // motivation was to prevent madness during teardown of LLVMContextImpl, but
-  // dropAllReferences() fixes that problem in a better way.  (It's just here
-  // now for better staging of semantic changes.)
-  if (New == this || !New) {
+  // Drop uniquing for self-reference cycles.
+  if (New == this) {
     storeDistinctInContext();
     setHash(0);
     if (!isResolved())
@@ -586,9 +585,15 @@ MDNode *MDNode::getMDNode(LLVMContext &Context, ArrayRef<Metadata *> MDs,
     return nullptr;
 
   // Coallocate space for the node and Operands together, then placement new.
-  GenericMDNode *N = new (MDs.size()) GenericMDNode(Context, MDs);
+  auto *N = new (MDs.size()) GenericMDNode(Context, MDs, /* AllowRAUW */ true);
   N->setHash(Key.Hash);
   Store.insert(N);
+  return N;
+}
+
+MDNode *MDNode::getDistinct(LLVMContext &Context, ArrayRef<Metadata *> MDs) {
+  auto *N = new (MDs.size()) GenericMDNode(Context, MDs, /* AllowRAUW */ false);
+  N->storeDistinctInContext();
   return N;
 }
 
@@ -840,6 +845,11 @@ MDNode *NamedMDNode::getOperand(unsigned i) const {
 }
 
 void NamedMDNode::addOperand(MDNode *M) { getNMDOps(Operands).emplace_back(M); }
+
+void NamedMDNode::setOperand(unsigned I, MDNode *New) {
+  assert(I < getNumOperands() && "Invalid operand number");
+  getNMDOps(Operands)[I].reset(New);
+}
 
 void NamedMDNode::eraseFromParent() {
   getParent()->eraseNamedMetadata(this);

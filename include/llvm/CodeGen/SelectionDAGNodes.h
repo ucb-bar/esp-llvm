@@ -1418,6 +1418,12 @@ public:
   /// isNaN - Return true if the value is a NaN.
   bool isNaN() const { return Value->isNaN(); }
 
+  /// isInfinity - Return true if the value is an infinity
+  bool isInfinity() const { return Value->isInfinity(); }
+
+  /// isNegative - Return true if the value is negative.
+  bool isNegative() const { return Value->isNegative(); }
+
   /// isExactlyValue - We don't rely on operator== working on double values, as
   /// it returns true for things that are clearly not equal, like -0.0 and 0.0.
   /// As such, this method can be used to do an exact bit-for-bit comparison of

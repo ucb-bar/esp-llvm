@@ -216,18 +216,20 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
   setOperationAction(ISD::EXTRACT_SUBVECTOR, MVT::v8f32, Custom);
   setOperationAction(ISD::EXTRACT_SUBVECTOR, MVT::v8i32, Custom);
 
-  setLoadExtAction(ISD::EXTLOAD, MVT::v2i8, Expand);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::v2i8, Expand);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::v2i8, Expand);
-  setLoadExtAction(ISD::EXTLOAD, MVT::v4i8, Expand);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::v4i8, Expand);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::v4i8, Expand);
-  setLoadExtAction(ISD::EXTLOAD, MVT::v2i16, Expand);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::v2i16, Expand);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::v2i16, Expand);
-  setLoadExtAction(ISD::EXTLOAD, MVT::v4i16, Expand);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::v4i16, Expand);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::v4i16, Expand);
+  for (MVT VT : MVT::integer_vector_valuetypes()) {
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::v2i8, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i8, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v2i8, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::v4i8, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v4i8, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v4i8, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::v2i16, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i16, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v2i16, Expand);
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::v4i16, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v4i16, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::v4i16, Expand);
+  }
 
   setOperationAction(ISD::BR_CC, MVT::i1, Expand);
 
@@ -246,7 +248,8 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
 
   setOperationAction(ISD::FP16_TO_FP, MVT::f64, Expand);
 
-  setLoadExtAction(ISD::EXTLOAD, MVT::f16, Expand);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f32, MVT::f16, Expand);
+  setLoadExtAction(ISD::EXTLOAD, MVT::f64, MVT::f16, Expand);
   setTruncStoreAction(MVT::f32, MVT::f16, Expand);
   setTruncStoreAction(MVT::f64, MVT::f16, Expand);
 
@@ -999,6 +1002,10 @@ SDValue AMDGPUTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
 
     case AMDGPUIntrinsic::AMDGPU_brev:
       return DAG.getNode(AMDGPUISD::BREV, DL, VT, Op.getOperand(1));
+
+  case Intrinsic::AMDGPU_class:
+    return DAG.getNode(AMDGPUISD::FP_CLASS, DL, VT,
+                       Op.getOperand(1), Op.getOperand(2));
 
     case AMDGPUIntrinsic::AMDIL_exp: // Legacy name.
       return DAG.getNode(ISD::FEXP2, DL, VT, Op.getOperand(1));
@@ -2516,6 +2523,7 @@ const char* AMDGPUTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(RSQ_LEGACY)
   NODE_NAME_CASE(RSQ_CLAMPED)
   NODE_NAME_CASE(LDEXP)
+  NODE_NAME_CASE(FP_CLASS)
   NODE_NAME_CASE(DOT4)
   NODE_NAME_CASE(BFE_U32)
   NODE_NAME_CASE(BFE_I32)

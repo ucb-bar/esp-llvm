@@ -300,6 +300,8 @@ class X86VMemOperand<RegisterClass RC, string printMethod,
   let MIOperandInfo = (ops ptr_rc, i8imm, RC, i32imm, i8imm);
 }
 
+def anymem : X86MemOperand<"printanymem">;
+
 def opaque32mem : X86MemOperand<"printopaquemem">;
 def opaque48mem : X86MemOperand<"printopaquemem">;
 def opaque80mem : X86MemOperand<"printopaquemem">;
@@ -375,6 +377,28 @@ def i16imm_pcrel : Operand<i16>;
 def brtarget : Operand<OtherVT>;
 def brtarget8 : Operand<OtherVT>;
 
+}
+
+// Special parsers to detect mode to disambiguate.
+def X86AbsMem16AsmOperand : AsmOperandClass {
+  let Name = "AbsMem16";
+  let RenderMethod = "addAbsMemOperands";
+  let SuperClasses = [X86AbsMemAsmOperand];
+}
+
+def X86AbsMem32AsmOperand : AsmOperandClass {
+  let Name = "AbsMem32";
+  let RenderMethod = "addAbsMemOperands";
+  let SuperClasses = [X86AbsMemAsmOperand];
+}
+
+// Branch targets have OtherVT type and print as pc-relative values.
+let OperandType = "OPERAND_PCREL",
+    PrintMethod = "printPCRelImm" in {
+let ParserMatchClass = X86AbsMem16AsmOperand in
+  def brtarget16 : Operand<OtherVT>;
+let ParserMatchClass = X86AbsMem32AsmOperand in
+  def brtarget32 : Operand<OtherVT>;
 }
 
 let RenderMethod = "addSrcIdxOperands" in {
@@ -618,14 +642,14 @@ def i64i8imm   : Operand<i64> {
 }
 
 def lea64_32mem : Operand<i32> {
-  let PrintMethod = "printi32mem";
+  let PrintMethod = "printanymem";
   let MIOperandInfo = (ops GR64, i8imm, GR64_NOSP, i32imm, i8imm);
   let ParserMatchClass = X86MemAsmOperand;
 }
 
 // Memory operands that use 64-bit pointers in both ILP32 and LP64.
 def lea64mem : Operand<i64> {
-  let PrintMethod = "printi64mem";
+  let PrintMethod = "printanymem";
   let MIOperandInfo = (ops GR64, i8imm, GR64_NOSP, i32imm, i8imm);
   let ParserMatchClass = X86MemAsmOperand;
 }

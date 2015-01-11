@@ -202,6 +202,91 @@ TEST_F(MDNodeTest, Print) {
   EXPECT_EQ(Expected, Actual);
 }
 
+TEST_F(MDNodeTest, NullOperand) {
+  // metadata !{}
+  MDNode *Empty = MDNode::get(Context, None);
+
+  // metadata !{metadata !{}}
+  Metadata *Ops[] = {Empty};
+  MDNode *N = MDNode::get(Context, Ops);
+  ASSERT_EQ(Empty, N->getOperand(0));
+
+  // metadata !{metadata !{}} => metadata !{null}
+  N->replaceOperandWith(0, nullptr);
+  ASSERT_EQ(nullptr, N->getOperand(0));
+
+  // metadata !{null}
+  Ops[0] = nullptr;
+  MDNode *NullOp = MDNode::get(Context, Ops);
+  ASSERT_EQ(nullptr, NullOp->getOperand(0));
+  EXPECT_EQ(N, NullOp);
+}
+
+TEST_F(MDNodeTest, DistinctOnUniquingCollision) {
+  // !{}
+  MDNode *Empty = MDNode::get(Context, None);
+  ASSERT_TRUE(Empty->isResolved());
+  EXPECT_FALSE(Empty->isDistinct());
+
+  // !{!{}}
+  Metadata *Wrapped1Ops[] = {Empty};
+  MDNode *Wrapped1 = MDNode::get(Context, Wrapped1Ops);
+  ASSERT_EQ(Empty, Wrapped1->getOperand(0));
+  ASSERT_TRUE(Wrapped1->isResolved());
+  EXPECT_FALSE(Wrapped1->isDistinct());
+
+  // !{!{!{}}}
+  Metadata *Wrapped2Ops[] = {Wrapped1};
+  MDNode *Wrapped2 = MDNode::get(Context, Wrapped2Ops);
+  ASSERT_EQ(Wrapped1, Wrapped2->getOperand(0));
+  ASSERT_TRUE(Wrapped2->isResolved());
+  EXPECT_FALSE(Wrapped2->isDistinct());
+
+  // !{!{!{}}} => !{!{}}
+  Wrapped2->replaceOperandWith(0, Empty);
+  ASSERT_EQ(Empty, Wrapped2->getOperand(0));
+  EXPECT_TRUE(Wrapped2->isDistinct());
+  EXPECT_FALSE(Wrapped1->isDistinct());
+}
+
+TEST_F(MDNodeTest, getDistinct) {
+  // !{}
+  MDNode *Empty = MDNode::get(Context, None);
+  ASSERT_TRUE(Empty->isResolved());
+  ASSERT_FALSE(Empty->isDistinct());
+  ASSERT_EQ(Empty, MDNode::get(Context, None));
+
+  // distinct !{}
+  MDNode *Distinct1 = MDNode::getDistinct(Context, None);
+  MDNode *Distinct2 = MDNode::getDistinct(Context, None);
+  EXPECT_TRUE(Distinct1->isResolved());
+  EXPECT_TRUE(Distinct2->isDistinct());
+  EXPECT_NE(Empty, Distinct1);
+  EXPECT_NE(Empty, Distinct2);
+  EXPECT_NE(Distinct1, Distinct2);
+
+  // !{}
+  ASSERT_EQ(Empty, MDNode::get(Context, None));
+}
+
+TEST_F(MDNodeTest, getDistinctWithUnresolvedOperands) {
+  // temporary !{}
+  MDNodeFwdDecl *Temp = MDNode::getTemporary(Context, None);
+  ASSERT_FALSE(Temp->isResolved());
+
+  // distinct !{temporary !{}}
+  Metadata *Ops[] = {Temp};
+  MDNode *Distinct = MDNode::getDistinct(Context, Ops);
+  EXPECT_TRUE(Distinct->isResolved());
+  EXPECT_EQ(Temp, Distinct->getOperand(0));
+
+  // temporary !{} => !{}
+  MDNode *Empty = MDNode::get(Context, None);
+  Temp->replaceAllUsesWith(Empty);
+  MDNode::deleteTemporary(Temp);
+  EXPECT_EQ(Empty, Distinct->getOperand(0));
+}
+
 typedef MetadataTest MetadataAsValueTest;
 
 TEST_F(MetadataAsValueTest, MDNode) {

@@ -80,6 +80,7 @@ static AsmPrinter *createAMDGPUAsmPrinterPass(TargetMachine &tm,
 
 extern "C" void LLVMInitializeR600AsmPrinter() {
   TargetRegistry::RegisterAsmPrinter(TheAMDGPUTarget, createAMDGPUAsmPrinterPass);
+  TargetRegistry::RegisterAsmPrinter(TheGCNTarget, createAMDGPUAsmPrinterPass);
 }
 
 AMDGPUAsmPrinter::AMDGPUAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
@@ -161,23 +162,18 @@ bool AMDGPUAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  if (STM.dumpCode()) {
-#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-    MF.dump();
-#endif
+  if (STM.dumpCode() && DisasmEnabled) {
 
-    if (DisasmEnabled) {
-      OutStreamer.SwitchSection(Context.getELFSection(".AMDGPU.disasm",
-                                                  ELF::SHT_NOTE, 0,
-                                                  SectionKind::getReadOnly()));
+    OutStreamer.SwitchSection(Context.getELFSection(".AMDGPU.disasm",
+                                                ELF::SHT_NOTE, 0,
+                                                SectionKind::getReadOnly()));
 
-      for (size_t i = 0; i < DisasmLines.size(); ++i) {
-        std::string Comment(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
-        Comment += " ; " + HexLines[i] + "\n";
+    for (size_t i = 0; i < DisasmLines.size(); ++i) {
+      std::string Comment(DisasmLineMaxLen - DisasmLines[i].size(), ' ');
+      Comment += " ; " + HexLines[i] + "\n";
 
-        OutStreamer.EmitBytes(StringRef(DisasmLines[i]));
-        OutStreamer.EmitBytes(StringRef(Comment));
-      }
+      OutStreamer.EmitBytes(StringRef(DisasmLines[i]));
+      OutStreamer.EmitBytes(StringRef(Comment));
     }
   }
 
@@ -293,7 +289,7 @@ void AMDGPUAsmPrinter::getSIProgramInfo(SIProgramInfo &ProgInfo,
         if (AMDGPU::SReg_32RegClass.contains(reg)) {
           isSGPR = true;
           width = 1;
-        } else if (AMDGPU::VReg_32RegClass.contains(reg)) {
+        } else if (AMDGPU::VGPR_32RegClass.contains(reg)) {
           isSGPR = false;
           width = 1;
         } else if (AMDGPU::SReg_64RegClass.contains(reg)) {

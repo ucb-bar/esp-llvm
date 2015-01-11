@@ -528,6 +528,14 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
 
   bool UseStackProbe = (STI.isOSWindows() && !STI.isTargetMachO());
 
+  // The default stack probe size is 4096 if the function has no stackprobesize
+  // attribute.
+  unsigned StackProbeSize = 4096;
+  if (Fn->hasFnAttribute("stack-probe-size"))
+    Fn->getFnAttribute("stack-probe-size")
+        .getValueAsString()
+        .getAsInteger(0, StackProbeSize);
+
   // If this is x86-64 and the Red Zone is not disabled, if we are a leaf
   // function, and use up to 128 bytes of stack space, don't have a frame
   // pointer, calls, or dynamic alloca then we do not need to adjust the
@@ -705,8 +713,6 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
 
   // Adjust stack pointer: ESP -= numbytes.
 
-  static const size_t PageSize = 4096;
-
   // Windows and cygwin/mingw require a prologue helper routine when allocating
   // more than 4K bytes on the stack.  Windows uses __chkstk and cygwin/mingw
   // uses __alloca.  __alloca and the 32-bit version of __chkstk will probe the
@@ -715,7 +721,7 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF) const {
   // responsible for adjusting the stack pointer.  Touching the stack at 4K
   // increments is necessary to ensure that the guard pages used by the OS
   // virtual memory manager are allocated in correct sequence.
-  if (NumBytes >= PageSize && UseStackProbe) {
+  if (NumBytes >= StackProbeSize && UseStackProbe) {
     const char *StackProbeSymbol;
     unsigned CallOp;
 
@@ -1617,7 +1623,7 @@ X86FrameLowering::adjustForSegmentedStacks(MachineFunction &MF) const {
 
   // This jump is taken if SP >= (Stacklet Limit + Stack Space required).
   // It jumps to normal execution of the function body.
-  BuildMI(checkMBB, DL, TII.get(X86::JA_4)).addMBB(&prologueMBB);
+  BuildMI(checkMBB, DL, TII.get(X86::JA_1)).addMBB(&prologueMBB);
 
   // On 32 bit we first push the arguments size and then the frame size. On 64
   // bit, we pass the stack frame size in r10 and the argument size in r11.
@@ -1821,7 +1827,7 @@ void X86FrameLowering::adjustForHiPEPrologue(MachineFunction &MF) const {
     // SPLimitOffset is in a fixed heap location (pointed by BP).
     addRegOffset(BuildMI(stackCheckMBB, DL, TII.get(CMPop))
                  .addReg(ScratchReg), PReg, false, SPLimitOffset);
-    BuildMI(stackCheckMBB, DL, TII.get(X86::JAE_4)).addMBB(&prologueMBB);
+    BuildMI(stackCheckMBB, DL, TII.get(X86::JAE_1)).addMBB(&prologueMBB);
 
     // Create new MBB for IncStack:
     BuildMI(incStackMBB, DL, TII.get(CALLop)).
@@ -1830,7 +1836,7 @@ void X86FrameLowering::adjustForHiPEPrologue(MachineFunction &MF) const {
                  SPReg, false, -MaxStack);
     addRegOffset(BuildMI(incStackMBB, DL, TII.get(CMPop))
                  .addReg(ScratchReg), PReg, false, SPLimitOffset);
-    BuildMI(incStackMBB, DL, TII.get(X86::JLE_4)).addMBB(incStackMBB);
+    BuildMI(incStackMBB, DL, TII.get(X86::JLE_1)).addMBB(incStackMBB);
 
     stackCheckMBB->addSuccessor(&prologueMBB, 99);
     stackCheckMBB->addSuccessor(incStackMBB, 1);

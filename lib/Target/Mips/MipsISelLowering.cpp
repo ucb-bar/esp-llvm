@@ -215,12 +215,15 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
                        ZeroOrNegativeOneBooleanContent);
 
   // Load extented operations for i1 types must be promoted
-  setLoadExtAction(ISD::EXTLOAD,  MVT::i1,  Promote);
-  setLoadExtAction(ISD::ZEXTLOAD, MVT::i1,  Promote);
-  setLoadExtAction(ISD::SEXTLOAD, MVT::i1,  Promote);
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setLoadExtAction(ISD::EXTLOAD,  VT, MVT::i1,  Promote);
+    setLoadExtAction(ISD::ZEXTLOAD, VT, MVT::i1,  Promote);
+    setLoadExtAction(ISD::SEXTLOAD, VT, MVT::i1,  Promote);
+  }
 
   // MIPS doesn't have extending float->double load/store
-  setLoadExtAction(ISD::EXTLOAD, MVT::f32, Expand);
+  for (MVT VT : MVT::fp_valuetypes())
+    setLoadExtAction(ISD::EXTLOAD, VT, MVT::f32, Expand);
   setTruncStoreAction(MVT::f64, MVT::f32, Expand);
 
   // Used by legalize types to correctly generate the setcc result.
@@ -368,9 +371,9 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::BSWAP, MVT::i64, Expand);
 
   if (Subtarget.isGP64bit()) {
-    setLoadExtAction(ISD::SEXTLOAD, MVT::i32, Custom);
-    setLoadExtAction(ISD::ZEXTLOAD, MVT::i32, Custom);
-    setLoadExtAction(ISD::EXTLOAD, MVT::i32, Custom);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, MVT::i32, Custom);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, MVT::i32, Custom);
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, MVT::i32, Custom);
     setTruncStoreAction(MVT::i64, MVT::i32, Custom);
   }
 
@@ -3835,4 +3838,26 @@ MipsTargetLowering::emitPseudoSELECT(MachineInstr *MI, MachineBasicBlock *BB,
   MI->eraseFromParent();   // The pseudo instruction is gone now.
 
   return BB;
+}
+
+// FIXME? Maybe this could be a TableGen attribute on some registers and
+// this table could be generated automatically from RegInfo.
+unsigned MipsTargetLowering::getRegisterByName(const char* RegName,
+                                               EVT VT) const {
+  // Named registers is expected to be fairly rare. For now, just support $28
+  // since the linux kernel uses it.
+  if (Subtarget.isGP64bit()) {
+    unsigned Reg = StringSwitch<unsigned>(RegName)
+                         .Case("$28", Mips::GP_64)
+                         .Default(0);
+    if (Reg)
+      return Reg;
+  } else {
+    unsigned Reg = StringSwitch<unsigned>(RegName)
+                         .Case("$28", Mips::GP)
+                         .Default(0);
+    if (Reg)
+      return Reg;
+  }
+  report_fatal_error("Invalid register name global variable");
 }

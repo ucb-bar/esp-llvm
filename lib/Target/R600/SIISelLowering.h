@@ -42,14 +42,11 @@ class SITargetLowering : public AMDGPUTargetLowering {
   SDValue LowerTrig(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
 
-  bool foldImm(SDValue &Operand, int32_t &Immediate,
-               bool &ScalarSlotUsed) const;
   const TargetRegisterClass *getRegClassForNode(SelectionDAG &DAG,
                                                 const SDValue &Op) const;
   bool fitsRegClass(SelectionDAG &DAG, const SDValue &Op,
                     unsigned RegClass) const;
 
-  SDNode *legalizeOperands(MachineSDNode *N, SelectionDAG &DAG) const;
   void adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
   MachineSDNode *AdjustRegClass(MachineSDNode *N, SelectionDAG &DAG) const;
 
@@ -58,8 +55,12 @@ class SITargetLowering : public AMDGPUTargetLowering {
   SDValue performSHLPtrCombine(SDNode *N,
                                unsigned AS,
                                DAGCombinerInfo &DCI) const;
+  SDValue performAndCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performOrCombine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performClassCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   SDValue performMin3Max3Combine(SDNode *N, DAGCombinerInfo &DCI) const;
+  SDValue performSetCCCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
 public:
   SITargetLowering(TargetMachine &tm);

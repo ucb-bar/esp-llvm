@@ -1,4 +1,4 @@
-; RUN: llc -march=r600 -mcpu=verde -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mcpu=verde -verify-machineinstrs < %s | FileCheck -check-prefix=SI -check-prefix=FUNC %s
 ; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -check-prefix=EG -check-prefix=FUNC %s
 
 
@@ -39,7 +39,7 @@ define void @xor_v4i32(<4 x i32> addrspace(1)* %out, <4 x i32> addrspace(1)* %in
 ; FUNC-LABEL: {{^}}xor_i1:
 ; EG: XOR_INT {{\** *}}T{{[0-9]+\.[XYZW], PV\.[XYZW], PS}}
 
-; SI-DAG: v_cmp_ge_f32_e64 [[CMP0:s\[[0-9]+:[0-9]+\]]], {{v[0-9]+}}, 0.0
+; SI-DAG: v_cmp_ge_f32_e64 [[CMP0:s\[[0-9]+:[0-9]+\]]], {{v[0-9]+}}, 0
 ; SI-DAG: v_cmp_ge_f32_e64 [[CMP1:s\[[0-9]+:[0-9]+\]]], {{v[0-9]+}}, 1.0
 ; SI: s_xor_b64 [[XOR:s\[[0-9]+:[0-9]+\]]], [[CMP0]], [[CMP1]]
 ; SI: v_cndmask_b32_e64 [[RESULT:v[0-9]+]], {{v[0-9]+}}, {{v[0-9]+}}, [[XOR]]
