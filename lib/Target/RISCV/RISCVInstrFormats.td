@@ -42,12 +42,6 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
   let TSFlags{1} = SimpleStore;
 }
 
-class PsuedoInst<dag outs, dag ins, list<dag> pattern>
-  : InstRISCV<4, outs, ins,"PSEUDO", pattern> {
-  let isPseudo = 1;
-  let isCodeGenOnly = 1;
-}
-
 /***************
 *RISCV Instruction Formats
 */
@@ -59,26 +53,6 @@ class InstR<string mnemonic, bits<7> op, bits<10> funct10,
   : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2, cls2:$src1), 
                 mnemonic#"\t$dst, $src1, $src2", 
                 [(set cls1:$dst, (operator cls2:$src1, cls2:$src2))]> {
-  field bits<32> Inst;
-
-  bits<5> RD;
-  bits<5> RS1;
-  bits<5> RS2;
-
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = RS2;
-  let Inst{16- 7} = funct10;
-  let Inst{6 - 0} = op;
-}
-
-//R-Type
-class InstR64<string mnemonic, bits<7> op, bits<10> funct10, 
-            SDPatternOperator operator, RegisterOperand cls1, 
-            RegisterOperand cls2>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2, cls2:$src1), 
-                mnemonic#"\t$dst, $src1, $src2", 
-                [(set cls1:$dst, (sext (operator cls2:$src1, cls2:$src2)))]> {
   field bits<32> Inst;
 
   bits<5> RD;
@@ -157,27 +131,6 @@ class InstA<string mnemonic, bits<7> op, bits<5> funct5, bits<3> funct3,
   let Inst{6 - 0} = op;
 }
 
-//R4-Type
-class InstR4<string mnemonic, bits<7> op, bits<5> funct5,
-            SDPatternOperator operator1, SDPatternOperator operator2,
-            RegisterOperand cls1, RegisterOperand cls2>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src3, cls2:$src2, cls2:$src1), 
-                mnemonic#"\t$dst, $src1, $src2, $src3", 
-                [(set cls1:$dst, (operator2 (operator1 cls2:$src1, cls2:$src2), cls2:$src3))]> {
-  field bits<32> Inst;
-
-  bits<5> RD;
-  bits<5> RS1;
-  bits<5> RS2;
-  bits<5> RS3;
-
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = RS2;
-  let Inst{16-12} = RS3;
-  let Inst{11- 7} = funct5;
-  let Inst{6 - 0} = op;
-}
 //Load-Type
 class InstLoad<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator opNode,
@@ -257,49 +210,6 @@ class InstISYS<string mnemonic, bits<12> funct12,
   let Inst{14-12} = 0b010;
   let Inst{11- 7} = RD;
   let Inst{6 - 0} = 0b1110011;
-}
-
-
-//Ip-Type: Pseudo-Ops for Type-I; used for MV
-class InstIp<string mnemonic, bits<7> op, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
-            Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2), 
-                mnemonic#"\t$dst, $src1", 
-                [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
-  field bits<32> Inst;
-
-  bits<5> RD;
-  bits<5> RS1;
-  bits<12> IMM;
-
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
-  let Inst{9 - 7} = funct3;
-  let Inst{6 - 0} = op;
-}
-
-//Ipn-Type: Pseudo-Ops for Type-I; used for NOP
-class InstIpn<string mnemonic, bits<7> op, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
-            Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2),
-                mnemonic#"\t",
-                [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
-  field bits<32> Inst;
-
-  bits<5> RD;
-  bits<5> RS1;
-  bits<12> IMM;
-
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
-  let Inst{9 - 7} = funct3;
-  let Inst{6 - 0} = op;
 }
 
 //B-Type, too different to consolidate further
