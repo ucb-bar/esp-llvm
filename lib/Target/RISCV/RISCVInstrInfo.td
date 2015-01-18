@@ -116,23 +116,26 @@ let isCall = 1 in {
 let isCall = 1 in {
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
+  // JLEIDEL : possible fix in place; requires more testing
   let Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64, gp] in { //after call return addr and values are defined
-    def JALR: InstRISCV<4, (outs), (ins jalrmem:$target), "jalr\t$target", 
-          [(r_call addr:$target)]>, Requires<[IsRV32]>{//, (r_call addr:$target))]>{
+
+    def JALR: InstRISCV<4, (outs GR32:$dest1), (ins jalrmem:$target), 
+          "jalr\t$dest1, $target", []>, Requires<[IsRV32]>{ 
+          //[(r_call addr:$target)]>, Requires<[IsRV32]>{//, (r_call addr:$target))]>{
           //[]>{
             field bits<32> Inst;
 
+            bits<5> RD;
             bits<5> RS1;
             bits<12> IMM;
 
-            let Inst{31-27} = 0b00001;
-            let Inst{26-22} = RS1;
-            let Inst{21-17} = IMM{11-7};
-            let Inst{16-10} = IMM{6 -0};
-            let Inst{9 - 7} = 0b000;
-            let Inst{6 - 0} = 0b1101011;
+            let Inst{31-20} = IMM{11-0};
+            let Inst{19-15} = RS1;
+            let Inst{14-12} = 0b000;
+            let Inst{11- 7} = RD;
+            let Inst{6 - 0} = 0b1100111;
           }
-          }
+    }
 }
  
 
