@@ -122,20 +122,28 @@ let isCall = 1 in {
   let Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64,
            a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
            t0_64, t1_64, t2_64, t3_64, t4_64] in {
-    def JALR64: InstRISCV<4, (outs), (ins jalrmem64:$target), "jalr\t$target", 
-          [(r_call addr:$target)]>, Requires<[IsRV64]>{
+
+    def JALR64: InstRISCV<4, (outs GR64:$dest1), (ins jalrmem64:$target),
+          "jalr\t$dest1, $target",  []>, Requires<[IsRV64]>{
+          //[(r_call addr:$target)]>, Requires<[IsRV64]>{
             field bits<32> Inst;
 
-            //bits<5> RD;
+            bits<5> RD;
             bits<5> RS1;
             bits<12> IMM;
 
-            let Inst{31-27} = 0b00001;
-            let Inst{26-22} = RS1;
-            let Inst{21-17} = IMM{11-7};
-            let Inst{16-10} = IMM{6 -0};
-            let Inst{9 - 7} = 0b000;
-            let Inst{6 - 0} = 0b1101011;
+            let Inst{31-20} = IMM{11-0};
+            let Inst{19-15} = RS1;
+            let Inst{14-12} = 0b000;
+            let Inst{11- 7} = RD;
+            let Inst{6 - 0} = 0b1100111;
+
+            //let Inst{31-27} = 0b00001;
+            //let Inst{26-22} = RS1;
+            //let Inst{21-17} = IMM{11-7};
+            //let Inst{16-10} = IMM{6 -0};
+            //let Inst{9 - 7} = 0b000;
+            //let Inst{6 - 0} = 0b1101011;
           }
   }
 }
