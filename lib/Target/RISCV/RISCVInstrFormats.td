@@ -47,7 +47,7 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
 */
 
 //R-Type
-class InstR<string mnemonic, bits<7> op, bits<10> funct10, 
+class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
             SDPatternOperator operator, RegisterOperand cls1, 
             RegisterOperand cls2>
   : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2, cls2:$src1), 
@@ -59,10 +59,11 @@ class InstR<string mnemonic, bits<7> op, bits<10> funct10,
   bits<5> RS1;
   bits<5> RS2;
 
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = RS2;
-  let Inst{16- 7} = funct10;
+  let Inst{31-25} = funct7;
+  let Inst{24-20} = RS1;
+  let Inst{19-15} = RS2;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
   let Inst{6 - 0} = op;
 }
 
@@ -187,11 +188,10 @@ class InstI<string mnemonic, bits<7> op, bits<3> funct3,
   bits<5> RS1;
   bits<12> IMM;
 
-  let Inst{31-27} = RD;
-  let Inst{26-22} = RS1;
-  let Inst{21-17} = IMM{11-7};
-  let Inst{16-10} = IMM{6 -0};
-  let Inst{9 - 7} = funct3;
+  let Inst{31-20} = IMM;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
   let Inst{6 - 0} = op;
 }
 
@@ -237,8 +237,8 @@ class InstU<bits<7> op, dag outs, dag ins, string asmstr, list<dag> pattern>
   bits<5> RD;
   bits<20> IMM;
 
-  let Inst{31-27} = RD;
-  let Inst{26- 7} = IMM{19-0};
+  let Inst{31-12} = IMM{19-0};
+  let Inst{11- 7} = RD;
   let Inst{6 - 0} = op;
 }
 

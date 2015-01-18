@@ -28,16 +28,16 @@
 *RISCV Instructions
 ********************/
 //Integer arithmetic register-register
-def ADD : InstR<"add" , 0b0110011, 0b0000000000, add   , GR32, GR32>, Requires<[IsRV32]>;
-def SUB : InstR<"sub" , 0b0110011, 0b1000000000, sub   , GR32, GR32>, Requires<[IsRV32]>;
-def SLL : InstR<"sll" , 0b0110011, 0b1000000001, shl   , GR32, GR32>, Requires<[IsRV32]>;
-def SLT : InstR<"slt" , 0b0110011, 0b0000000010, setlt , GR32, GR32>;
-def SLTU: InstR<"sltu", 0b0110011, 0b0000000011, setult, GR32, GR32>;
-def XOR : InstR<"xor" , 0b0110011, 0b0000000100, xor   , GR32, GR32>;
-def SRL : InstR<"srl" , 0b0110011, 0b0000000101, srl   , GR32, GR32>, Requires<[IsRV32]>;
-def SRA : InstR<"sra" , 0b0110011, 0b1000000101, sra   , GR32, GR32>, Requires<[IsRV32]>;
-def OR  : InstR<"or"  , 0b0110011, 0b0000000110, or    , GR32, GR32>;
-def AND : InstR<"and" , 0b0110011, 0b0000000111, and   , GR32, GR32>;
+def ADD : InstR<"add" , 0b0110011, 0b0000000, 0b000, add   , GR32, GR32>, Requires<[IsRV32]>;
+def SUB : InstR<"sub" , 0b0110011, 0b0100000, 0b000, sub   , GR32, GR32>, Requires<[IsRV32]>;
+def SLL : InstR<"sll" , 0b0110011, 0b0000000, 0b001, shl   , GR32, GR32>, Requires<[IsRV32]>;
+def SLT : InstR<"slt" , 0b0110011, 0b0000000, 0b010, setlt , GR32, GR32>;
+def SLTU: InstR<"sltu", 0b0110011, 0b0000000, 0b011, setult, GR32, GR32>;
+def XOR : InstR<"xor" , 0b0110011, 0b0000000, 0b100, xor   , GR32, GR32>;
+def SRL : InstR<"srl" , 0b0110011, 0b0000000, 0b101, srl   , GR32, GR32>, Requires<[IsRV32]>;
+def SRA : InstR<"sra" , 0b0110011, 0b0100000, 0b101, sra   , GR32, GR32>, Requires<[IsRV32]>;
+def OR  : InstR<"or"  , 0b0110011, 0b0000000, 0b110, or    , GR32, GR32>;
+def AND : InstR<"and" , 0b0110011, 0b0000000, 0b111, and   , GR32, GR32>;
 //Integer arithmetic register-immediate
 def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>;
 def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
@@ -58,7 +58,7 @@ def SRLI: InstI<"srli", 0b0010011, 0b101       , srl, GR32, GR32, imm32sx12>, Re
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAI: InstI<"srai", 0b0010011, 0b101       , sra, GR32, GR32, imm32sx12>, Requires<[IsRV32]>{
-  let IMM{11-6} = 0b000001; 
+  let IMM{11-6} = 0b010000;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SLTI : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR32, imm32sx12>;
@@ -228,7 +228,7 @@ def LUI: InstU<0b0110111, (outs GR32:$dst), (ins imm32sxu20:$imm),
                "lui\t$dst, $imm",
                [(set GR32:$dst, (shl imm32sx20:$imm, (i32 12)))]>;
 
-def AUIPC: InstU<0b0110111, (outs GR32:$dst), (ins pcimm:$target),
+def AUIPC: InstU<0b0010111, (outs GR32:$dst), (ins pcimm:$target),
                "auipc\t$dst, $target",
                [(set GR32:$dst, (r_pcrel_wrapper tglobaladdr:$target))]>;
 

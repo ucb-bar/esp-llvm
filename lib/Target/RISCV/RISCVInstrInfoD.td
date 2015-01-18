@@ -18,13 +18,13 @@ let mayStore = 1 in {
 }
 
 multiclass  FPBinOps64<string name, SDPatternOperator op1, bits<5> funct5, bits<2> fmt> {
-  def _RDY : InstR<name, 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},1,1,1,fmt{1},fmt{0}}, op1, FP64, FP64>;
+  def _RDY : InstR<name, 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {1,1,1}, op1, FP64, FP64>;
   let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
-    def _RNE : InstR<name#".rne", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,0,fmt{1},fmt{0}}, op1, FP64, FP64>;
-    def _RTZ : InstR<name#".rtz", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,0,1,fmt{1},fmt{0}}, op1, FP64, FP64>;
-    def _RDN : InstR<name#".rdn", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,0,fmt{1},fmt{0}}, op1, FP64, FP64>;
-    def _RUP : InstR<name#".rup", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},0,1,1,fmt{1},fmt{0}}, op1, FP64, FP64>;
-    def _RMM : InstR<name#".rmm", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},1,0,0,fmt{1},fmt{0}}, op1, FP64, FP64>;
+    def _RNE : InstR<name#".rne", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {0,0,0}, op1, FP64, FP64>;
+    def _RTZ : InstR<name#".rtz", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {0,0,1}, op1, FP64, FP64>;
+    def _RDN : InstR<name#".rdn", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {0,1,0}, op1, FP64, FP64>;
+    def _RUP : InstR<name#".rup", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {0,1,1}, op1, FP64, FP64>;
+    def _RMM : InstR<name#".rmm", 0b1010011, {funct5{4},funct5{3},funct5{2},funct5{1},funct5{0},fmt{1},fmt{0}}, {1,0,0}, op1, FP64, FP64>;
   }
 }
 //Single precision arithmetic

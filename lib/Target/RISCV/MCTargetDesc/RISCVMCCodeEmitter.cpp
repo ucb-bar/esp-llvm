@@ -77,7 +77,7 @@ private:
     const MCOperand &MO = MI.getOperand(OpNum);
     //TODO: do we need to sign extend explicitly?
     if (MO.isImm())
-      return MO.getImm() << 12;
+      return MO.getImm();
     llvm_unreachable("Branch with no immediate field");
   }
 
@@ -136,11 +136,11 @@ void RISCVMCCodeEmitter::EncodeInstruction(const MCInst &MI, raw_ostream &OS,
                                            const MCSubtargetInfo &STI) const {
   uint64_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
   unsigned Size = MCII.get(MI.getOpcode()).getSize();
-  // Big-endian insertion of Size bytes.
-  unsigned ShiftValue = (Size * 8) - 8;
+  // Little-endian insertion of Size bytes.
+  unsigned ShiftValue = 0;
   for (unsigned I = 0; I != Size; ++I) {
     OS << uint8_t(Bits >> ShiftValue);
-    ShiftValue -= 8;
+    ShiftValue += 8;
   }
 }
 

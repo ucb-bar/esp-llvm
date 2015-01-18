@@ -8,11 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 //special 64bit instructions
-def ADDW : InstR<"addw" , 0b0111011, 0b0000000000, add   , GR32, GR32>, Requires<[IsRV64]>;
-def SUBW : InstR<"subw" , 0b0111011, 0b1000000000, sub   , GR32, GR32>, Requires<[IsRV64]>;
-def SLLW : InstR<"sllw" , 0b0111011, 0b1000000001, shl   , GR32, GR32>, Requires<[IsRV64]>;
-def SRLW : InstR<"srlw" , 0b0111011, 0b0000000101, srl   , GR32, GR32>, Requires<[IsRV64]>;
-def SRAW : InstR<"sraw" , 0b0111011, 0b1000000101, sra   , GR32, GR32>, Requires<[IsRV64]>;
+def ADDW : InstR<"addw" , 0b0111011, 0b0000000, 0b000, add   , GR32, GR32>, Requires<[IsRV64]>;
+def SUBW : InstR<"subw" , 0b0111011, 0b0100000, 0b000, sub   , GR32, GR32>, Requires<[IsRV64]>;
+def SLLW : InstR<"sllw" , 0b0111011, 0b0000000, 0b001, shl   , GR32, GR32>, Requires<[IsRV64]>;
+def SRLW : InstR<"srlw" , 0b0111011, 0b0000000, 0b101, srl   , GR32, GR32>, Requires<[IsRV64]>;
+def SRAW : InstR<"sraw" , 0b0111011, 0b0100000, 0b101, sra   , GR32, GR32>, Requires<[IsRV64]>;
 
 //Integer arithmetic register-immediate
 def ADDIW:  InstI<"addiw",   0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>;
@@ -37,11 +37,11 @@ def SRLIW64: InstI<"srliw", 0b0011011, 0b101       , srl, GR32, GR32, imm64sx12>
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAIW: InstI<"sraiw", 0b0011011, 0b101       , sra, GR32, GR32, imm32sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b000010;
+  let IMM{11-6} = 0b010000;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAIW64: InstI<"sraiw", 0b0011011, 0b101       , sra, GR32, GR32, imm64sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b000010;
+  let IMM{11-6} = 0b010000;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 
@@ -58,16 +58,16 @@ let mayStore = 1 in {
 
 //Standard instructions operating on 64bit values
 //Integer arithmetic register-register
-def ADD64 : InstR<"add" , 0b0110011, 0b0000000000, add   , GR64, GR64>, Requires<[IsRV64]>;
-def SUB64 : InstR<"sub" , 0b0110011, 0b1000000000, sub   , GR64, GR64>, Requires<[IsRV64]>;
-def SLL64 : InstR<"sll" , 0b0110011, 0b1000000001, shl   , GR64, GR64>, Requires<[IsRV64]>;
-def SLT64 : InstR<"slt" , 0b0110011, 0b0000000010, setlt , GR32, GR64>, Requires<[IsRV64]>;
-def SLTU64: InstR<"sltu", 0b0110011, 0b0000000011, setult, GR32, GR64>, Requires<[IsRV64]>;
-def XOR64 : InstR<"xor" , 0b0110011, 0b0000000100, xor   , GR64, GR64>, Requires<[IsRV64]>;
-def SRL64 : InstR<"srl" , 0b0110011, 0b0000000101, srl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRA64 : InstR<"sra" , 0b0110011, 0b1000000101, sra   , GR64, GR64>, Requires<[IsRV64]>;
-def OR64  : InstR<"or"  , 0b0110011, 0b0000000110, or    , GR64, GR64>, Requires<[IsRV64]>;
-def AND64 : InstR<"and" , 0b0110011, 0b0000000111, and   , GR64, GR64>, Requires<[IsRV64]>;
+def ADD64 : InstR<"add" , 0b0110011, 0b0000000, 0b000, add   , GR64, GR64>, Requires<[IsRV64]>;
+def SUB64 : InstR<"sub" , 0b0110011, 0b0100000, 0b000, sub   , GR64, GR64>, Requires<[IsRV64]>;
+def SLL64 : InstR<"sll" , 0b0110011, 0b0000000, 0b001, shl   , GR64, GR64>, Requires<[IsRV64]>;
+def SLT64 : InstR<"slt" , 0b0110011, 0b0000000, 0b010, setlt , GR32, GR64>, Requires<[IsRV64]>;
+def SLTU64: InstR<"sltu", 0b0110011, 0b0000000, 0b011, setult, GR32, GR64>, Requires<[IsRV64]>;
+def XOR64 : InstR<"xor" , 0b0110011, 0b0000000, 0b100, xor   , GR64, GR64>, Requires<[IsRV64]>;
+def SRL64 : InstR<"srl" , 0b0110011, 0b0000000, 0b101, srl   , GR64, GR64>, Requires<[IsRV64]>;
+def SRA64 : InstR<"sra" , 0b0110011, 0b0100000, 0b101, sra   , GR64, GR64>, Requires<[IsRV64]>;
+def OR64  : InstR<"or"  , 0b0110011, 0b0000000, 0b110, or    , GR64, GR64>, Requires<[IsRV64]>;
+def AND64 : InstR<"and" , 0b0110011, 0b0000000, 0b111, and   , GR64, GR64>, Requires<[IsRV64]>;
 //Integer arithmetic register-immediate
 def ADDI64: InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def XORI64: InstI<"xori", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
@@ -89,7 +89,7 @@ def SRLI64: InstI<"srli", 0b0010011, 0b101       , srl, GR64, GR64, imm64sx12>, 
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SRAI64: InstI<"srai", 0b0010011, 0b101       , sra, GR64, GR64, imm64sx12>, Requires<[IsRV64]> {
-  let IMM{11-6} = 0b000001; 
+  let IMM{11-6} = 0b010000;
   //trap if $src{5}!=0 TODO:how to do this?
 }
 def SLTI64 : InstI<"slti", 0b0010011, 0b010, setlt, GR32, GR64, imm64sx12>, Requires<[IsRV64]>;
