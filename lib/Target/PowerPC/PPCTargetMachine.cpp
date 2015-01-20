@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "PPCTargetMachine.h"
-#include "PPCTargetObjectFile.h"
 #include "PPC.h"
+#include "PPCTargetObjectFile.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCStreamer.h"
@@ -64,6 +64,14 @@ static std::string computeFSAdditions(StringRef FS, CodeGenOpt::Level OL, String
     else
       FullFS = "+crbits";
   }
+
+  if (OL != CodeGenOpt::None) {
+     if (!FullFS.empty())
+      FullFS = "+invariant-function-descriptors," + FullFS;
+    else
+      FullFS = "+invariant-function-descriptors";
+  }
+
   return FullFS;
 }
 

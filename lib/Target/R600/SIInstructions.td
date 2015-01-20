@@ -1191,6 +1191,8 @@ defm V_MOV_B32 : VOP1Inst <vop1<0x1>, "v_mov_b32", VOP_I32_I32>;
 
 let Uses = [EXEC] in {
 
+// FIXME: Specify SchedRW for READFIRSTLANE_B32
+
 def V_READFIRSTLANE_B32 : VOP1 <
   0x00000002,
   (outs SReg_32:$vdst),
@@ -1200,6 +1202,8 @@ def V_READFIRSTLANE_B32 : VOP1 <
 >;
 
 }
+
+let SchedRW = [WriteQuarterRate32] in {
 
 defm V_CVT_I32_F64 : VOP1Inst <vop1<0x3>, "v_cvt_i32_f64",
   VOP_I32_F64, fp_to_sint
@@ -1226,8 +1230,10 @@ defm V_CVT_F16_F32 : VOP1Inst <vop1<0xa>, "v_cvt_f16_f32",
 defm V_CVT_F32_F16 : VOP1Inst <vop1<0xb>, "v_cvt_f32_f16",
   VOP_F32_I32, f16_to_fp
 >;
-//defm V_CVT_RPI_I32_F32 : VOP1_32 <0x0000000c, "v_cvt_rpi_i32_f32", []>;
-//defm V_CVT_FLR_I32_F32 : VOP1_32 <0x0000000d, "v_cvt_flr_i32_f32", []>;
+defm V_CVT_RPI_I32_F32 : VOP1Inst <vop1<0xc>, "v_cvt_rpi_i32_f32",
+  VOP_I32_F32, cvt_rpi_i32_f32>;
+defm V_CVT_FLR_I32_F32 : VOP1Inst <vop1<0xd>, "v_cvt_flr_i32_f32",
+  VOP_I32_F32, cvt_flr_i32_f32>;
 //defm V_CVT_OFF_F32_I4 : VOP1_32 <0x0000000e, "v_cvt_off_f32_i4", []>;
 defm V_CVT_F32_F64 : VOP1Inst <vop1<0xf>, "v_cvt_f32_f64",
   VOP_F32_F64, fround
@@ -1253,6 +1259,9 @@ defm V_CVT_U32_F64 : VOP1Inst <vop1<0x15>, "v_cvt_u32_f64",
 defm V_CVT_F64_U32 : VOP1Inst <vop1<0x16>, "v_cvt_f64_u32",
   VOP_F64_I32, uint_to_fp
 >;
+
+} // let SchedRW = [WriteQuarterRate32]
+
 defm V_FRACT_F32 : VOP1Inst <vop1<0x20, 0x1b>, "v_fract_f32",
   VOP_F32_F32, AMDGPUfract
 >;
@@ -1271,6 +1280,9 @@ defm V_FLOOR_F32 : VOP1Inst <vop1<0x24, 0x1f>, "v_floor_f32",
 defm V_EXP_F32 : VOP1Inst <vop1<0x25, 0x20>, "v_exp_f32",
   VOP_F32_F32, fexp2
 >;
+
+let SchedRW = [WriteQuarterRate32] in {
+
 defm V_LOG_F32 : VOP1Inst <vop1<0x27, 0x21>, "v_log_f32",
   VOP_F32_F32, flog2
 >;
@@ -1283,18 +1295,32 @@ defm V_RCP_IFLAG_F32 : VOP1Inst <vop1<0x2b, 0x23>, "v_rcp_iflag_f32",
 defm V_RSQ_F32 : VOP1Inst <vop1<0x2e, 0x24>, "v_rsq_f32",
   VOP_F32_F32, AMDGPUrsq
 >;
+
+} //let SchedRW = [WriteQuarterRate32]
+
+let SchedRW = [WriteDouble] in {
+
 defm V_RCP_F64 : VOP1Inst <vop1<0x2f, 0x25>, "v_rcp_f64",
   VOP_F64_F64, AMDGPUrcp
 >;
 defm V_RSQ_F64 : VOP1Inst <vop1<0x31, 0x26>, "v_rsq_f64",
   VOP_F64_F64, AMDGPUrsq
 >;
+
+} // let SchedRW = [WriteDouble];
+
 defm V_SQRT_F32 : VOP1Inst <vop1<0x33, 0x27>, "v_sqrt_f32",
   VOP_F32_F32, fsqrt
 >;
+
+let SchedRW = [WriteDouble] in {
+
 defm V_SQRT_F64 : VOP1Inst <vop1<0x34, 0x28>, "v_sqrt_f64",
   VOP_F64_F64, fsqrt
 >;
+
+} // let SchedRW = [WriteDouble]
+
 defm V_SIN_F32 : VOP1Inst <vop1<0x35, 0x29>, "v_sin_f32",
   VOP_F32_F32, AMDGPUsin
 >;
@@ -1323,6 +1349,8 @@ defm V_MOVRELSD_B32 : VOP1Inst <vop1<0x44, 0x38>, "v_movrelsd_b32", VOP_I32_I32>
 // These instruction only exist on SI and CI
 let SubtargetPredicate = isSICI in {
 
+let SchedRW = [WriteQuarterRate32] in {
+
 defm V_LOG_CLAMP_F32 : VOP1InstSI <vop1<0x26>, "v_log_clamp_f32", VOP_F32_F32>;
 defm V_RCP_CLAMP_F32 : VOP1InstSI <vop1<0x28>, "v_rcp_clamp_f32", VOP_F32_F32>;
 defm V_RCP_LEGACY_F32 : VOP1InstSI <vop1<0x29>, "v_rcp_legacy_f32", VOP_F32_F32>;
@@ -1332,10 +1360,17 @@ defm V_RSQ_CLAMP_F32 : VOP1InstSI <vop1<0x2c>, "v_rsq_clamp_f32",
 defm V_RSQ_LEGACY_F32 : VOP1InstSI <vop1<0x2d>, "v_rsq_legacy_f32",
   VOP_F32_F32, AMDGPUrsq_legacy
 >;
+
+} // End let SchedRW = [WriteQuarterRate32]
+
+let SchedRW = [WriteDouble] in {
+
 defm V_RCP_CLAMP_F64 : VOP1InstSI <vop1<0x30>, "v_rcp_clamp_f64", VOP_F64_F64>;
 defm V_RSQ_CLAMP_F64 : VOP1InstSI <vop1<0x32>, "v_rsq_clamp_f64",
   VOP_F64_F64, AMDGPUrsq_clamped
 >;
+
+} // End SchedRW = [WriteDouble]
 
 } // End SubtargetPredicate = isSICI
 
@@ -1343,6 +1378,7 @@ defm V_RSQ_CLAMP_F64 : VOP1InstSI <vop1<0x32>, "v_rsq_clamp_f64",
 // VINTRP Instructions
 //===----------------------------------------------------------------------===//
 
+// FIXME: Specify SchedRW for VINTRP insturctions.
 defm V_INTERP_P1_F32 : VINTRP_m <
   0x00000000, "v_interp_p1_f32",
   (outs VGPR_32:$dst),
@@ -1491,24 +1527,24 @@ defm V_SUBBREV_U32 : VOP2bInst <vop2<0x2a, 0x1e>, "v_subbrev_u32",
 } // End Uses = [VCC]
 } // End isCommutable = 1, Defs = [VCC]
 
-// These instructions only exist on SI and CI
-let SubtargetPredicate = isSICI in {
-
-def V_READLANE_B32 : VOP2 <
-  0x00000001,
+defm V_READLANE_B32 : VOP2SI_3VI_m <
+  vop3 <0x001, 0x289>,
+  "v_readlane_b32",
   (outs SReg_32:$vdst),
   (ins VGPR_32:$src0, SSrc_32:$vsrc1),
-  "v_readlane_b32 $vdst, $src0, $vsrc1",
-  []
+  "v_readlane_b32 $vdst, $src0, $vsrc1"
 >;
 
-def V_WRITELANE_B32 : VOP2 <
-  0x00000002,
+defm V_WRITELANE_B32 : VOP2SI_3VI_m <
+  vop3 <0x002, 0x28a>,
+  "v_writelane_b32",
   (outs VGPR_32:$vdst),
   (ins SReg_32:$src0, SSrc_32:$vsrc1),
-  "v_writelane_b32 $vdst, $src0, $vsrc1",
-  []
+  "v_writelane_b32 $vdst, $src0, $vsrc1"
 >;
+
+// These instructions only exist on SI and CI
+let SubtargetPredicate = isSICI in {
 
 let isCommutable = 1 in {
 defm V_MAC_LEGACY_F32 : VOP2Inst <vop2<0x6>, "v_mac_legacy_f32",
@@ -1534,30 +1570,33 @@ defm V_LSHL_B32 : VOP2Inst <vop2<0x19>, "v_lshl_b32", VOP_I32_I32_I32, shl>;
 }
 
 } // End isCommutable = 1
+} // End let SubtargetPredicate = SICI
 
-defm V_BFM_B32 : VOP2Inst <vop2<0x1e>, "v_bfm_b32", VOP_I32_I32_I32,
-  AMDGPUbfm>;
-defm V_BCNT_U32_B32 : VOP2Inst <vop2<0x22>, "v_bcnt_u32_b32", VOP_I32_I32_I32>;
-defm V_MBCNT_LO_U32_B32 : VOP2Inst <vop2<0x23>, "v_mbcnt_lo_u32_b32",
+defm V_BFM_B32 : VOP2_VI3_Inst <vop23<0x1e, 0x293>, "v_bfm_b32", VOP_I32_I32_I32,
+  AMDGPUbfm
+>;
+defm V_BCNT_U32_B32 : VOP2_VI3_Inst <vop23<0x22, 0x28b>, "v_bcnt_u32_b32",
   VOP_I32_I32_I32
 >;
-defm V_MBCNT_HI_U32_B32 : VOP2Inst <vop2<0x24>, "v_mbcnt_hi_u32_b32",
+defm V_MBCNT_LO_U32_B32 : VOP2_VI3_Inst <vop23<0x23, 0x28c>, "v_mbcnt_lo_u32_b32",
   VOP_I32_I32_I32
 >;
-defm V_LDEXP_F32 : VOP2Inst <vop2<0x2b>, "v_ldexp_f32",
+defm V_MBCNT_HI_U32_B32 : VOP2_VI3_Inst <vop23<0x24, 0x28d>, "v_mbcnt_hi_u32_b32",
+  VOP_I32_I32_I32
+>;
+defm V_LDEXP_F32 : VOP2_VI3_Inst <vop23<0x2b, 0x288>, "v_ldexp_f32",
   VOP_F32_F32_I32, AMDGPUldexp
 >;
 
 ////def V_CVT_PKACCUM_U8_F32 : VOP2_U8 <0x0000002c, "v_cvt_pkaccum_u8_f32", []>;
 ////def V_CVT_PKNORM_I16_F32 : VOP2_I16 <0x0000002d, "v_cvt_pknorm_i16_f32", []>;
 ////def V_CVT_PKNORM_U16_F32 : VOP2_U16 <0x0000002e, "v_cvt_pknorm_u16_f32", []>;
-defm V_CVT_PKRTZ_F16_F32 : VOP2Inst <vop2<0x2f>, "v_cvt_pkrtz_f16_f32",
+defm V_CVT_PKRTZ_F16_F32 : VOP2_VI3_Inst <vop23<0x2f, 0x296>, "v_cvt_pkrtz_f16_f32",
  VOP_I32_F32_F32, int_SI_packf16
 >;
 ////def V_CVT_PK_U16_U32 : VOP2_U16 <0x00000030, "v_cvt_pk_u16_u32", []>;
 ////def V_CVT_PK_I16_I32 : VOP2_I16 <0x00000031, "v_cvt_pk_i16_i32", []>;
 
-} // End let SubtargetPredicate = SICI
 //===----------------------------------------------------------------------===//
 // VOP3 Instructions
 //===----------------------------------------------------------------------===//
@@ -1622,9 +1661,6 @@ defm V_ALIGNBYTE_B32 : VOP3Inst <vop3<0x14f, 0x1cf>, "v_alignbyte_b32",
   VOP_I32_I32_I32_I32
 >;
 
-// Only on SI
-defm V_MULLIT_F32 : VOP3Inst <vop3<0x150>, "v_mullit_f32",
-  VOP_F32_F32_F32_F32>;
 defm V_MIN3_F32 : VOP3Inst <vop3<0x151>, "v_min3_f32",
   VOP_F32_F32_F32_F32, AMDGPUfmin3>;
 
@@ -1656,25 +1692,16 @@ defm V_SAD_U32 : VOP3Inst <vop3<0x15d, 0x1dc>, "v_sad_u32",
 defm V_DIV_FIXUP_F32 : VOP3Inst <
   vop3<0x15f, 0x1de>, "v_div_fixup_f32", VOP_F32_F32_F32_F32, AMDGPUdiv_fixup
 >;
+
+let SchedRW = [WriteDouble] in {
+
 defm V_DIV_FIXUP_F64 : VOP3Inst <
   vop3<0x160, 0x1df>, "v_div_fixup_f64", VOP_F64_F64_F64_F64, AMDGPUdiv_fixup
 >;
 
-// Only on SI
-defm V_LSHL_B64 : VOP3Inst <vop3<0x161>, "v_lshl_b64",
-  VOP_I64_I64_I32, shl
->;
+} // let SchedRW = [WriteDouble]
 
-// Only on SI
-defm V_LSHR_B64 : VOP3Inst <vop3<0x162>, "v_lshr_b64",
-  VOP_I64_I64_I32, srl
->;
-
-// Only on SI
-defm V_ASHR_I64 : VOP3Inst <vop3<0x163>, "v_ashr_i64",
-  VOP_I64_I64_I32, sra
->;
-
+let SchedRW = [WriteDouble] in {
 let isCommutable = 1 in {
 
 defm V_ADD_F64 : VOP3Inst <vop3<0x164, 0x280>, "v_add_f64",
@@ -1697,7 +1724,9 @@ defm V_LDEXP_F64 : VOP3Inst <vop3<0x168, 0x284>, "v_ldexp_f64",
   VOP_F64_F64_I32, AMDGPUldexp
 >;
 
-let isCommutable = 1 in {
+} // let SchedRW = [WriteDouble]
+
+let isCommutable = 1, SchedRW = [WriteQuarterRate32] in {
 
 defm V_MUL_LO_U32 : VOP3Inst <vop3<0x169, 0x285>, "v_mul_lo_u32",
   VOP_I32_I32_I32
@@ -1713,29 +1742,56 @@ defm V_MUL_HI_I32 : VOP3Inst <vop3<0x16c, 0x287>, "v_mul_hi_i32",
   VOP_I32_I32_I32
 >;
 
-} // isCommutable = 1
+} // isCommutable = 1, SchedRW = [WriteQuarterRate32]
 
 defm V_DIV_SCALE_F32 : VOP3b_32 <vop3<0x16d, 0x1e0>, "v_div_scale_f32", []>;
 
+let SchedRW = [WriteDouble] in {
 // Double precision division pre-scale.
 defm V_DIV_SCALE_F64 : VOP3b_64 <vop3<0x16e, 0x1e1>, "v_div_scale_f64", []>;
+} // let SchedRW = [WriteDouble]
 
 let isCommutable = 1 in {
 defm V_DIV_FMAS_F32 : VOP3Inst <vop3<0x16f, 0x1e2>, "v_div_fmas_f32",
   VOP_F32_F32_F32_F32, AMDGPUdiv_fmas
 >;
+let SchedRW = [WriteDouble] in {
 defm V_DIV_FMAS_F64 : VOP3Inst <vop3<0x170, 0x1e3>, "v_div_fmas_f64",
   VOP_F64_F64_F64_F64, AMDGPUdiv_fmas
 >;
+} // End SchedRW = [WriteDouble]
 } // End isCommutable = 1
 
 //def V_MSAD_U8 : VOP3_U8 <0x00000171, "v_msad_u8", []>;
 //def V_QSAD_U8 : VOP3_U8 <0x00000172, "v_qsad_u8", []>;
 //def V_MQSAD_U8 : VOP3_U8 <0x00000173, "v_mqsad_u8", []>;
 
+let SchedRW = [WriteDouble] in {
 defm V_TRIG_PREOP_F64 : VOP3Inst <
   vop3<0x174, 0x292>, "v_trig_preop_f64", VOP_F64_F64_I32, AMDGPUtrig_preop
 >;
+
+} // let SchedRW = [WriteDouble]
+
+// These instructions only exist on SI and CI
+let SubtargetPredicate = isSICI in {
+
+defm V_LSHL_B64 : VOP3Inst <vop3<0x161>, "v_lshl_b64",
+  VOP_I64_I64_I32, shl
+>;
+
+defm V_LSHR_B64 : VOP3Inst <vop3<0x162>, "v_lshr_b64",
+  VOP_I64_I64_I32, srl
+>;
+
+defm V_ASHR_I64 : VOP3Inst <vop3<0x163>, "v_ashr_i64",
+  VOP_I64_I64_I32, sra
+>;
+
+defm V_MULLIT_F32 : VOP3Inst <vop3<0x150>, "v_mullit_f32",
+  VOP_F32_F32_F32_F32>;
+
+} // End SubtargetPredicate = isSICI
 
 //===----------------------------------------------------------------------===//
 // Pseudo Instructions
@@ -1892,18 +1948,20 @@ def V_SUB_F64 : InstSI <
 
 multiclass SI_SPILL_SGPR <RegisterClass sgpr_class> {
 
-  def _SAVE : InstSI <
-    (outs),
-    (ins sgpr_class:$src, i32imm:$frame_idx),
-    "", []
-  >;
+  let UseNamedOperandTable = 1 in {
+    def _SAVE : InstSI <
+      (outs),
+      (ins sgpr_class:$src, i32imm:$frame_idx, SReg_64:$scratch_ptr,
+           SReg_32:$scratch_offset),
+      "", []
+    >;
 
-  def _RESTORE : InstSI <
-    (outs sgpr_class:$dst),
-    (ins i32imm:$frame_idx),
-    "", []
-  >;
-
+    def _RESTORE : InstSI <
+      (outs sgpr_class:$dst),
+      (ins i32imm:$frame_idx, SReg_64:$scratch_ptr, SReg_32:$scratch_offset),
+      "", []
+    >;
+  } // End UseNamedOperandTable = 1
 }
 
 defm SI_SPILL_S32  : SI_SPILL_SGPR <SReg_32>;
@@ -1913,17 +1971,20 @@ defm SI_SPILL_S256 : SI_SPILL_SGPR <SReg_256>;
 defm SI_SPILL_S512 : SI_SPILL_SGPR <SReg_512>;
 
 multiclass SI_SPILL_VGPR <RegisterClass vgpr_class> {
-  def _SAVE : InstSI <
-    (outs),
-    (ins vgpr_class:$src, i32imm:$frame_idx),
-    "", []
-  >;
+  let UseNamedOperandTable = 1 in {
+    def _SAVE : InstSI <
+      (outs),
+      (ins vgpr_class:$src, i32imm:$frame_idx, SReg_64:$scratch_ptr,
+           SReg_32:$scratch_offset),
+      "", []
+    >;
 
-  def _RESTORE : InstSI <
-    (outs vgpr_class:$dst),
-    (ins i32imm:$frame_idx),
-    "", []
-  >;
+    def _RESTORE : InstSI <
+      (outs vgpr_class:$dst),
+      (ins i32imm:$frame_idx, SReg_64:$scratch_ptr, SReg_32:$scratch_offset),
+      "", []
+    >;
+  } // End UseNamedOperandTable = 1
 }
 
 defm SI_SPILL_V32  : SI_SPILL_VGPR <VGPR_32>;
@@ -2552,7 +2613,7 @@ def : Pat <
 
 def : Pat <
   (SGPRImm<(f32 fpimm)>:$imm),
-  (S_MOV_B32 fpimm:$imm)
+  (S_MOV_B32 (f32 (bitcast_fpimm_to_i32 $imm)))
 >;
 
 def : Pat <
@@ -2562,7 +2623,7 @@ def : Pat <
 
 def : Pat <
   (f32 fpimm:$imm),
-  (V_MOV_B32_e32 fpimm:$imm)
+  (V_MOV_B32_e32 (f32 (bitcast_fpimm_to_i32 $imm)))
 >;
 
 def : Pat <
@@ -2580,7 +2641,7 @@ def : Pat <
 
 def : Pat <
   (f64 InlineFPImm<f64>:$imm),
-  (S_MOV_B64 InlineFPImm<f64>:$imm)
+  (S_MOV_B64 (f64 (bitcast_fpimm_to_i64 InlineFPImm<f64>:$imm)))
 >;
 
 /********** ===================== **********/
@@ -2675,15 +2736,11 @@ def : Pat <
                    (V_RCP_IFLAG_F32_e32 (V_CVT_F32_U32_e32 $src0))))
 >;
 
-let Predicates = [isSICI] in {
-
 def : Pat <
   (int_SI_tid),
-  (V_MBCNT_HI_U32_B32_e32 0xffffffff,
+  (V_MBCNT_HI_U32_B32_e64 0xffffffff,
                           (V_MBCNT_LO_U32_B32_e64 0xffffffff, 0))
 >;
-
-}
 
 //===----------------------------------------------------------------------===//
 // VOP3 Patterns

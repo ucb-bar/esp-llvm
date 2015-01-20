@@ -194,6 +194,10 @@ def X86rdpmc   : SDNode<"X86ISD::RDPMC_DAG", SDTX86Void,
 def X86Wrapper    : SDNode<"X86ISD::Wrapper",     SDTX86Wrapper>;
 def X86WrapperRIP : SDNode<"X86ISD::WrapperRIP",  SDTX86Wrapper>;
 
+def X86RecoverFrameAlloc : SDNode<"ISD::FRAME_ALLOC_RECOVER",
+                                  SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
+                                                       SDTCisInt<1>]>>;
+
 def X86tlsaddr : SDNode<"X86ISD::TLSADDR", SDT_X86TLSADDR,
                         [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
@@ -549,10 +553,6 @@ def AVXCC : Operand<i8> {
 }
 
 def i8immZExt5 : ImmLeaf<i8, [{
-  return Imm >= 0 && Imm < 32;
-}]>;
-// AVX-512 uses a 32-bit immediate in their intrinsics
-def i32immZExt5 : ImmLeaf<i32, [{
   return Imm >= 0 && Imm < 32;
 }]>;
 

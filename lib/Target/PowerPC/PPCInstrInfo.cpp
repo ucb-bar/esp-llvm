@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
 #include "llvm/CodeGen/SlotIndexes.h"
+#include "llvm/CodeGen/StackMaps.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
@@ -1113,7 +1114,7 @@ bool PPCInstrInfo::PredicateInstruction(
                      MachineInstr *MI,
                      const SmallVectorImpl<MachineOperand> &Pred) const {
   unsigned OpC = MI->getOpcode();
-  if (OpC == PPC::BLR) {
+  if (OpC == PPC::BLR || OpC == PPC::BLR8) {
     if (Pred[1].getReg() == PPC::CTR8 || Pred[1].getReg() == PPC::CTR) {
       bool isPPC64 = Subtarget.isPPC64();
       MI->setDesc(get(Pred[0].getImm() ?
@@ -1277,6 +1278,7 @@ bool PPCInstrInfo::isPredicable(MachineInstr *MI) const {
     return false;
   case PPC::B:
   case PPC::BLR:
+  case PPC::BLR8:
   case PPC::BCTR:
   case PPC::BCTR8:
   case PPC::BCTRL:
@@ -1595,6 +1597,11 @@ unsigned PPCInstrInfo::GetInstSizeInBytes(const MachineInstr *MI) const {
     const MachineFunction *MF = MI->getParent()->getParent();
     const char *AsmStr = MI->getOperand(0).getSymbolName();
     return getInlineAsmLength(AsmStr, *MF->getTarget().getMCAsmInfo());
+  } else if (Opcode == TargetOpcode::STACKMAP) {
+    return MI->getOperand(1).getImm();
+  } else if (Opcode == TargetOpcode::PATCHPOINT) {
+    PatchPointOpers Opers(MI);
+    return Opers.getMetaOper(PatchPointOpers::NBytesPos).getImm();
   } else {
     const MCInstrDesc &Desc = get(Opcode);
     return Desc.getSize();
@@ -2138,7 +2145,8 @@ protected:
       I = ReturnMBB.SkipPHIsAndLabels(I);
 
       // The block must be essentially empty except for the blr.
-      if (I == ReturnMBB.end() || I->getOpcode() != PPC::BLR ||
+      if (I == ReturnMBB.end() ||
+          (I->getOpcode() != PPC::BLR && I->getOpcode() != PPC::BLR8) ||
           I != ReturnMBB.getLastNonDebugInstr())
         return Changed;
 
@@ -2151,7 +2159,7 @@ protected:
             if (J->getOperand(0).getMBB() == &ReturnMBB) {
               // This is an unconditional branch to the return. Replace the
               // branch with a blr.
-              BuildMI(**PI, J, J->getDebugLoc(), TII->get(PPC::BLR));
+              BuildMI(**PI, J, J->getDebugLoc(), TII->get(I->getOpcode()));
               MachineBasicBlock::iterator K = J--;
               K->eraseFromParent();
               BlockChanged = true;

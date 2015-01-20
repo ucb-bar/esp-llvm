@@ -234,10 +234,10 @@ bool ISD::allOperandsUndef(const SDNode *N) {
   return true;
 }
 
-ISD::NodeType ISD::getExtForLoadExtType(ISD::LoadExtType ExtType) {
+ISD::NodeType ISD::getExtForLoadExtType(bool IsFP, ISD::LoadExtType ExtType) {
   switch (ExtType) {
   case ISD::EXTLOAD:
-    return ISD::ANY_EXTEND;
+    return IsFP ? ISD::FP_EXTEND : ISD::ANY_EXTEND;
   case ISD::SEXTLOAD:
     return ISD::SIGN_EXTEND;
   case ISD::ZEXTLOAD:
@@ -3383,8 +3383,9 @@ SDValue SelectionDAG::getNode(unsigned Opcode, SDLoc DL, EVT VT, SDValue N1,
   }
 
   // Perform trivial constant folding.
-  SDValue SV = FoldConstantArithmetic(Opcode, VT, N1.getNode(), N2.getNode());
-  if (SV.getNode()) return SV;
+  if (SDValue SV =
+          FoldConstantArithmetic(Opcode, VT, N1.getNode(), N2.getNode()))
+    return SV;
 
   // Canonicalize constant to RHS if commutative.
   if (N1C && !N2C && isCommutativeBinOp(Opcode)) {

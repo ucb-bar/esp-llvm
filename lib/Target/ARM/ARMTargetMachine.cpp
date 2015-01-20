@@ -11,8 +11,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "ARM.h"
-#include "ARMTargetMachine.h"
 #include "ARMFrameLowering.h"
+#include "ARMTargetMachine.h"
 #include "ARMTargetObjectFile.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Function.h"
@@ -55,12 +55,13 @@ static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
 static ARMBaseTargetMachine::ARMABI
 computeTargetABI(const Triple &TT, StringRef CPU,
                  const TargetOptions &Options) {
-  if (Options.getABIName().startswith("aapcs"))
+  if (Options.MCOptions.getABIName().startswith("aapcs"))
     return ARMBaseTargetMachine::ARM_ABI_AAPCS;
-  else if (Options.getABIName().startswith("apcs"))
+  else if (Options.MCOptions.getABIName().startswith("apcs"))
     return ARMBaseTargetMachine::ARM_ABI_APCS;
 
-  assert(Options.getABIName().empty() && "Unknown target-abi option!");
+  assert(Options.MCOptions.getABIName().empty() &&
+         "Unknown target-abi option!");
 
   ARMBaseTargetMachine::ARMABI TargetABI =
       ARMBaseTargetMachine::ARM_ABI_UNKNOWN;

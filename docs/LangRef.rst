@@ -2883,6 +2883,23 @@ attached to the ``add`` instruction using the ``!dbg`` identifier:
 More information about specific metadata nodes recognized by the
 optimizers and code generator is found below.
 
+Specialized Metadata Nodes
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Specialized metadata nodes are custom data structures in metadata (as opposed
+to generic tuples).  Their fields are labelled, and can be specified in any
+order.
+
+MDLocation
+""""""""""
+
+``MDLocation`` nodes represent source debug locations.  The ``scope:`` field is
+mandatory.
+
+.. code-block:: llvm
+
+    !0 = !MDLocation(line: 2900, column: 42, scope: !1, inlinedAt: !2)
+
 '``tbaa``' Metadata
 ^^^^^^^^^^^^^^^^^^^
 
@@ -7281,6 +7298,56 @@ Note that calling this intrinsic does not prevent function inlining or
 other aggressive transformations, so the value returned may not be that
 of the obvious source-language caller.
 
+'``llvm.frameallocate``' and '``llvm.framerecover``' Intrinsics
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare i8* @llvm.frameallocate(i32 %size)
+      declare i8* @llvm.framerecover(i8* %func, i8* %fp)
+
+Overview:
+"""""""""
+
+The '``llvm.frameallocate``' intrinsic allocates stack memory at some fixed
+offset from the frame pointer, and the '``llvm.framerecover``'
+intrinsic applies that offset to a live frame pointer to recover the address of
+the allocation. The offset is computed during frame layout of the caller of
+``llvm.frameallocate``.
+
+Arguments:
+""""""""""
+
+The ``size`` argument to '``llvm.frameallocate``' must be a constant integer
+indicating the amount of stack memory to allocate. As with allocas, allocating
+zero bytes is legal, but the result is undefined.
+
+The ``func`` argument to '``llvm.framerecover``' must be a constant
+bitcasted pointer to a function defined in the current module. The code
+generator cannot determine the frame allocation offset of functions defined in
+other modules.
+
+The ``fp`` argument to '``llvm.framerecover``' must be a frame
+pointer of a call frame that is currently live. The return value of
+'``llvm.frameaddress``' is one way to produce such a value, but most platforms
+also expose the frame pointer through stack unwinding mechanisms.
+
+Semantics:
+""""""""""
+
+These intrinsics allow a group of functions to access one stack memory
+allocation in an ancestor stack frame. The memory returned from
+'``llvm.frameallocate``' may be allocated prior to stack realignment, so the
+memory is only aligned to the ABI-required stack alignment.  Each function may
+only call '``llvm.frameallocate``' one or zero times from the function entry
+block.  The frame allocation intrinsic inhibits inlining, as any frame
+allocations in the inlined function frame are likely to be at a different
+offset from the one used by '``llvm.framerecover``' called with the
+uninlined function.
+
 .. _int_read_register:
 .. _int_write_register:
 
@@ -9812,10 +9879,10 @@ generated for this intrinsic, and instructions that contribute only to the
 provided condition are not used for code generation. If the condition is
 violated during execution, the behavior is undefined.
 
-Please note that optimizer might limit the transformations performed on values
+Note that the optimizer might limit the transformations performed on values
 used by the ``llvm.assume`` intrinsic in order to preserve the instructions
 only used to form the intrinsic's input argument. This might prove undesirable
-if the extra information provided by the ``llvm.assume`` intrinsic does cause
+if the extra information provided by the ``llvm.assume`` intrinsic does not cause
 sufficient overall improvement in code quality. For this reason,
 ``llvm.assume`` should not be used to document basic mathematical invariants
 that the optimizer can otherwise deduce or facts that are of little use to the

@@ -830,7 +830,7 @@ private:
   ///
   /// Looks for accesses like "a[i * StrideA]" where "StrideA" is loop
   /// invariant.
-  void collectStridedAcccess(Value *LoadOrStoreInst);
+  void collectStridedAccess(Value *LoadOrStoreInst);
 
   /// Report an analysis message to assist the user in diagnosing loops that are
   /// not vectorized.
@@ -1277,11 +1277,12 @@ struct LoopVectorize : public FunctionPass {
     SE = &getAnalysis<ScalarEvolution>();
     DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
     DL = DLP ? &DLP->getDataLayout() : nullptr;
-    LI = &getAnalysis<LoopInfo>();
+    LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
     TTI = &getAnalysis<TargetTransformInfo>();
     DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     BFI = &getAnalysis<BlockFrequencyInfo>();
-    TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
+    auto *TLIP = getAnalysisIfAvailable<TargetLibraryInfoWrapperPass>();
+    TLI = TLIP ? &TLIP->getTLI() : nullptr;
     AA = &getAnalysis<AliasAnalysis>();
     AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
 
@@ -1495,11 +1496,11 @@ struct LoopVectorize : public FunctionPass {
     AU.addRequiredID(LCSSAID);
     AU.addRequired<BlockFrequencyInfo>();
     AU.addRequired<DominatorTreeWrapperPass>();
-    AU.addRequired<LoopInfo>();
+    AU.addRequired<LoopInfoWrapperPass>();
     AU.addRequired<ScalarEvolution>();
     AU.addRequired<TargetTransformInfo>();
     AU.addRequired<AliasAnalysis>();
-    AU.addPreserved<LoopInfo>();
+    AU.addPreserved<LoopInfoWrapperPass>();
     AU.addPreserved<DominatorTreeWrapperPass>();
     AU.addPreserved<AliasAnalysis>();
   }
@@ -1990,7 +1991,7 @@ void InnerLoopVectorizer::scalarizeInstruction(Instruction *Instr, bool IfPredic
         Cmp = Builder.CreateICmp(ICmpInst::ICMP_EQ, Cmp, ConstantInt::get(Cmp->getType(), 1));
         CondBlock = IfBlock->splitBasicBlock(InsertPt, "cond.store");
         LoopVectorBody.push_back(CondBlock);
-        VectorLp->addBasicBlockToLoop(CondBlock, LI->getBase());
+        VectorLp->addBasicBlockToLoop(CondBlock, *LI);
         // Update Builder with newly created basic block.
         Builder.SetInsertPoint(InsertPt);
       }
@@ -2019,7 +2020,7 @@ void InnerLoopVectorizer::scalarizeInstruction(Instruction *Instr, bool IfPredic
       if (IfPredicateStore) {
          BasicBlock *NewIfBlock = CondBlock->splitBasicBlock(InsertPt, "else");
          LoopVectorBody.push_back(NewIfBlock);
-         VectorLp->addBasicBlockToLoop(NewIfBlock, LI->getBase());
+         VectorLp->addBasicBlockToLoop(NewIfBlock, *LI);
          Builder.SetInsertPoint(InsertPt);
          Instruction *OldBr = IfBlock->getTerminator();
          BranchInst::Create(CondBlock, NewIfBlock, Cmp, OldBr);
@@ -2297,13 +2298,13 @@ void InnerLoopVectorizer::createEmptyLoop() {
   // before calling any utilities such as SCEV that require valid LoopInfo.
   if (ParentLoop) {
     ParentLoop->addChildLoop(Lp);
-    ParentLoop->addBasicBlockToLoop(ScalarPH, LI->getBase());
-    ParentLoop->addBasicBlockToLoop(VectorPH, LI->getBase());
-    ParentLoop->addBasicBlockToLoop(MiddleBlock, LI->getBase());
+    ParentLoop->addBasicBlockToLoop(ScalarPH, *LI);
+    ParentLoop->addBasicBlockToLoop(VectorPH, *LI);
+    ParentLoop->addBasicBlockToLoop(MiddleBlock, *LI);
   } else {
     LI->addTopLevelLoop(Lp);
   }
-  Lp->addBasicBlockToLoop(VecBody, LI->getBase());
+  Lp->addBasicBlockToLoop(VecBody, *LI);
 
   // Use this IR builder to create the loop instructions (Phi, Br, Cmp)
   // inside the loop.
@@ -2358,7 +2359,7 @@ void InnerLoopVectorizer::createEmptyLoop() {
     BasicBlock *CheckBlock =
       LastBypassBlock->splitBasicBlock(PastOverflowCheck, "overflow.checked");
     if (ParentLoop)
-      ParentLoop->addBasicBlockToLoop(CheckBlock, LI->getBase());
+      ParentLoop->addBasicBlockToLoop(CheckBlock, *LI);
     LoopBypassBlocks.push_back(CheckBlock);
     Instruction *OldTerm = LastBypassBlock->getTerminator();
     BranchInst::Create(ScalarPH, CheckBlock, CheckBCOverflow, OldTerm);
@@ -2378,7 +2379,7 @@ void InnerLoopVectorizer::createEmptyLoop() {
     BasicBlock *CheckBlock =
         LastBypassBlock->splitBasicBlock(FirstCheckInst, "vector.stridecheck");
     if (ParentLoop)
-      ParentLoop->addBasicBlockToLoop(CheckBlock, LI->getBase());
+      ParentLoop->addBasicBlockToLoop(CheckBlock, *LI);
     LoopBypassBlocks.push_back(CheckBlock);
 
     // Replace the branch into the memory check block with a conditional branch
@@ -2402,7 +2403,7 @@ void InnerLoopVectorizer::createEmptyLoop() {
     BasicBlock *CheckBlock =
         LastBypassBlock->splitBasicBlock(MemRuntimeCheck, "vector.memcheck");
     if (ParentLoop)
-      ParentLoop->addBasicBlockToLoop(CheckBlock, LI->getBase());
+      ParentLoop->addBasicBlockToLoop(CheckBlock, *LI);
     LoopBypassBlocks.push_back(CheckBlock);
 
     // Replace the branch into the memory check block with a conditional branch
@@ -3548,7 +3549,7 @@ bool LoopVectorizationLegality::canVectorize() {
   }
 
   // We can only vectorize innermost loops.
-  if (TheLoop->getSubLoopsVector().size()) {
+  if (!TheLoop->getSubLoopsVector().empty()) {
     emitAnalysis(Report() << "loop is not the innermost loop");
     return false;
   }
@@ -3703,7 +3704,7 @@ bool LoopVectorizationLegality::canVectorizeInstrs() {
           return false;
         }
 
-        // We only allow if-converted PHIs with more than two incoming values.
+        // We only allow if-converted PHIs with exactly two incoming values.
         if (Phi->getNumIncomingValues() != 2) {
           emitAnalysis(Report(it)
                        << "control flow not understood by vectorizer");
@@ -3829,12 +3830,12 @@ bool LoopVectorizationLegality::canVectorizeInstrs() {
           return false;
         }
         if (EnableMemAccessVersioning)
-          collectStridedAcccess(ST);
+          collectStridedAccess(ST);
       }
 
       if (EnableMemAccessVersioning)
         if (LoadInst *LI = dyn_cast<LoadInst>(it))
-          collectStridedAcccess(LI);
+          collectStridedAccess(LI);
 
       // Reduction instructions are allowed to have exit users.
       // All other instructions must not have external users.
@@ -3972,7 +3973,7 @@ static Value *getStrideFromPointer(Value *Ptr, ScalarEvolution *SE,
   return Stride;
 }
 
-void LoopVectorizationLegality::collectStridedAcccess(Value *MemAccess) {
+void LoopVectorizationLegality::collectStridedAccess(Value *MemAccess) {
   Value *Ptr = nullptr;
   if (LoadInst *LI = dyn_cast<LoadInst>(MemAccess))
     Ptr = LI->getPointerOperand();
@@ -4010,7 +4011,7 @@ void LoopVectorizationLegality::collectLoopUniforms() {
       if (I->getType()->isPointerTy() && isConsecutivePtr(I))
         Worklist.insert(Worklist.end(), I->op_begin(), I->op_end());
 
-  while (Worklist.size()) {
+  while (!Worklist.empty()) {
     Instruction *I = dyn_cast<Instruction>(Worklist.back());
     Worklist.pop_back();
 
@@ -6159,7 +6160,7 @@ INITIALIZE_PASS_DEPENDENCY(BlockFrequencyInfo)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
 INITIALIZE_PASS_DEPENDENCY(LCSSA)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
 INITIALIZE_PASS_END(LoopVectorize, LV_NAME, lv_name, false, false)
 
@@ -6257,7 +6258,7 @@ void InnerLoopUnroller::scalarizeInstruction(Instruction *Instr,
                                ConstantInt::get(Cond[Part]->getType(), 1));
       CondBlock = IfBlock->splitBasicBlock(InsertPt, "cond.store");
       LoopVectorBody.push_back(CondBlock);
-      VectorLp->addBasicBlockToLoop(CondBlock, LI->getBase());
+      VectorLp->addBasicBlockToLoop(CondBlock, *LI);
       // Update Builder with newly created basic block.
       Builder.SetInsertPoint(InsertPt);
     }
@@ -6283,7 +6284,7 @@ void InnerLoopUnroller::scalarizeInstruction(Instruction *Instr,
       if (IfPredicateStore) {
         BasicBlock *NewIfBlock = CondBlock->splitBasicBlock(InsertPt, "else");
         LoopVectorBody.push_back(NewIfBlock);
-        VectorLp->addBasicBlockToLoop(NewIfBlock, LI->getBase());
+        VectorLp->addBasicBlockToLoop(NewIfBlock, *LI);
         Builder.SetInsertPoint(InsertPt);
         Instruction *OldBr = IfBlock->getTerminator();
         BranchInst::Create(CondBlock, NewIfBlock, Cmp, OldBr);

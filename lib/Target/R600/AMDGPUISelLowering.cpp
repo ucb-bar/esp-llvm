@@ -216,6 +216,14 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
   setOperationAction(ISD::EXTRACT_SUBVECTOR, MVT::v8f32, Custom);
   setOperationAction(ISD::EXTRACT_SUBVECTOR, MVT::v8i32, Custom);
 
+  // There are no 64-bit extloads. These should be done as a 32-bit extload and
+  // an extension to 64-bit.
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setLoadExtAction(ISD::EXTLOAD, MVT::i64, VT, Expand);
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i64, VT, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i64, VT, Expand);
+  }
+
   for (MVT VT : MVT::integer_vector_valuetypes()) {
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::v2i8, Expand);
     setLoadExtAction(ISD::SEXTLOAD, VT, MVT::v2i8, Expand);
@@ -403,6 +411,7 @@ AMDGPUTargetLowering::AMDGPUTargetLowering(TargetMachine &TM) :
   // large sequence of instructions.
   setIntDivIsCheap(false);
   setPow2SDivIsCheap(false);
+  setFsqrtIsCheap(true);
 
   // FIXME: Need to really handle these.
   MaxStoresPerMemcpy  = 4096;
@@ -469,6 +478,18 @@ bool AMDGPUTargetLowering::isLoadBitCastBeneficial(EVT LoadTy,
   return ((LScalarSize <= CastScalarSize) ||
           (CastScalarSize >= 32) ||
           (LScalarSize < 32));
+}
+
+// SI+ has instructions for cttz / ctlz for 32-bit values. This is probably also
+// profitable with the expansion for 64-bit since it's generally good to
+// speculate things.
+// FIXME: These should really have the size as a parameter.
+bool AMDGPUTargetLowering::isCheapToSpeculateCttz() const {
+  return true;
+}
+
+bool AMDGPUTargetLowering::isCheapToSpeculateCtlz() const {
+  return true;
 }
 
 //===---------------------------------------------------------------------===//
@@ -1398,24 +1419,6 @@ SDValue AMDGPUTargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   ISD::LoadExtType ExtType = Load->getExtensionType();
   EVT VT = Op.getValueType();
   EVT MemVT = Load->getMemoryVT();
-
-  if (ExtType != ISD::NON_EXTLOAD && !VT.isVector() && VT.getSizeInBits() > 32) {
-    // We can do the extload to 32-bits, and then need to separately extend to
-    // 64-bits.
-
-    SDValue ExtLoad32 = DAG.getExtLoad(ExtType, DL, MVT::i32,
-                                       Load->getChain(),
-                                       Load->getBasePtr(),
-                                       MemVT,
-                                       Load->getMemOperand());
-
-    SDValue Ops[] = {
-      DAG.getNode(ISD::getExtForLoadExtType(ExtType), DL, VT, ExtLoad32),
-      ExtLoad32.getValue(1)
-    };
-
-    return DAG.getMergeValues(Ops, DL);
-  }
 
   if (ExtType == ISD::NON_EXTLOAD && VT.getSizeInBits() < 32) {
     assert(VT == MVT::i1 && "Only i1 non-extloads expected");
@@ -2553,6 +2556,46 @@ const char* AMDGPUTargetLowering::getTargetNodeName(unsigned Opcode) const {
   NODE_NAME_CASE(STORE_MSKOR)
   NODE_NAME_CASE(TBUFFER_STORE_FORMAT)
   }
+}
+
+SDValue AMDGPUTargetLowering::getRsqrtEstimate(SDValue Operand,
+                                               DAGCombinerInfo &DCI,
+                                               unsigned &RefinementSteps,
+                                               bool &UseOneConstNR) const {
+  SelectionDAG &DAG = DCI.DAG;
+  EVT VT = Operand.getValueType();
+
+  if (VT == MVT::f32) {
+    RefinementSteps = 0;
+    return DAG.getNode(AMDGPUISD::RSQ, SDLoc(Operand), VT, Operand);
+  }
+
+  // TODO: There is also f64 rsq instruction, but the documentation is less
+  // clear on its precision.
+
+  return SDValue();
+}
+
+SDValue AMDGPUTargetLowering::getRecipEstimate(SDValue Operand,
+                                               DAGCombinerInfo &DCI,
+                                               unsigned &RefinementSteps) const {
+  SelectionDAG &DAG = DCI.DAG;
+  EVT VT = Operand.getValueType();
+
+  if (VT == MVT::f32) {
+    // Reciprocal, < 1 ulp error.
+    //
+    // This reciprocal approximation converges to < 0.5 ulp error with one
+    // newton rhapson performed with two fused multiple adds (FMAs).
+
+    RefinementSteps = 0;
+    return DAG.getNode(AMDGPUISD::RCP, SDLoc(Operand), VT, Operand);
+  }
+
+  // TODO: There is also f64 rcp instruction, but the documentation is less
+  // clear on its precision.
+
+  return SDValue();
 }
 
 static void computeKnownBitsForMinMax(const SDValue Op0,

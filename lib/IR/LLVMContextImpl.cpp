@@ -15,6 +15,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DiagnosticInfo.h"
+#include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
 using namespace llvm;
@@ -72,7 +73,30 @@ LLVMContextImpl::~LLVMContextImpl() {
   // the container. Avoid iterators during this operation:
   while (!OwnedModules.empty())
     delete *OwnedModules.begin();
-  
+
+  // Drop references for MDNodes.  Do this before Values get deleted to avoid
+  // unnecessary RAUW when nodes are still unresolved.
+  for (auto *I : DistinctMDNodes)
+    I->dropAllReferences();
+#define HANDLE_MDNODE_LEAF(CLASS)                                              \
+  for (auto *I : CLASS##s)                                                     \
+    I->dropAllReferences();
+#include "llvm/IR/Metadata.def"
+
+  // Also drop references that come from the Value bridges.
+  for (auto &Pair : ValuesAsMetadata)
+    Pair.second->dropUsers();
+  for (auto &Pair : MetadataAsValues)
+    Pair.second->dropUse();
+
+  // Destroy MDNodes.
+  for (MDNode *I : DistinctMDNodes)
+    I->deleteAsSubclass();
+#define HANDLE_MDNODE_LEAF(CLASS)                                              \
+  for (CLASS *I : CLASS##s)                                                    \
+    delete I;
+#include "llvm/IR/Metadata.def"
+
   // Free the constants.  This is important to do here to ensure that they are
   // freed before the LeakDetector is torn down.
   std::for_each(ExprConstants.map_begin(), ExprConstants.map_end(),
@@ -135,21 +159,42 @@ LLVMContextImpl::~LLVMContextImpl() {
   for (auto &Pair : ValuesAsMetadata)
     delete Pair.second;
 
-  // Destroy MDNodes.  ~MDNode can move and remove nodes between the MDNodeSet
-  // and the NonUniquedMDNodes sets, so copy the values out first.
-  SmallVector<GenericMDNode *, 8> MDNodes;
-  MDNodes.reserve(MDNodeSet.size() + NonUniquedMDNodes.size());
-  MDNodes.append(MDNodeSet.begin(), MDNodeSet.end());
-  MDNodes.append(NonUniquedMDNodes.begin(), NonUniquedMDNodes.end());
-  for (GenericMDNode *I : MDNodes)
-    I->dropAllReferences();
-  for (GenericMDNode *I : MDNodes)
-    delete I;
-  assert(MDNodeSet.empty() && NonUniquedMDNodes.empty() &&
-         "Destroying all MDNodes didn't empty the Context's sets.");
-
   // Destroy MDStrings.
   MDStringCache.clear();
+}
+
+namespace llvm {
+/// \brief Make MDOperand transparent for hashing.
+///
+/// This overload of an implementation detail of the hashing library makes
+/// MDOperand hash to the same value as a \a Metadata pointer.
+///
+/// Note that overloading \a hash_value() as follows:
+///
+/// \code
+///     size_t hash_value(const MDOperand &X) { return hash_value(X.get()); }
+/// \endcode
+///
+/// does not cause MDOperand to be transparent.  In particular, a bare pointer
+/// doesn't get hashed before it's combined, whereas \a MDOperand would.
+static const Metadata *get_hashable_data(const MDOperand &X) { return X.get(); }
+}
+
+unsigned MDNodeOpsKey::calculateHash(MDNode *N, unsigned Offset) {
+  unsigned Hash = hash_combine_range(N->op_begin() + Offset, N->op_end());
+#ifndef NDEBUG
+  {
+    SmallVector<Metadata *, 8> MDs(N->op_begin() + Offset, N->op_end());
+    unsigned RawHash = calculateHash(MDs);
+    assert(Hash == RawHash &&
+           "Expected hash of MDOperand to equal hash of Metadata*");
+  }
+#endif
+  return Hash;
+}
+
+unsigned MDNodeOpsKey::calculateHash(ArrayRef<Metadata *> Ops) {
+  return hash_combine_range(Ops.begin(), Ops.end());
 }
 
 // ConstantsContext anchors
@@ -172,3 +217,26 @@ void InsertValueConstantExpr::anchor() { }
 void GetElementPtrConstantExpr::anchor() { }
 
 void CompareConstantExpr::anchor() { }
+
+GCStrategy *LLVMContextImpl::getGCStrategy(const StringRef Name) {
+  // TODO: Arguably, just doing a linear search would be faster for small N
+  auto NMI = GCStrategyMap.find(Name);
+  if (NMI != GCStrategyMap.end())
+    return NMI->getValue();
+  
+  for (auto& Entry : GCRegistry::entries()) {
+    if (Name == Entry.getName()) {
+      std::unique_ptr<GCStrategy> S = Entry.instantiate();
+      S->Name = Name;
+      GCStrategyMap[Name] = S.get();
+      GCStrategyList.push_back(std::move(S));
+      return GCStrategyList.back().get();
+    }
+  }
+
+  // No GCStrategy found for that name, error reporting is the job of our
+  // callers. 
+  return nullptr;
+}
+
+

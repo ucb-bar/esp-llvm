@@ -127,12 +127,13 @@ private:
   DwarfDebug *DD;
 
 protected:
-  explicit AsmPrinter(TargetMachine &TM, MCStreamer &Streamer);
+  explicit AsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer);
 
 public:
   virtual ~AsmPrinter();
 
   DwarfDebug *getDwarfDebug() { return DD; }
+  DwarfDebug *getDwarfDebug() const { return DD; }
 
   /// Return true if assembly output should contain comments.
   ///
@@ -203,6 +204,8 @@ public:
   void EmitFunctionBody();
 
   void emitCFIInstruction(const MachineInstr &MI);
+
+  void emitFrameAlloc(const MachineInstr &MI);
 
   enum CFIMoveType { CFI_M_None, CFI_M_EH, CFI_M_Debug };
   CFIMoveType needsCFIMoves();
@@ -428,8 +431,8 @@ public:
 
   /// EmitDwarfRegOp - Emit a dwarf register operation.
   /// \param Indirect   whether this is a register-indirect address
-  virtual void EmitDwarfRegOp(ByteStreamer &BS, const MachineLocation &MLoc,
-                              bool Indirect) const;
+  virtual void EmitDwarfRegOp(ByteStreamer &BS,
+                              const MachineLocation &MLoc) const;
 
   //===------------------------------------------------------------------===//
   // Dwarf Lowering Routines

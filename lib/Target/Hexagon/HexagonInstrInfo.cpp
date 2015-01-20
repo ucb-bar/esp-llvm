@@ -358,21 +358,19 @@ bool HexagonInstrInfo::analyzeCompare(const MachineInstr *MI,
       SrcReg = MI->getOperand(1).getReg();
       Mask = ~0;
       break;
-    case Hexagon::CMPbEQri_V4:
-    case Hexagon::CMPbEQrr_sbsb_V4:
-    case Hexagon::CMPbEQrr_ubub_V4:
-    case Hexagon::CMPbGTUri_V4:
-    case Hexagon::CMPbGTUrr_V4:
-    case Hexagon::CMPbGTrr_V4:
+    case Hexagon::A4_cmpbeqi:
+    case Hexagon::A4_cmpbeq:
+    case Hexagon::A4_cmpbgtui:
+    case Hexagon::A4_cmpbgtu:
+    case Hexagon::A4_cmpbgt:
       SrcReg = MI->getOperand(1).getReg();
       Mask = 0xFF;
       break;
-    case Hexagon::CMPhEQri_V4:
-    case Hexagon::CMPhEQrr_shl_V4:
-    case Hexagon::CMPhEQrr_xor_V4:
-    case Hexagon::CMPhGTUri_V4:
-    case Hexagon::CMPhGTUrr_V4:
-    case Hexagon::CMPhGTrr_shl_V4:
+    case Hexagon::A4_cmpheqi:
+    case Hexagon::A4_cmpheq:
+    case Hexagon::A4_cmphgtui:
+    case Hexagon::A4_cmphgtu:
+    case Hexagon::A4_cmphgt:
       SrcReg = MI->getOperand(1).getReg();
       Mask = 0xFFFF;
       break;
@@ -386,24 +384,22 @@ bool HexagonInstrInfo::analyzeCompare(const MachineInstr *MI,
     case Hexagon::C2_cmpgtup:
     case Hexagon::C2_cmpgtu:
     case Hexagon::C2_cmpgt:
-    case Hexagon::CMPbEQrr_sbsb_V4:
-    case Hexagon::CMPbEQrr_ubub_V4:
-    case Hexagon::CMPbGTUrr_V4:
-    case Hexagon::CMPbGTrr_V4:
-    case Hexagon::CMPhEQrr_shl_V4:
-    case Hexagon::CMPhEQrr_xor_V4:
-    case Hexagon::CMPhGTUrr_V4:
-    case Hexagon::CMPhGTrr_shl_V4:
+    case Hexagon::A4_cmpbeq:
+    case Hexagon::A4_cmpbgtu:
+    case Hexagon::A4_cmpbgt:
+    case Hexagon::A4_cmpheq:
+    case Hexagon::A4_cmphgtu:
+    case Hexagon::A4_cmphgt:
       SrcReg2 = MI->getOperand(2).getReg();
       return true;
 
     case Hexagon::C2_cmpeqi:
     case Hexagon::C2_cmpgtui:
     case Hexagon::C2_cmpgti:
-    case Hexagon::CMPbEQri_V4:
-    case Hexagon::CMPbGTUri_V4:
-    case Hexagon::CMPhEQri_V4:
-    case Hexagon::CMPhGTUri_V4:
+    case Hexagon::A4_cmpbeqi:
+    case Hexagon::A4_cmpbgtui:
+    case Hexagon::A4_cmpheqi:
+    case Hexagon::A4_cmphgtui:
       SrcReg2 = 0;
       Value = MI->getOperand(2).getImm();
       return true;
@@ -774,14 +770,6 @@ getMatchingCondBranchOpcode(int Opc, bool invertPredicate) const {
     return !invertPredicate ? Hexagon::C2_ccombinewt :
                               Hexagon::C2_ccombinewf;
 
-  // Word.
-  case Hexagon::STriw_f:
-    return !invertPredicate ? Hexagon::S2_pstorerit_io:
-                              Hexagon::S2_pstorerif_io;
-  case Hexagon::STriw_indexed_f:
-    return !invertPredicate ? Hexagon::S2_pstorerit_io:
-                              Hexagon::S2_pstorerif_io;
-
   // DEALLOC_RETURN.
   case Hexagon::L4_return:
     return !invertPredicate ? Hexagon::L4_return_t:
@@ -1098,16 +1086,12 @@ isValidOffset(const int Opcode, const int Offset) const {
   switch(Opcode) {
 
   case Hexagon::L2_loadri_io:
-  case Hexagon::LDriw_f:
   case Hexagon::S2_storeri_io:
-  case Hexagon::STriw_f:
     return (Offset >= Hexagon_MEMW_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMW_OFFSET_MAX);
 
   case Hexagon::L2_loadrd_io:
-  case Hexagon::LDrid_f:
   case Hexagon::S2_storerd_io:
-  case Hexagon::STrid_f:
     return (Offset >= Hexagon_MEMD_OFFSET_MIN) &&
       (Offset <= Hexagon_MEMD_OFFSET_MAX);
 
@@ -1554,12 +1538,6 @@ int HexagonInstrInfo::GetDotNewOp(const MachineInstr* MI) const {
 
   case Hexagon::STrih_shl_V4:
     return Hexagon::STrih_shl_nv_V4;
-
-  case Hexagon::STriw_f:
-    return Hexagon::S2_storerinew_io;
-
-  case Hexagon::STriw_indexed_f:
-    return Hexagon::S4_storerinew_rr;
 
   case Hexagon::STriw_shl_V4:
     return Hexagon::STriw_shl_nv_V4;

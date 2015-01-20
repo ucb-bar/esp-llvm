@@ -3,11 +3,10 @@ set(LLVM_LINK_COMPONENTS
   Core
   ExecutionEngine
   InstCombine
-  MC
+  MCJIT
   ScalarOpts
   Support
   native
-  mcjit
   )
 
 add_kaleidoscope_chapter(Kaleidoscope-Ch5

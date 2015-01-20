@@ -452,6 +452,14 @@ void MachineModuleInfo::addCleanup(MachineBasicBlock *LandingPad) {
   LP.TypeIds.push_back(0);
 }
 
+MCSymbol *
+MachineModuleInfo::addClauseForLandingPad(MachineBasicBlock *LandingPad) {
+  MCSymbol *ClauseLabel = Context.CreateTempSymbol();
+  LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
+  LP.ClauseLabels.push_back(ClauseLabel);
+  return ClauseLabel;
+}
+
 /// TidyLandingPads - Remap landing pad labels and remove any deleted landing
 /// pads.
 void MachineModuleInfo::TidyLandingPads(DenseMap<MCSymbol*, uintptr_t> *LPMap) {
@@ -546,8 +554,6 @@ try_next:;
 
 /// getPersonality - Return the personality function for the current function.
 const Function *MachineModuleInfo::getPersonality() const {
-  // FIXME: Until PR1414 will be fixed, we're using 1 personality function per
-  // function
   return !LandingPads.empty() ? LandingPads[0].Personality : nullptr;
 }
 

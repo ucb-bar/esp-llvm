@@ -26,8 +26,8 @@ private:
   const RISCVSubtarget *Subtarget;
 
 public:
-  RISCVAsmPrinter(TargetMachine &TM, MCStreamer &Streamer)
-    : AsmPrinter(TM, Streamer) {
+  RISCVAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
+    : AsmPrinter(TM, std::move(Streamer)) {
     Subtarget = &TM.getSubtarget<RISCVSubtarget>();
   }
 

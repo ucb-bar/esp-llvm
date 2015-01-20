@@ -190,7 +190,7 @@ class ARMAsmParser : public MCTargetAsmParser {
   }
 
   bool validatetLDMRegList(MCInst Inst, const OperandVector &Operands,
-                           unsigned ListNo, bool IsPop = false);
+                           unsigned ListNo, bool IsARPop = false);
   bool validatetSTMRegList(MCInst Inst, const OperandVector &Operands,
                            unsigned ListNo);
 
@@ -5254,15 +5254,52 @@ bool ARMAsmParser::parsePrefix(ARMMCExpr::VariantKind &RefKind) {
     return true;
   }
 
+  enum {
+    COFF = (1 << MCObjectFileInfo::IsCOFF),
+    ELF = (1 << MCObjectFileInfo::IsELF),
+    MACHO = (1 << MCObjectFileInfo::IsMachO)
+  };
+  static const struct PrefixEntry {
+    const char *Spelling;
+    ARMMCExpr::VariantKind VariantKind;
+    uint8_t SupportedFormats;
+  } PrefixEntries[] = {
+    { "lower16", ARMMCExpr::VK_ARM_LO16, COFF | ELF | MACHO },
+    { "upper16", ARMMCExpr::VK_ARM_HI16, COFF | ELF | MACHO },
+  };
+
   StringRef IDVal = Parser.getTok().getIdentifier();
-  if (IDVal == "lower16") {
-    RefKind = ARMMCExpr::VK_ARM_LO16;
-  } else if (IDVal == "upper16") {
-    RefKind = ARMMCExpr::VK_ARM_HI16;
-  } else {
+
+  const auto &Prefix =
+      std::find_if(std::begin(PrefixEntries), std::end(PrefixEntries),
+                   [&IDVal](const PrefixEntry &PE) {
+                      return PE.Spelling == IDVal;
+                   });
+  if (Prefix == std::end(PrefixEntries)) {
     Error(Parser.getTok().getLoc(), "unexpected prefix in operand");
     return true;
   }
+
+  uint8_t CurrentFormat;
+  switch (getContext().getObjectFileInfo()->getObjectFileType()) {
+  case MCObjectFileInfo::IsMachO:
+    CurrentFormat = MACHO;
+    break;
+  case MCObjectFileInfo::IsELF:
+    CurrentFormat = ELF;
+    break;
+  case MCObjectFileInfo::IsCOFF:
+    CurrentFormat = COFF;
+    break;
+  }
+
+  if (~Prefix->SupportedFormats & CurrentFormat) {
+    Error(Parser.getTok().getLoc(),
+          "cannot represent relocation in the current file format");
+    return true;
+  }
+
+  RefKind = Prefix->VariantKind;
   Parser.Lex();
 
   if (getLexer().isNot(AsmToken::Colon)) {
@@ -5270,6 +5307,7 @@ bool ARMAsmParser::parsePrefix(ARMMCExpr::VariantKind &RefKind) {
     return true;
   }
   Parser.Lex(); // Eat the last ':'
+
   return false;
 }
 
@@ -5989,7 +6027,7 @@ static bool instIsBreakpoint(const MCInst &Inst) {
 
 bool ARMAsmParser::validatetLDMRegList(MCInst Inst,
                                        const OperandVector &Operands,
-                                       unsigned ListNo, bool IsPop) {
+                                       unsigned ListNo, bool IsARPop) {
   const ARMOperand &Op = static_cast<const ARMOperand &>(*Operands[ListNo]);
   bool HasWritebackToken = Op.isToken() && Op.getToken() == "!";
 
@@ -5997,7 +6035,7 @@ bool ARMAsmParser::validatetLDMRegList(MCInst Inst,
   bool ListContainsLR = listContainsReg(Inst, ListNo, ARM::LR);
   bool ListContainsPC = listContainsReg(Inst, ListNo, ARM::PC);
 
-  if (!IsPop && ListContainsSP)
+  if (!IsARPop && ListContainsSP)
     return Error(Operands[ListNo + HasWritebackToken]->getStartLoc(),
                  "SP may not be in the register list");
   else if (ListContainsPC && ListContainsLR)
@@ -6300,7 +6338,7 @@ bool ARMAsmParser::validateInstruction(MCInst &Inst,
         !isThumbTwo())
       return Error(Operands[2]->getStartLoc(),
                    "registers must be in range r0-r7 or pc");
-    if (validatetLDMRegList(Inst, Operands, 2, /*IsPop=*/true))
+    if (validatetLDMRegList(Inst, Operands, 2, !isMClass()))
       return true;
     break;
   }

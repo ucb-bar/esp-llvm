@@ -30,9 +30,9 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Target/TargetCallingConv.h"
 #include "llvm/Target/TargetMachine.h"
@@ -216,6 +216,11 @@ public:
   /// Return true if integer divide is usually cheaper than a sequence of
   /// several shifts, adds, and multiplies for this target.
   bool isIntDivCheap() const { return IntDivIsCheap; }
+
+  /// Return true if sqrt(x) is as cheap or cheaper than 1 / rsqrt(x)
+  bool isFsqrtCheap() const {
+    return FsqrtIsCheap;
+  }
 
   /// Returns true if target has indicated at least one type should be bypassed.
   bool isSlowDivBypassed() const { return !BypassSlowDivWidths.empty(); }
@@ -1183,7 +1188,11 @@ protected:
   /// possible, should be replaced by an alternate sequence of instructions not
   /// containing an integer divide.
   void setIntDivIsCheap(bool isCheap = true) { IntDivIsCheap = isCheap; }
-  
+
+  /// Tells the code generator that fsqrt is cheap, and should not be replaced
+  /// with an alternative sequence of instructions.
+  void setFsqrtIsCheap(bool isCheap = true) { FsqrtIsCheap = isCheap; }
+
   /// Tells the code generator that this target supports floating point
   /// exceptions and cares about preserving floating point exception behavior.
   void setHasFloatingPointExceptions(bool FPExceptions = true) {
@@ -1500,6 +1509,14 @@ public:
     return isZExtFree(Val.getValueType(), VT2);
   }
 
+  /// Return true if an fpext operation is free (for instance, because
+  /// single-precision floating-point numbers are implicitly extended to
+  /// double-precision).
+  virtual bool isFPExtFree(EVT VT) const {
+    assert(VT.isFloatingPoint());
+    return false;
+  }
+
   /// Return true if an fneg operation is free to the point where it is never
   /// worthwhile to replace it with a bitwise operation.
   virtual bool isFNegFree(EVT VT) const {
@@ -1616,6 +1633,9 @@ private:
   /// model is in place.  If we ever optimize for size, this will be set to true
   /// unconditionally.
   bool IntDivIsCheap;
+
+  // Don't expand fsqrt with an approximation based on the inverse sqrt.
+  bool FsqrtIsCheap;
 
   /// Tells the code generator to bypass slow divide or remainder
   /// instructions. For example, BypassSlowDivWidths[32,8] tells the code
@@ -2291,6 +2311,7 @@ public:
     SelectionDAG &DAG;
     SDLoc DL;
     ImmutableCallSite *CS;
+    bool IsPatchPoint;
     SmallVector<ISD::OutputArg, 32> Outs;
     SmallVector<SDValue, 32> OutVals;
     SmallVector<ISD::InputArg, 32> Ins;
@@ -2299,7 +2320,7 @@ public:
       : RetTy(nullptr), RetSExt(false), RetZExt(false), IsVarArg(false),
         IsInReg(false), DoesNotReturn(false), IsReturnValueUsed(true),
         IsTailCall(false), NumFixedArgs(-1), CallConv(CallingConv::C),
-        DAG(DAG), CS(nullptr) {}
+        DAG(DAG), CS(nullptr), IsPatchPoint(false) {}
 
     CallLoweringInfo &setDebugLoc(SDLoc dl) {
       DL = dl;
@@ -2378,6 +2399,11 @@ public:
 
     CallLoweringInfo &setZExtResult(bool Value = true) {
       RetZExt = Value;
+      return *this;
+    }
+
+    CallLoweringInfo &setIsPatchPoint(bool Value = true) {
+      IsPatchPoint = Value;
       return *this;
     }
 

@@ -22,7 +22,7 @@ add_llvm_library(LLVMCodeGen
   ForwardControlFlowIntegrity.cpp
   GCMetadata.cpp
   GCMetadataPrinter.cpp
-  GCStrategy.cpp
+  GCRootLowering.cpp
   GlobalMerge.cpp
   IfConversion.cpp
   InlineSpiller.cpp

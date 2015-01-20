@@ -45,7 +45,7 @@
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/TargetLibraryInfo.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
@@ -685,7 +685,7 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AssumptionCacheTracker>();
       AU.addRequired<DominatorTreeWrapperPass>();
-      AU.addRequired<TargetLibraryInfo>();
+      AU.addRequired<TargetLibraryInfoWrapperPass>();
       if (!NoLoads)
         AU.addRequired<MemoryDependenceAnalysis>();
       AU.addRequired<AliasAnalysis>();
@@ -736,7 +736,7 @@ INITIALIZE_PASS_BEGIN(GVN, "gvn", "Global Value Numbering", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_END(GVN, "gvn", "Global Value Numbering", false, false)
 
@@ -2106,15 +2106,15 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
       std::swap(LHS, RHS);
     assert((isa<Argument>(LHS) || isa<Instruction>(LHS)) && "Unexpected value!");
 
-    // If there is no obvious reason to prefer the left-hand side over the right-
-    // hand side, ensure the longest lived term is on the right-hand side, so the
-    // shortest lived term will be replaced by the longest lived.  This tends to
-    // expose more simplifications.
+    // If there is no obvious reason to prefer the left-hand side over the
+    // right-hand side, ensure the longest lived term is on the right-hand side,
+    // so the shortest lived term will be replaced by the longest lived.
+    // This tends to expose more simplifications.
     uint32_t LVN = VN.lookup_or_add(LHS);
     if ((isa<Argument>(LHS) && isa<Argument>(RHS)) ||
         (isa<Instruction>(LHS) && isa<Instruction>(RHS))) {
-      // Move the 'oldest' value to the right-hand side, using the value number as
-      // a proxy for age.
+      // Move the 'oldest' value to the right-hand side, using the value number
+      // as a proxy for age.
       uint32_t RVN = VN.lookup_or_add(RHS);
       if (LVN < RVN) {
         std::swap(LHS, RHS);
@@ -2143,10 +2143,10 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
       NumGVNEqProp += NumReplacements;
     }
 
-    // Now try to deduce additional equalities from this one.  For example, if the
-    // known equality was "(A != B)" == "false" then it follows that A and B are
-    // equal in the scope.  Only boolean equalities with an explicit true or false
-    // RHS are currently supported.
+    // Now try to deduce additional equalities from this one. For example, if
+    // the known equality was "(A != B)" == "false" then it follows that A and B
+    // are equal in the scope. Only boolean equalities with an explicit true or
+    // false RHS are currently supported.
     if (!RHS->getType()->isIntegerTy(1))
       // Not a boolean equality - bail out.
       continue;
@@ -2171,7 +2171,7 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
     // If we are propagating an equality like "(A == B)" == "true" then also
     // propagate the equality A == B.  When propagating a comparison such as
     // "(A >= B)" == "true", replace all instances of "A < B" with "false".
-    if (ICmpInst *Cmp = dyn_cast<ICmpInst>(LHS)) {
+    if (CmpInst *Cmp = dyn_cast<CmpInst>(LHS)) {
       Value *Op0 = Cmp->getOperand(0), *Op1 = Cmp->getOperand(1);
 
       // If "A == B" is known true, or "A != B" is known false, then replace
@@ -2180,12 +2180,17 @@ bool GVN::propagateEquality(Value *LHS, Value *RHS,
           (isKnownFalse && Cmp->getPredicate() == CmpInst::ICMP_NE))
         Worklist.push_back(std::make_pair(Op0, Op1));
 
+      // Handle the floating point versions of equality comparisons too.
+      if ((isKnownTrue && Cmp->getPredicate() == CmpInst::FCMP_OEQ) ||
+          (isKnownFalse && Cmp->getPredicate() == CmpInst::FCMP_UNE))
+        Worklist.push_back(std::make_pair(Op0, Op1));
+
       // If "A >= B" is known true, replace "A < B" with false everywhere.
       CmpInst::Predicate NotPred = Cmp->getInversePredicate();
       Constant *NotVal = ConstantInt::get(Cmp->getType(), isKnownFalse);
-      // Since we don't have the instruction "A < B" immediately to hand, work out
-      // the value number that it would have and use that to find an appropriate
-      // instruction (if any).
+      // Since we don't have the instruction "A < B" immediately to hand, work
+      // out the value number that it would have and use that to find an
+      // appropriate instruction (if any).
       uint32_t NextNum = VN.getNextUnusedValueNumber();
       uint32_t Num = VN.lookup_or_add_cmp(Cmp->getOpcode(), NotPred, Op0, Op1);
       // If the number we were assigned was brand new then there is no point in
@@ -2345,7 +2350,7 @@ bool GVN::runOnFunction(Function& F) {
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
   AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
-  TLI = &getAnalysis<TargetLibraryInfo>();
+  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
   VN.setAliasAnalysis(&getAnalysis<AliasAnalysis>());
   VN.setMemDep(MD);
   VN.setDomTree(DT);
@@ -2358,7 +2363,8 @@ bool GVN::runOnFunction(Function& F) {
   for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE; ) {
     BasicBlock *BB = FI++;
 
-    bool removedBlock = MergeBlockIntoPredecessor(BB, this);
+    bool removedBlock = MergeBlockIntoPredecessor(
+        BB, DT, /* LoopInfo */ nullptr, VN.getAliasAnalysis(), MD);
     if (removedBlock) ++NumGVNBlocks;
 
     Changed |= removedBlock;
@@ -2629,7 +2635,8 @@ bool GVN::performPRE(Function &F) {
 /// Split the critical edge connecting the given two blocks, and return
 /// the block inserted to the critical edge.
 BasicBlock *GVN::splitCriticalEdges(BasicBlock *Pred, BasicBlock *Succ) {
-  BasicBlock *BB = SplitCriticalEdge(Pred, Succ, this);
+  BasicBlock *BB = SplitCriticalEdge(
+      Pred, Succ, CriticalEdgeSplittingOptions(getAliasAnalysis(), DT));
   if (MD)
     MD->invalidateCachedPredecessors();
   return BB;
@@ -2642,7 +2649,8 @@ bool GVN::splitCriticalEdges() {
     return false;
   do {
     std::pair<TerminatorInst*, unsigned> Edge = toSplit.pop_back_val();
-    SplitCriticalEdge(Edge.first, Edge.second, this);
+    SplitCriticalEdge(Edge.first, Edge.second,
+                      CriticalEdgeSplittingOptions(getAliasAnalysis(), DT));
   } while (!toSplit.empty());
   if (MD) MD->invalidateCachedPredecessors();
   return true;

@@ -1249,12 +1249,9 @@ static void WriteConstantInternal(raw_ostream &Out, const Constant *CV,
   Out << "<placeholder or erroneous Constant>";
 }
 
-static void WriteMDNodeBodyInternal(raw_ostream &Out, const MDNode *Node,
-                                    TypePrinting *TypePrinter,
-                                    SlotTracker *Machine,
-                                    const Module *Context) {
-  if (Node->isDistinct())
-    Out << "distinct ";
+static void writeMDTuple(raw_ostream &Out, const MDTuple *Node,
+                         TypePrinting *TypePrinter, SlotTracker *Machine,
+                         const Module *Context) {
   Out << "!{";
   for (unsigned mi = 0, me = Node->getNumOperands(); mi != me; ++mi) {
     const Metadata *MD = Node->getOperand(mi);
@@ -1273,6 +1270,65 @@ static void WriteMDNodeBodyInternal(raw_ostream &Out, const MDNode *Node,
   }
 
   Out << "}";
+}
+
+namespace {
+struct FieldSeparator {
+  bool Skip;
+  FieldSeparator() : Skip(true) {}
+};
+raw_ostream &operator<<(raw_ostream &OS, FieldSeparator &FS) {
+  if (FS.Skip) {
+    FS.Skip = false;
+    return OS;
+  }
+  return OS << ", ";
+}
+} // end namespace
+
+static void writeGenericDwarfNode(raw_ostream &, const GenericDwarfNode *,
+                                  TypePrinting *, SlotTracker *,
+                                  const Module *) {
+  llvm_unreachable("Unimplemented write");
+}
+
+static void writeMDLocation(raw_ostream &Out, const MDLocation *DL,
+                            TypePrinting *TypePrinter, SlotTracker *Machine,
+                            const Module *Context) {
+  Out << "!MDLocation(";
+  FieldSeparator FS;
+  // Always output the line, since 0 is a relevant and important value for it.
+  Out << FS << "line: " << DL->getLine();
+  if (DL->getColumn())
+    Out << FS << "column: " << DL->getColumn();
+  Out << FS << "scope: ";
+  WriteAsOperandInternal(Out, DL->getScope(), TypePrinter, Machine, Context);
+  if (DL->getInlinedAt()) {
+    Out << FS << "inlinedAt: ";
+    WriteAsOperandInternal(Out, DL->getInlinedAt(), TypePrinter, Machine,
+                           Context);
+  }
+  Out << ")";
+}
+
+static void WriteMDNodeBodyInternal(raw_ostream &Out, const MDNode *Node,
+                                    TypePrinting *TypePrinter,
+                                    SlotTracker *Machine,
+                                    const Module *Context) {
+  assert(!Node->isTemporary() && "Unexpected forward declaration");
+
+  if (Node->isDistinct())
+    Out << "distinct ";
+
+  switch (Node->getMetadataID()) {
+  default:
+    llvm_unreachable("Expected uniquable MDNode");
+#define HANDLE_MDNODE_LEAF(CLASS)                                              \
+  case Metadata::CLASS##Kind:                                                  \
+    write##CLASS(Out, cast<CLASS>(Node), TypePrinter, Machine, Context);       \
+    break;
+#include "llvm/IR/Metadata.def"
+  }
 }
 
 // Full implementation of printing a Value as an operand with support for

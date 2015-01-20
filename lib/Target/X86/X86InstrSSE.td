@@ -2504,6 +2504,7 @@ multiclass sse12_cmp_packed<RegisterClass RC, X86MemOperand x86memop,
     def rri_alt : PIi8<0xC2, MRMSrcReg,
                (outs RC:$dst), (ins RC:$src1, RC:$src2, i8imm:$cc),
                asm_alt, [], itins.rr, d>, Sched<[WriteFAdd]>;
+    let mayLoad = 1 in
     def rmi_alt : PIi8<0xC2, MRMSrcMem,
                (outs RC:$dst), (ins RC:$src1, x86memop:$src2, i8imm:$cc),
                asm_alt, [], itins.rm, d>,
@@ -7241,13 +7242,13 @@ let Predicates = [HasAVX] in {
 
 let Predicates = [HasAVX2] in {
   let isCommutable = 0 in {
-  defm VPBLENDWY : SS41I_binop_rmi_int<0x0E, "vpblendw", int_x86_avx2_pblendw,
-                                  VR256, loadv4i64, i256mem, 0,
-                                  DEFAULT_ITINS_BLENDSCHED>, VEX_4V, VEX_L;
   defm VMPSADBWY : SS41I_binop_rmi_int<0x42, "vmpsadbw", int_x86_avx2_mpsadbw,
                                   VR256, loadv4i64, i256mem, 0,
                                   DEFAULT_ITINS_MPSADSCHED>, VEX_4V, VEX_L;
   }
+  defm VPBLENDWY : SS41I_binop_rmi_int<0x0E, "vpblendw", int_x86_avx2_pblendw,
+                                  VR256, loadv4i64, i256mem, 0,
+                                  DEFAULT_ITINS_BLENDSCHED>, VEX_4V, VEX_L;
 }
 
 let Constraints = "$src1 = $dst" in {

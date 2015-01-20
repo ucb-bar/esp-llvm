@@ -113,6 +113,14 @@ static void placeSplitBlockCarefully(BasicBlock *NewBB,
 BasicBlock *llvm::InsertPreheaderForLoop(Loop *L, Pass *PP) {
   BasicBlock *Header = L->getHeader();
 
+  // Get analyses that we try to update.
+  auto *AA = PP->getAnalysisIfAvailable<AliasAnalysis>();
+  auto *DTWP = PP->getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+  auto *DT = DTWP ? &DTWP->getDomTree() : nullptr;
+  auto *LIWP = PP->getAnalysisIfAvailable<LoopInfoWrapperPass>();
+  auto *LI = LIWP ? &LIWP->getLoopInfo() : nullptr;
+  bool PreserveLCSSA = PP->mustPreserveAnalysisID(LCSSAID);
+
   // Compute the set of predecessors of the loop that are not in the loop.
   SmallVector<BasicBlock*, 8> OutsideBlocks;
   for (pred_iterator PI = pred_begin(Header), PE = pred_end(Header);
@@ -133,11 +141,11 @@ BasicBlock *llvm::InsertPreheaderForLoop(Loop *L, Pass *PP) {
   BasicBlock *PreheaderBB;
   if (!Header->isLandingPad()) {
     PreheaderBB = SplitBlockPredecessors(Header, OutsideBlocks, ".preheader",
-                                         PP);
+                                         AA, DT, LI, PreserveLCSSA);
   } else {
     SmallVector<BasicBlock*, 2> NewBBs;
     SplitLandingPadPredecessors(Header, OutsideBlocks, ".preheader",
-                                ".split-lp", PP, NewBBs);
+                                ".split-lp", NewBBs, AA, DT, LI, PreserveLCSSA);
     PreheaderBB = NewBBs[0];
   }
 
@@ -157,7 +165,9 @@ BasicBlock *llvm::InsertPreheaderForLoop(Loop *L, Pass *PP) {
 ///
 /// This method is used to split exit blocks that have predecessors outside of
 /// the loop.
-static BasicBlock *rewriteLoopExitBlock(Loop *L, BasicBlock *Exit, Pass *PP) {
+static BasicBlock *rewriteLoopExitBlock(Loop *L, BasicBlock *Exit,
+                                        AliasAnalysis *AA, DominatorTree *DT,
+                                        LoopInfo *LI, Pass *PP) {
   SmallVector<BasicBlock*, 8> LoopBlocks;
   for (pred_iterator I = pred_begin(Exit), E = pred_end(Exit); I != E; ++I) {
     BasicBlock *P = *I;
@@ -172,14 +182,16 @@ static BasicBlock *rewriteLoopExitBlock(Loop *L, BasicBlock *Exit, Pass *PP) {
   assert(!LoopBlocks.empty() && "No edges coming in from outside the loop?");
   BasicBlock *NewExitBB = nullptr;
 
+  bool PreserveLCSSA = PP->mustPreserveAnalysisID(LCSSAID);
+
   if (Exit->isLandingPad()) {
     SmallVector<BasicBlock*, 2> NewBBs;
-    SplitLandingPadPredecessors(Exit, LoopBlocks,
-                                ".loopexit", ".nonloopexit",
-                                PP, NewBBs);
+    SplitLandingPadPredecessors(Exit, LoopBlocks, ".loopexit", ".nonloopexit",
+                                NewBBs, AA, DT, LI, PreserveLCSSA);
     NewExitBB = NewBBs[0];
   } else {
-    NewExitBB = SplitBlockPredecessors(Exit, LoopBlocks, ".loopexit", PP);
+    NewExitBB = SplitBlockPredecessors(Exit, LoopBlocks, ".loopexit", AA, DT,
+                                       LI, PreserveLCSSA);
   }
 
   DEBUG(dbgs() << "LoopSimplify: Creating dedicated exit block "
@@ -287,9 +299,11 @@ static Loop *separateNestedLoop(Loop *L, BasicBlock *Preheader,
   if (SE)
     SE->forgetLoop(L);
 
+  bool PreserveLCSSA = PP->mustPreserveAnalysisID(LCSSAID);
+
   BasicBlock *Header = L->getHeader();
-  BasicBlock *NewBB =
-    SplitBlockPredecessors(Header, OuterLoopPreds,  ".outer", PP);
+  BasicBlock *NewBB = SplitBlockPredecessors(Header, OuterLoopPreds, ".outer",
+                                             AA, DT, LI, PreserveLCSSA);
 
   // Make sure that NewBB is put someplace intelligent, which doesn't mess up
   // code layout too horribly.
@@ -460,7 +474,7 @@ static BasicBlock *insertUniqueBackedgeBlock(Loop *L, BasicBlock *Preheader,
 
   // Update Loop Information - we know that this block is now in the current
   // loop and all parent loops.
-  L->addBasicBlockToLoop(BEBlock, LI->getBase());
+  L->addBasicBlockToLoop(BEBlock, *LI);
 
   // Update dominator information
   DT->splitBlock(BEBlock);
@@ -567,7 +581,7 @@ ReprocessLoop:
       // Must be exactly this loop: no subloops, parent loops, or non-loop preds
       // allowed.
       if (!L->contains(*PI)) {
-        if (rewriteLoopExitBlock(L, ExitBlock, PP)) {
+        if (rewriteLoopExitBlock(L, ExitBlock, AA, DT, LI, PP)) {
           ++NumInserted;
           Changed = true;
         }
@@ -762,8 +776,8 @@ namespace {
       AU.addRequired<DominatorTreeWrapperPass>();
       AU.addPreserved<DominatorTreeWrapperPass>();
 
-      AU.addRequired<LoopInfo>();
-      AU.addPreserved<LoopInfo>();
+      AU.addRequired<LoopInfoWrapperPass>();
+      AU.addPreserved<LoopInfoWrapperPass>();
 
       AU.addPreserved<AliasAnalysis>();
       AU.addPreserved<ScalarEvolution>();
@@ -781,7 +795,7 @@ INITIALIZE_PASS_BEGIN(LoopSimplify, "loop-simplify",
                 "Canonicalize natural loops", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_END(LoopSimplify, "loop-simplify",
                 "Canonicalize natural loops", false, false)
 
@@ -795,7 +809,7 @@ Pass *llvm::createLoopSimplifyPass() { return new LoopSimplify(); }
 bool LoopSimplify::runOnFunction(Function &F) {
   bool Changed = false;
   AA = getAnalysisIfAvailable<AliasAnalysis>();
-  LI = &getAnalysis<LoopInfo>();
+  LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   SE = getAnalysisIfAvailable<ScalarEvolution>();
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();

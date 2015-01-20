@@ -98,15 +98,15 @@ static unsigned getGVAlignmentLog2(const GlobalValue *GV, const DataLayout &TD,
   return NumBits;
 }
 
-AsmPrinter::AsmPrinter(TargetMachine &tm, MCStreamer &Streamer)
+AsmPrinter::AsmPrinter(TargetMachine &tm, std::unique_ptr<MCStreamer> Streamer)
     : MachineFunctionPass(ID), TM(tm), MAI(tm.getMCAsmInfo()),
       MII(tm.getSubtargetImpl()->getInstrInfo()),
-      OutContext(Streamer.getContext()), OutStreamer(Streamer), LastMI(nullptr),
-      LastFn(0), Counter(~0U), SetCounter(0) {
+      OutContext(Streamer->getContext()), OutStreamer(*Streamer.release()),
+      LastMI(nullptr), LastFn(0), Counter(~0U), SetCounter(0) {
   DD = nullptr; MMI = nullptr; LI = nullptr; MF = nullptr;
   CurrentFnSym = CurrentFnSymForSize = nullptr;
   GCMetadataPrinters = nullptr;
-  VerboseAsm = Streamer.isVerboseAsm();
+  VerboseAsm = OutStreamer.isVerboseAsm();
 }
 
 AsmPrinter::~AsmPrinter() {
@@ -748,6 +748,16 @@ void AsmPrinter::emitCFIInstruction(const MachineInstr &MI) {
   emitCFIInstruction(CFI);
 }
 
+void AsmPrinter::emitFrameAlloc(const MachineInstr &MI) {
+  // The operands are the MCSymbol and the frame offset of the allocation.
+  MCSymbol *FrameAllocSym = MI.getOperand(0).getMCSymbol();
+  int FrameOffset = MI.getOperand(1).getImm();
+
+  // Emit a symbol assignment.
+  OutStreamer.EmitAssignment(FrameAllocSym,
+                             MCConstantExpr::Create(FrameOffset, OutContext));
+}
+
 /// EmitFunctionBody - This method emits the body and trailer for a
 /// function.
 void AsmPrinter::EmitFunctionBody() {
@@ -784,6 +794,10 @@ void AsmPrinter::EmitFunctionBody() {
       switch (MI.getOpcode()) {
       case TargetOpcode::CFI_INSTRUCTION:
         emitCFIInstruction(MI);
+        break;
+
+      case TargetOpcode::FRAME_ALLOC:
+        emitFrameAlloc(MI);
         break;
 
       case TargetOpcode::EH_LABEL:

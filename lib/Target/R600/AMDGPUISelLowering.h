@@ -129,6 +129,9 @@ public:
                              EVT ExtVT) const override;
 
   bool isLoadBitCastBeneficial(EVT, EVT) const override;
+  bool isCheapToSpeculateCttz() const override;
+  bool isCheapToSpeculateCtlz() const override;
+
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                       bool isVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
@@ -163,6 +166,14 @@ public:
                          SelectionDAG &DAG) const;
 
   const char* getTargetNodeName(unsigned Opcode) const override;
+
+  SDValue getRsqrtEstimate(SDValue Operand,
+                           DAGCombinerInfo &DCI,
+                           unsigned &RefinementSteps,
+                           bool &UseOneConstNR) const override;
+  SDValue getRecipEstimate(SDValue Operand,
+                           DAGCombinerInfo &DCI,
+                           unsigned &RefinementSteps) const override;
 
   virtual SDNode *PostISelFolding(MachineSDNode *N,
                                   SelectionDAG &DAG) const {

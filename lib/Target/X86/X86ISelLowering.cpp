@@ -5472,12 +5472,6 @@ static bool getTargetShuffleMask(SDNode *N, MVT VT,
       return false;
 
     if (auto *C = dyn_cast<Constant>(MaskCP->getConstVal())) {
-      // FIXME: Support AVX-512 here.
-      Type *Ty = C->getType();
-      if (!Ty->isVectorTy() || (Ty->getVectorNumElements() != 16 &&
-                                Ty->getVectorNumElements() != 32))
-        return false;
-
       DecodePSHUFBMask(C, Mask);
       break;
     }
@@ -9658,7 +9652,6 @@ static SDValue lowerV16I8VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
         V2InUse |= (ZeroMask != V2Idx);
       }
     }
-    assert((V1InUse || V2InUse) && "Shuffling to a zeroable vector");
 
     if (V1InUse)
       V1 = DAG.getNode(X86ISD::PSHUFB, DL, MVT::v16i8, V1,
@@ -9674,6 +9667,8 @@ static SDValue lowerV16I8VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
       return V1; // Single inputs are easy.
     if (V2InUse)
       return V2; // Single inputs are easy.
+    // Shuffling to a zeroable vector.
+    return getZeroVector(MVT::v16i8, Subtarget, DAG, DL);
   }
 
   // There are special ways we can lower some single-element blends.
@@ -10755,6 +10750,13 @@ static SDValue lowerV8F64VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
   ArrayRef<int> Mask = SVOp->getMask();
   assert(Mask.size() == 8 && "Unexpected mask size for v8 shuffle!");
 
+  // X86 has dedicated unpack instructions that can handle specific blend
+  // operations: UNPCKH and UNPCKL.
+  if (isShuffleEquivalent(Mask, 0, 8, 2, 10, 4, 12, 6, 14))
+    return DAG.getNode(X86ISD::UNPCKL, DL, MVT::v8f64, V1, V2);
+  if (isShuffleEquivalent(Mask, 1, 9, 3, 11, 5, 13, 7, 15))
+    return DAG.getNode(X86ISD::UNPCKH, DL, MVT::v8f64, V1, V2);
+
   // FIXME: Implement direct support for this type!
   return splitAndLowerVectorShuffle(DL, MVT::v8f64, V1, V2, Mask, DAG);
 }
@@ -10769,6 +10771,16 @@ static SDValue lowerV16F32VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
   ShuffleVectorSDNode *SVOp = cast<ShuffleVectorSDNode>(Op);
   ArrayRef<int> Mask = SVOp->getMask();
   assert(Mask.size() == 16 && "Unexpected mask size for v16 shuffle!");
+
+  // Use dedicated unpack instructions for masks that match their pattern.
+  if (isShuffleEquivalent(Mask,
+                          0, 16, 1, 17, 4, 20, 5, 21,
+                          8, 24, 9, 25, 12, 28, 13, 29))
+    return DAG.getNode(X86ISD::UNPCKL, DL, MVT::v16f32, V1, V2);
+  if (isShuffleEquivalent(Mask,
+                          2, 18, 3, 19, 6, 22, 7, 23,
+                          10, 26, 11, 27, 14, 30, 15, 31))
+    return DAG.getNode(X86ISD::UNPCKH, DL, MVT::v16f32, V1, V2);
 
   // FIXME: Implement direct support for this type!
   return splitAndLowerVectorShuffle(DL, MVT::v16f32, V1, V2, Mask, DAG);
@@ -10785,6 +10797,13 @@ static SDValue lowerV8I64VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
   ArrayRef<int> Mask = SVOp->getMask();
   assert(Mask.size() == 8 && "Unexpected mask size for v8 shuffle!");
 
+  // X86 has dedicated unpack instructions that can handle specific blend
+  // operations: UNPCKH and UNPCKL.
+  if (isShuffleEquivalent(Mask, 0, 8, 2, 10, 4, 12, 6, 14))
+    return DAG.getNode(X86ISD::UNPCKL, DL, MVT::v8i64, V1, V2);
+  if (isShuffleEquivalent(Mask, 1, 9, 3, 11, 5, 13, 7, 15))
+    return DAG.getNode(X86ISD::UNPCKH, DL, MVT::v8i64, V1, V2);
+
   // FIXME: Implement direct support for this type!
   return splitAndLowerVectorShuffle(DL, MVT::v8i64, V1, V2, Mask, DAG);
 }
@@ -10799,6 +10818,16 @@ static SDValue lowerV16I32VectorShuffle(SDValue Op, SDValue V1, SDValue V2,
   ShuffleVectorSDNode *SVOp = cast<ShuffleVectorSDNode>(Op);
   ArrayRef<int> Mask = SVOp->getMask();
   assert(Mask.size() == 16 && "Unexpected mask size for v16 shuffle!");
+
+  // Use dedicated unpack instructions for masks that match their pattern.
+  if (isShuffleEquivalent(Mask,
+                          0, 16, 1, 17, 4, 20, 5, 21,
+                          8, 24, 9, 25, 12, 28, 13, 29))
+    return DAG.getNode(X86ISD::UNPCKL, DL, MVT::v16i32, V1, V2);
+  if (isShuffleEquivalent(Mask,
+                          2, 18, 3, 19, 6, 22, 7, 23,
+                          10, 26, 11, 27, 14, 30, 15, 31))
+    return DAG.getNode(X86ISD::UNPCKH, DL, MVT::v16i32, V1, V2);
 
   // FIXME: Implement direct support for this type!
   return splitAndLowerVectorShuffle(DL, MVT::v16i32, V1, V2, Mask, DAG);
@@ -19664,6 +19693,22 @@ void X86TargetLowering::ReplaceNodeResults(SDNode *N,
   switch (N->getOpcode()) {
   default:
     llvm_unreachable("Do not know how to custom type legalize this operation!");
+  // We might have generated v2f32 FMIN/FMAX operations. Widen them to v4f32.
+  case X86ISD::FMINC:
+  case X86ISD::FMIN:
+  case X86ISD::FMAXC:
+  case X86ISD::FMAX: {
+    EVT VT = N->getValueType(0);
+    if (VT != MVT::v2f32)
+      llvm_unreachable("Unexpected type (!= v2f32) on FMIN/FMAX.");
+    SDValue UNDEF = DAG.getUNDEF(VT);
+    SDValue LHS = DAG.getNode(ISD::CONCAT_VECTORS, dl, MVT::v4f32,
+                              N->getOperand(0), UNDEF);
+    SDValue RHS = DAG.getNode(ISD::CONCAT_VECTORS, dl, MVT::v4f32,
+                              N->getOperand(1), UNDEF);
+    Results.push_back(DAG.getNode(N->getOpcode(), dl, MVT::v4f32, LHS, RHS));
+    return;
+  }
   case ISD::SIGN_EXTEND_INREG:
   case ISD::ADDC:
   case ISD::ADDE:
@@ -23083,8 +23128,9 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
   // instructions match the semantics of the common C idiom x<y?x:y but not
   // x<=y?x:y, because of how they handle negative zero (which can be
   // ignored in unsafe-math mode).
+  // We also try to create v2f32 min/max nodes, which we later widen to v4f32.
   if (Cond.getOpcode() == ISD::SETCC && VT.isFloatingPoint() &&
-      VT != MVT::f80 && TLI.isTypeLegal(VT) &&
+      VT != MVT::f80 && (TLI.isTypeLegal(VT) || VT == MVT::v2f32) &&
       (Subtarget->hasSSE2() ||
        (Subtarget->hasSSE1() && VT.getScalarType() == MVT::f32))) {
     ISD::CondCode CC = cast<CondCodeSDNode>(Cond.getOperand(2))->get();
@@ -25828,8 +25874,11 @@ SDValue X86TargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::FMA:            return PerformFMACombine(N, DAG, Subtarget);
   case ISD::INTRINSIC_WO_CHAIN:
     return PerformINTRINSIC_WO_CHAINCombine(N, DAG, Subtarget);
-  case X86ISD::INSERTPS:
-    return PerformINSERTPSCombine(N, DAG, Subtarget);
+  case X86ISD::INSERTPS: {
+    if (getTargetMachine().getOptLevel() > CodeGenOpt::None)
+      return PerformINSERTPSCombine(N, DAG, Subtarget);
+    break;
+  }
   case ISD::BUILD_VECTOR: return PerformBUILD_VECTORCombine(N, DAG, Subtarget);
   }
 
@@ -26255,9 +26304,34 @@ void X86TargetLowering::LowerAsmOperandForConstraint(SDValue Op,
       }
     }
     return;
+  case 'L':
+    if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op)) {
+      if (C->getZExtValue() == 0xff || C->getZExtValue() == 0xffff ||
+          (Subtarget->is64Bit() && C->getZExtValue() == 0xffffffff)) {
+        Result = DAG.getTargetConstant(C->getSExtValue(), Op.getValueType());
+        break;
+      }
+    }
+    return;
+  case 'M':
+    if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op)) {
+      if (C->getZExtValue() <= 3) {
+        Result = DAG.getTargetConstant(C->getZExtValue(), Op.getValueType());
+        break;
+      }
+    }
+    return;
   case 'N':
     if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op)) {
       if (C->getZExtValue() <= 255) {
+        Result = DAG.getTargetConstant(C->getZExtValue(), Op.getValueType());
+        break;
+      }
+    }
+    return;
+  case 'O':
+    if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op)) {
+      if (C->getZExtValue() <= 127) {
         Result = DAG.getTargetConstant(C->getZExtValue(), Op.getValueType());
         break;
       }

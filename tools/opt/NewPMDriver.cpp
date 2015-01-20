@@ -18,6 +18,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Bitcode/BitcodeWriterPass.h"
+#include "llvm/IR/Dominators.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -30,12 +31,16 @@
 using namespace llvm;
 using namespace opt_tool;
 
+static cl::opt<bool>
+    DebugPM("debug-pass-manager", cl::Hidden,
+            cl::desc("Print pass management debugging information"));
+
 bool llvm::runPassPipeline(StringRef Arg0, LLVMContext &Context, Module &M,
                            tool_output_file *Out, StringRef PassPipeline,
                            OutputKind OK, VerifierKind VK) {
-  FunctionAnalysisManager FAM;
-  CGSCCAnalysisManager CGAM;
-  ModuleAnalysisManager MAM;
+  FunctionAnalysisManager FAM(DebugPM);
+  CGSCCAnalysisManager CGAM(DebugPM);
+  ModuleAnalysisManager MAM(DebugPM);
 
   // Register all the basic analyses with the managers.
   registerModuleAnalyses(MAM);
@@ -50,11 +55,11 @@ bool llvm::runPassPipeline(StringRef Arg0, LLVMContext &Context, Module &M,
   FAM.registerPass(CGSCCAnalysisManagerFunctionProxy(CGAM));
   FAM.registerPass(ModuleAnalysisManagerFunctionProxy(MAM));
 
-  ModulePassManager MPM;
+  ModulePassManager MPM(DebugPM);
   if (VK > VK_NoVerifier)
     MPM.addPass(VerifierPass());
 
-  if (!parsePassPipeline(MPM, PassPipeline, VK == VK_VerifyEachPass)) {
+  if (!parsePassPipeline(MPM, PassPipeline, VK == VK_VerifyEachPass, DebugPM)) {
     errs() << Arg0 << ": unable to parse pass pipeline description.\n";
     return false;
   }

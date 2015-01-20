@@ -198,9 +198,14 @@ class Verifier : public InstVisitor<Verifier>, VerifierSupport {
   /// personality function.
   const Value *PersonalityFn;
 
+  /// \brief Whether we've seen a call to @llvm.frameallocate in this function
+  /// already.
+  bool SawFrameAllocate;
+
 public:
   explicit Verifier(raw_ostream &OS = dbgs())
-      : VerifierSupport(OS), Context(nullptr), PersonalityFn(nullptr) {}
+      : VerifierSupport(OS), Context(nullptr), PersonalityFn(nullptr),
+        SawFrameAllocate(false) {}
 
   bool verify(const Function &F) {
     M = F.getParent();
@@ -235,6 +240,7 @@ public:
     visit(const_cast<Function &>(F));
     InstsInThisBlock.clear();
     PersonalityFn = nullptr;
+    SawFrameAllocate = false;
 
     return !Broken;
   }
@@ -611,7 +617,7 @@ void Verifier::visitMDNode(MDNode &MD) {
   }
 
   // Check these last, so we diagnose problems in operands first.
-  Assert1(!isa<MDNodeFwdDecl>(MD), "Expected no forward declarations!", &MD);
+  Assert1(!MD.isTemporary(), "Expected no forward declarations!", &MD);
   Assert1(MD.isResolved(), "All nodes should be resolved!", &MD);
 }
 
@@ -1122,7 +1128,7 @@ void Verifier::visitFunction(const Function &F) {
 
     // Check the entry node
     const BasicBlock *Entry = &F.getEntryBlock();
-    Assert1(pred_begin(Entry) == pred_end(Entry),
+    Assert1(pred_empty(Entry),
             "Entry block to function must not have predecessors!", Entry);
 
     // The address of the entry block cannot be taken, unless it is dead.
@@ -2599,7 +2605,26 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
     Assert1(isa<ConstantInt>(CI.getArgOperand(1)),
             "llvm.invariant.end parameter #2 must be a constant integer", &CI);
     break;
- 
+
+  case Intrinsic::frameallocate: {
+    BasicBlock *BB = CI.getParent();
+    Assert1(BB == &BB->getParent()->front(),
+            "llvm.frameallocate used outside of entry block", &CI);
+    Assert1(!SawFrameAllocate,
+            "multiple calls to llvm.frameallocate in one function", &CI);
+    SawFrameAllocate = true;
+    Assert1(isa<ConstantInt>(CI.getArgOperand(0)),
+            "llvm.frameallocate argument must be constant integer size", &CI);
+    break;
+  }
+  case Intrinsic::framerecover: {
+    Value *FnArg = CI.getArgOperand(0)->stripPointerCasts();
+    Function *Fn = dyn_cast<Function>(FnArg);
+    Assert1(Fn && !Fn->isDeclaration(), "llvm.framerecover first "
+            "argument must be function defined in this module", &CI);
+    break;
+  }
+
   case Intrinsic::experimental_gc_statepoint: {
     Assert1(!CI.doesNotAccessMemory() &&
             !CI.onlyReadsMemory(),

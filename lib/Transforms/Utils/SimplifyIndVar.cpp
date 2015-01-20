@@ -48,22 +48,15 @@ namespace {
     Loop             *L;
     LoopInfo         *LI;
     ScalarEvolution  *SE;
-    const DataLayout *DL; // May be NULL
 
     SmallVectorImpl<WeakVH> &DeadInsts;
 
     bool Changed;
 
   public:
-    SimplifyIndvar(Loop *Loop, ScalarEvolution *SE, LPPassManager *LPM,
-                   SmallVectorImpl<WeakVH> &Dead, IVUsers *IVU = nullptr) :
-      L(Loop),
-      LI(LPM->getAnalysisIfAvailable<LoopInfo>()),
-      SE(SE),
-      DeadInsts(Dead),
-      Changed(false) {
-      DataLayoutPass *DLP = LPM->getAnalysisIfAvailable<DataLayoutPass>();
-      DL = DLP ? &DLP->getDataLayout() : nullptr;
+    SimplifyIndvar(Loop *Loop, ScalarEvolution *SE, LoopInfo *LI,
+                   SmallVectorImpl<WeakVH> &Dead, IVUsers *IVU = nullptr)
+        : L(Loop), LI(LI), SE(SE), DeadInsts(Dead), Changed(false) {
       assert(LI && "IV simplification requires LoopInfo");
     }
 
@@ -278,9 +271,8 @@ bool SimplifyIndvar::strengthenOverflowingOperation(BinaryOperator *BO,
                                                     Value *IVOperand) {
 
   // Currently we only handle instructions of the form "add <indvar> <value>"
-  // and "sub <indvar> <value>".
   unsigned Op = BO->getOpcode();
-  if (!(Op == Instruction::Add || Op == Instruction::Sub))
+  if (Op != Instruction::Add)
     return false;
 
   // If BO is already both nuw and nsw then there is nothing left to do
@@ -289,29 +281,17 @@ bool SimplifyIndvar::strengthenOverflowingOperation(BinaryOperator *BO,
 
   IntegerType *IT = cast<IntegerType>(IVOperand->getType());
   Value *OtherOperand = nullptr;
-  int OtherOperandIdx = -1;
   if (BO->getOperand(0) == IVOperand) {
     OtherOperand = BO->getOperand(1);
-    OtherOperandIdx = 1;
   } else {
     assert(BO->getOperand(1) == IVOperand && "only other use!");
     OtherOperand = BO->getOperand(0);
-    OtherOperandIdx = 0;
   }
 
   bool Changed = false;
   const SCEV *OtherOpSCEV = SE->getSCEV(OtherOperand);
   if (OtherOpSCEV == SE->getCouldNotCompute())
     return false;
-
-  if (Op == Instruction::Sub) {
-    // If the subtraction is of the form "sub <indvar>, <op>", then pretend it
-    // is "add <indvar>, -<op>" and continue, else bail out.
-    if (OtherOperandIdx != 1)
-      return false;
-
-    OtherOpSCEV = SE->getNegativeSCEV(OtherOpSCEV);
-  }
 
   const SCEV *IVOpSCEV = SE->getSCEV(IVOperand);
   const SCEV *ZeroSCEV = SE->getConstant(IVOpSCEV->getType(), 0);
@@ -575,8 +555,8 @@ void IVVisitor::anchor() { }
 bool simplifyUsersOfIV(PHINode *CurrIV, ScalarEvolution *SE, LPPassManager *LPM,
                        SmallVectorImpl<WeakVH> &Dead, IVVisitor *V)
 {
-  LoopInfo *LI = &LPM->getAnalysis<LoopInfo>();
-  SimplifyIndvar SIV(LI->getLoopFor(CurrIV->getParent()), SE, LPM, Dead);
+  LoopInfo *LI = &LPM->getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+  SimplifyIndvar SIV(LI->getLoopFor(CurrIV->getParent()), SE, LI, Dead);
   SIV.simplifyUsers(CurrIV, V);
   return SIV.hasChanged();
 }

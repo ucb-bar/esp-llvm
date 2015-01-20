@@ -55,7 +55,7 @@
 #include "llvm/IR/ValueHandle.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/TargetLibraryInfo.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include <algorithm>
 #include <climits>
@@ -85,7 +85,7 @@ char InstCombiner::ID = 0;
 INITIALIZE_PASS_BEGIN(InstCombiner, "instcombine",
                 "Combine redundant instructions", false, false)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfo)
+INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_END(InstCombiner, "instcombine",
                 "Combine redundant instructions", false, false)
@@ -93,7 +93,7 @@ INITIALIZE_PASS_END(InstCombiner, "instcombine",
 void InstCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addRequired<AssumptionCacheTracker>();
-  AU.addRequired<TargetLibraryInfo>();
+  AU.addRequired<TargetLibraryInfoWrapperPass>();
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addPreserved<DominatorTreeWrapperPass>();
 }
@@ -799,8 +799,7 @@ Instruction *InstCombiner::FoldOpIntoPhi(Instruction &I) {
     // If the incoming non-constant value is in I's block, we will remove one
     // instruction, but insert another equivalent one, leading to infinite
     // instcombine.
-    if (isPotentiallyReachable(I.getParent(), NonConstBB, DT,
-                               getAnalysisIfAvailable<LoopInfo>()))
+    if (isPotentiallyReachable(I.getParent(), NonConstBB, DT, LI))
       return nullptr;
   }
 
@@ -2974,7 +2973,9 @@ bool InstCombiner::runOnFunction(Function &F) {
   DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
   DL = DLP ? &DLP->getDataLayout() : nullptr;
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
-  TLI = &getAnalysis<TargetLibraryInfo>();
+  auto *LIWP = getAnalysisIfAvailable<LoopInfoWrapperPass>();
+  LI = LIWP ? &LIWP->getLoopInfo() : nullptr;
+  TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
 
   // Minimizing size?
   MinimizeSize = F.getAttributes().hasAttribute(AttributeSet::FunctionIndex,

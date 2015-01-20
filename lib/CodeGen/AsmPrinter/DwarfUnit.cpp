@@ -12,10 +12,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "DwarfUnit.h"
-
 #include "DwarfAccelTable.h"
 #include "DwarfCompileUnit.h"
 #include "DwarfDebug.h"
+#include "DwarfExpression.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
@@ -42,6 +42,20 @@ static cl::opt<bool>
 GenerateDwarfTypeUnits("generate-type-units", cl::Hidden,
                        cl::desc("Generate DWARF4 type units."),
                        cl::init(false));
+
+void DIEDwarfExpression::EmitOp(uint8_t Op, const char* Comment) {
+  DU.addUInt(DIE, dwarf::DW_FORM_data1, Op);
+}
+void DIEDwarfExpression::EmitSigned(int Value) {
+  DU.addSInt(DIE, dwarf::DW_FORM_sdata, Value);
+}
+void DIEDwarfExpression::EmitUnsigned(unsigned Value) {
+  DU.addUInt(DIE, dwarf::DW_FORM_udata, Value);
+}
+bool DIEDwarfExpression::isFrameRegister(unsigned MachineReg) {
+  return MachineReg == getTRI()->getFrameRegister(*AP.MF);
+}
+
 
 /// Unit - Unit constructor.
 DwarfUnit::DwarfUnit(unsigned UID, dwarf::Tag UnitTag, DICompileUnit Node,
@@ -399,86 +413,18 @@ void DwarfUnit::addSourceLine(DIE &Die, DINameSpace NS) {
 }
 
 /// addRegisterOp - Add register operand.
-// FIXME: Ideally, this would share the implementation with
-// AsmPrinter::EmitDwarfRegOpPiece.
 bool DwarfUnit::addRegisterOpPiece(DIELoc &TheDie, unsigned Reg,
                                    unsigned SizeInBits, unsigned OffsetInBits) {
-  const TargetRegisterInfo *RI = Asm->TM.getSubtargetImpl()->getRegisterInfo();
-  int DWReg = RI->getDwarfRegNum(Reg, false);
-  bool isSubRegister = DWReg < 0;
-
-  unsigned Idx = 0;
-
-  // Go up the super-register chain until we hit a valid dwarf register number.
-  for (MCSuperRegIterator SR(Reg, RI); SR.isValid() && DWReg < 0; ++SR) {
-    DWReg = RI->getDwarfRegNum(*SR, false);
-    if (DWReg >= 0)
-      Idx = RI->getSubRegIndex(*SR, Reg);
-  }
-
-  if (DWReg < 0)
-    return false;
-
-  // Emit register.
-  if (DWReg < 32)
-    addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_reg0 + DWReg);
-  else {
-    addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_regx);
-    addUInt(TheDie, dwarf::DW_FORM_udata, DWReg);
-  }
-
-  // Emit mask.
-  bool isPiece = SizeInBits > 0;
-  if (isSubRegister || isPiece) {
-    const unsigned SizeOfByte = 8;
-    unsigned RegSizeInBits = RI->getSubRegIdxSize(Idx);
-    unsigned RegOffsetInBits = RI->getSubRegIdxOffset(Idx);
-    unsigned PieceSizeInBits = std::max(SizeInBits, RegSizeInBits);
-    unsigned PieceOffsetInBits = OffsetInBits ? OffsetInBits : RegOffsetInBits;
-    assert(RegSizeInBits >= SizeInBits && "register smaller than value");
-
-    if (RegOffsetInBits != PieceOffsetInBits) {
-      // Manually shift the value into place, since the DW_OP_piece
-      // describes the part of the variable, not the position of the
-      // subregister.
-      addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_constu);
-      addUInt(TheDie, dwarf::DW_FORM_data1, RegOffsetInBits);
-      addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_shr);
-    }
-
-    if (PieceOffsetInBits > 0 || PieceSizeInBits % SizeOfByte) {
-      assert(PieceSizeInBits > 0 && "piece has zero size");
-      addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_bit_piece);
-      addUInt(TheDie, dwarf::DW_FORM_data1, PieceSizeInBits);
-      addUInt(TheDie, dwarf::DW_FORM_data1, PieceOffsetInBits);
-     } else {
-      assert(PieceSizeInBits > 0 && "piece has zero size");
-      addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_piece);
-      addUInt(TheDie, dwarf::DW_FORM_data1, PieceSizeInBits/SizeOfByte);
-    }
-  }
+  DIEDwarfExpression Expr(*Asm, *this, TheDie);
+  Expr.AddMachineRegPiece(Reg, SizeInBits, OffsetInBits);
   return true;
 }
 
 /// addRegisterOffset - Add register offset.
 bool DwarfUnit::addRegisterOffset(DIELoc &TheDie, unsigned Reg,
                                   int64_t Offset) {
-  const TargetRegisterInfo *TRI = Asm->TM.getSubtargetImpl()->getRegisterInfo();
-  int DWReg = TRI->getDwarfRegNum(Reg, false);
-  if (DWReg < 0)
-    return false;
-
-  if (Reg == TRI->getFrameRegister(*Asm->MF))
-    // If variable offset is based in frame register then use fbreg.
-    addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_fbreg);
-  else if (DWReg < 32)
-    addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_breg0 + DWReg);
-  else {
-    addUInt(TheDie, dwarf::DW_FORM_data1, dwarf::DW_OP_bregx);
-    addUInt(TheDie, dwarf::DW_FORM_udata, DWReg);
-  }
-  addSInt(TheDie, dwarf::DW_FORM_sdata, Offset);
-  return true;
+  DIEDwarfExpression Expr(*Asm, *this, TheDie);
+  return Expr.AddMachineRegIndirect(Reg, Offset);
 }
 
 /* Byref variables, in Blocks, are declared by the programmer as "SomeType

@@ -27,11 +27,47 @@ class TargetLibraryInfo;
 class BasicBlock;
 class Function;
 
+/// \brief This class implements simplifications for calls to fortified library
+/// functions (__st*cpy_chk, __memcpy_chk, __memmove_chk, __memset_chk), to,
+/// when possible, replace them with their non-checking counterparts.
+/// Other optimizations can also be done, but it's possible to disable them and
+/// only simplify needless use of the checking versions (when the object size
+/// is unknown) by passing true for OnlyLowerUnknownSize.
+class FortifiedLibCallSimplifier {
+private:
+  const DataLayout *DL;
+  const TargetLibraryInfo *TLI;
+  bool OnlyLowerUnknownSize;
+
+public:
+  FortifiedLibCallSimplifier(const DataLayout *DL, const TargetLibraryInfo *TLI,
+                             bool OnlyLowerUnknownSize = false);
+
+  /// \brief Take the given call instruction and return a more
+  /// optimal value to replace the instruction with or 0 if a more
+  /// optimal form can't be found.
+  /// The call must not be an indirect call.
+  Value *optimizeCall(CallInst *CI);
+
+private:
+  Value *optimizeMemCpyChk(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeMemMoveChk(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeMemSetChk(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeStrCpyChk(CallInst *CI, IRBuilder<> &B);
+  Value *optimizeStrNCpyChk(CallInst *CI, IRBuilder<> &B);
+
+  /// \brief Checks whether the call \p CI to a fortified libcall is foldable
+  /// to the non-fortified version.
+  bool isFortifiedCallFoldable(CallInst *CI, unsigned ObjSizeOp,
+                               unsigned SizeOp, bool isString);
+};
+
 /// LibCallSimplifier - This class implements a collection of optimizations
 /// that replace well formed calls to library functions with a more optimal
 /// form.  For example, replacing 'printf("Hello!")' with 'puts("Hello!")'.
 class LibCallSimplifier {
 private:
+  FortifiedLibCallSimplifier FortifiedSimplifier;
   const DataLayout *DL;
   const TargetLibraryInfo *TLI;
   bool UnsafeFPShrink;
@@ -48,6 +84,7 @@ public:
   /// be equal to the instruction being optimized.  In this case all
   /// other instructions that use the given instruction were modified
   /// and the given instruction is dead.
+  /// The call must not be an indirect call.
   Value *optimizeCall(CallInst *CI);
 
   /// replaceAllUsesWith - This method is used when the library call
@@ -56,14 +93,6 @@ public:
   virtual void replaceAllUsesWith(Instruction *I, Value *With) const;
 
 private:
-  // Fortified Library Call Optimizations
-  Value *optimizeMemCpyChk(CallInst *CI, IRBuilder<> &B);
-  Value *optimizeMemMoveChk(CallInst *CI, IRBuilder<> &B);
-  Value *optimizeMemSetChk(CallInst *CI, IRBuilder<> &B);
-  Value *optimizeStrCpyChk(CallInst *CI, IRBuilder<> &B);
-  Value *optimizeStpCpyChk(CallInst *CI, IRBuilder<> &B);
-  Value *optimizeStrNCpyChk(CallInst *CI, IRBuilder<> &B);
-
   // String and Memory Library Call Optimizations
   Value *optimizeStrCat(CallInst *CI, IRBuilder<> &B);
   Value *optimizeStrNCat(CallInst *CI, IRBuilder<> &B);
@@ -84,6 +113,8 @@ private:
   Value *optimizeMemCpy(CallInst *CI, IRBuilder<> &B);
   Value *optimizeMemMove(CallInst *CI, IRBuilder<> &B);
   Value *optimizeMemSet(CallInst *CI, IRBuilder<> &B);
+  // Wrapper for all String/Memory Library Call Optimizations
+  Value *optimizeStringMemoryLibCall(CallInst *CI, IRBuilder<> &B);
 
   // Math Library Optimizations
   Value *optimizeUnaryDoubleFP(CallInst *CI, IRBuilder<> &B, bool CheckRetType);

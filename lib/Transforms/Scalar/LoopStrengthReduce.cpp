@@ -4728,12 +4728,14 @@ void LSRInstance::RewriteForPHI(PHINode *PN,
           // Split the critical edge.
           BasicBlock *NewBB = nullptr;
           if (!Parent->isLandingPad()) {
-            NewBB = SplitCriticalEdge(BB, Parent, P,
-                                      /*MergeIdenticalEdges=*/true,
-                                      /*DontDeleteUselessPhis=*/true);
+            NewBB = SplitCriticalEdge(BB, Parent,
+                                      CriticalEdgeSplittingOptions(&DT, &LI)
+                                          .setMergeIdenticalEdges()
+                                          .setDontDeleteUselessPHIs());
           } else {
             SmallVector<BasicBlock*, 2> NewBBs;
-            SplitLandingPadPredecessors(Parent, BB, "", "", P, NewBBs);
+            SplitLandingPadPredecessors(Parent, BB, "", "", NewBBs,
+                                        /*AliasAnalysis*/ nullptr, &DT, &LI);
             NewBB = NewBBs[0];
           }
           // If NewBB==NULL, then SplitCriticalEdge refused to split because all
@@ -4863,7 +4865,7 @@ LSRInstance::ImplementSolution(const SmallVectorImpl<const Formula *> &Solution,
 LSRInstance::LSRInstance(Loop *L, Pass *P)
     : IU(P->getAnalysis<IVUsers>()), SE(P->getAnalysis<ScalarEvolution>()),
       DT(P->getAnalysis<DominatorTreeWrapperPass>().getDomTree()),
-      LI(P->getAnalysis<LoopInfo>()),
+      LI(P->getAnalysis<LoopInfoWrapperPass>().getLoopInfo()),
       TTI(P->getAnalysis<TargetTransformInfo>()), L(L), Changed(false),
       IVIncInsertPos(nullptr) {
   // If LoopSimplify form is not available, stay out of trouble.
@@ -5045,7 +5047,7 @@ INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
 INITIALIZE_PASS_DEPENDENCY(IVUsers)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
 INITIALIZE_PASS_END(LoopStrengthReduce, "loop-reduce",
                 "Loop Strength Reduction", false, false)
@@ -5064,8 +5066,8 @@ void LoopStrengthReduce::getAnalysisUsage(AnalysisUsage &AU) const {
   // many analyses if they are around.
   AU.addPreservedID(LoopSimplifyID);
 
-  AU.addRequired<LoopInfo>();
-  AU.addPreserved<LoopInfo>();
+  AU.addRequired<LoopInfoWrapperPass>();
+  AU.addPreserved<LoopInfoWrapperPass>();
   AU.addRequiredID(LoopSimplifyID);
   AU.addRequired<DominatorTreeWrapperPass>();
   AU.addPreserved<DominatorTreeWrapperPass>();

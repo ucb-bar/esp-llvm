@@ -56,8 +56,8 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<AssumptionCacheTracker>();
       AU.addPreserved<DominatorTreeWrapperPass>();
-      AU.addRequired<LoopInfo>();
-      AU.addPreserved<LoopInfo>();
+      AU.addRequired<LoopInfoWrapperPass>();
+      AU.addPreserved<LoopInfoWrapperPass>();
       AU.addRequiredID(LoopSimplifyID);
       AU.addPreservedID(LoopSimplifyID);
       AU.addRequiredID(LCSSAID);
@@ -75,6 +75,7 @@ namespace {
     LoopInfo *LI;
     const TargetTransformInfo *TTI;
     AssumptionCache *AC;
+    DominatorTree *DT;
   };
 }
 
@@ -82,7 +83,7 @@ char LoopRotate::ID = 0;
 INITIALIZE_PASS_BEGIN(LoopRotate, "loop-rotate", "Rotate Loops", false, false)
 INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
-INITIALIZE_PASS_DEPENDENCY(LoopInfo)
+INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
 INITIALIZE_PASS_DEPENDENCY(LCSSA)
 INITIALIZE_PASS_END(LoopRotate, "loop-rotate", "Rotate Loops", false, false)
@@ -100,10 +101,12 @@ bool LoopRotate::runOnLoop(Loop *L, LPPassManager &LPM) {
   // Save the loop metadata.
   MDNode *LoopMD = L->getLoopID();
 
-  LI = &getAnalysis<LoopInfo>();
+  LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   TTI = &getAnalysis<TargetTransformInfo>();
   AC = &getAnalysis<AssumptionCacheTracker>().getAssumptionCache(
       *L->getHeader()->getParent());
+  auto *DTWP = getAnalysisIfAvailable<DominatorTreeWrapperPass>();
+  DT = DTWP ? &DTWP->getDomTree() : nullptr;
 
   // Simplify the loop latch before attempting to rotate the header
   // upward. Rotation may not be needed if the loop tail can be folded into the
@@ -308,9 +311,8 @@ bool LoopRotate::simplifyLoopLatch(Loop *L) {
   // Nuke the Latch block.
   assert(Latch->empty() && "unable to evacuate Latch");
   LI->removeBlock(Latch);
-  if (DominatorTreeWrapperPass *DTWP =
-          getAnalysisIfAvailable<DominatorTreeWrapperPass>())
-    DTWP->getDomTree().eraseNode(Latch);
+  if (DT)
+    DT->eraseNode(Latch);
   Latch->eraseFromParent();
   return true;
 }
@@ -495,31 +497,31 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
     // The conditional branch can't be folded, handle the general case.
     // Update DominatorTree to reflect the CFG change we just made.  Then split
     // edges as necessary to preserve LoopSimplify form.
-    if (DominatorTreeWrapperPass *DTWP =
-            getAnalysisIfAvailable<DominatorTreeWrapperPass>()) {
-      DominatorTree &DT = DTWP->getDomTree();
+    if (DT) {
       // Everything that was dominated by the old loop header is now dominated
       // by the original loop preheader. Conceptually the header was merged
       // into the preheader, even though we reuse the actual block as a new
       // loop latch.
-      DomTreeNode *OrigHeaderNode = DT.getNode(OrigHeader);
+      DomTreeNode *OrigHeaderNode = DT->getNode(OrigHeader);
       SmallVector<DomTreeNode *, 8> HeaderChildren(OrigHeaderNode->begin(),
                                                    OrigHeaderNode->end());
-      DomTreeNode *OrigPreheaderNode = DT.getNode(OrigPreheader);
+      DomTreeNode *OrigPreheaderNode = DT->getNode(OrigPreheader);
       for (unsigned I = 0, E = HeaderChildren.size(); I != E; ++I)
-        DT.changeImmediateDominator(HeaderChildren[I], OrigPreheaderNode);
+        DT->changeImmediateDominator(HeaderChildren[I], OrigPreheaderNode);
 
-      assert(DT.getNode(Exit)->getIDom() == OrigPreheaderNode);
-      assert(DT.getNode(NewHeader)->getIDom() == OrigPreheaderNode);
+      assert(DT->getNode(Exit)->getIDom() == OrigPreheaderNode);
+      assert(DT->getNode(NewHeader)->getIDom() == OrigPreheaderNode);
 
       // Update OrigHeader to be dominated by the new header block.
-      DT.changeImmediateDominator(OrigHeader, OrigLatch);
+      DT->changeImmediateDominator(OrigHeader, OrigLatch);
     }
 
     // Right now OrigPreHeader has two successors, NewHeader and ExitBlock, and
     // thus is not a preheader anymore.
     // Split the edge to form a real preheader.
-    BasicBlock *NewPH = SplitCriticalEdge(OrigPreheader, NewHeader, this);
+    BasicBlock *NewPH = SplitCriticalEdge(
+        OrigPreheader, NewHeader,
+        CriticalEdgeSplittingOptions(DT, LI).setPreserveLCSSA());
     NewPH->setName(NewHeader->getName() + ".lr.ph");
 
     // Preserve canonical loop form, which means that 'Exit' should have only
@@ -536,7 +538,8 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
       if (!PredLoop || PredLoop->contains(Exit))
         continue;
       SplitLatchEdge |= L->getLoopLatch() == *PI;
-      BasicBlock *ExitSplit = SplitCriticalEdge(*PI, Exit, this);
+      BasicBlock *ExitSplit = SplitCriticalEdge(
+          *PI, Exit, CriticalEdgeSplittingOptions(DT, LI).setPreserveLCSSA());
       ExitSplit->moveBefore(Exit);
     }
     assert(SplitLatchEdge &&
@@ -550,17 +553,15 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
     PHBI->eraseFromParent();
 
     // With our CFG finalized, update DomTree if it is available.
-    if (DominatorTreeWrapperPass *DTWP =
-            getAnalysisIfAvailable<DominatorTreeWrapperPass>()) {
-      DominatorTree &DT = DTWP->getDomTree();
+    if (DT) {
       // Update OrigHeader to be dominated by the new header block.
-      DT.changeImmediateDominator(NewHeader, OrigPreheader);
-      DT.changeImmediateDominator(OrigHeader, OrigLatch);
+      DT->changeImmediateDominator(NewHeader, OrigPreheader);
+      DT->changeImmediateDominator(OrigHeader, OrigLatch);
 
       // Brute force incremental dominator tree update. Call
       // findNearestCommonDominator on all CFG predecessors of each child of the
       // original header.
-      DomTreeNode *OrigHeaderNode = DT.getNode(OrigHeader);
+      DomTreeNode *OrigHeaderNode = DT->getNode(OrigHeader);
       SmallVector<DomTreeNode *, 8> HeaderChildren(OrigHeaderNode->begin(),
                                                    OrigHeaderNode->end());
       bool Changed;
@@ -573,11 +574,11 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
           pred_iterator PI = pred_begin(BB);
           BasicBlock *NearestDom = *PI;
           for (pred_iterator PE = pred_end(BB); PI != PE; ++PI)
-            NearestDom = DT.findNearestCommonDominator(NearestDom, *PI);
+            NearestDom = DT->findNearestCommonDominator(NearestDom, *PI);
 
           // Remember if this changes the DomTree.
           if (Node->getIDom()->getBlock() != NearestDom) {
-            DT.changeImmediateDominator(BB, NearestDom);
+            DT->changeImmediateDominator(BB, NearestDom);
             Changed = true;
           }
         }
@@ -595,7 +596,7 @@ bool LoopRotate::rotateLoop(Loop *L, bool SimplifiedLatch) {
   // the OrigHeader block into OrigLatch.  This will succeed if they are
   // connected by an unconditional branch.  This is just a cleanup so the
   // emitted code isn't too gross in this common case.
-  MergeBlockIntoPredecessor(OrigHeader, this);
+  MergeBlockIntoPredecessor(OrigHeader, DT, LI);
 
   DEBUG(dbgs() << "LoopRotation: into "; L->dump());
 

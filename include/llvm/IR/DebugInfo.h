@@ -18,10 +18,10 @@
 #define LLVM_IR_DEBUGINFO_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Dwarf.h"
@@ -138,9 +138,8 @@ public:
     FlagObjectPointer     = 1 << 10,
     FlagVector            = 1 << 11,
     FlagStaticMember      = 1 << 12,
-    FlagIndirectVariable  = 1 << 13,
-    FlagLValueReference   = 1 << 14,
-    FlagRValueReference   = 1 << 15
+    FlagLValueReference   = 1 << 13,
+    FlagRValueReference   = 1 << 14
   };
 
 protected:
@@ -816,11 +815,6 @@ public:
     return (getHeaderFieldAs<unsigned>(3) & FlagObjectPointer) != 0;
   }
 
-  /// \brief Return true if this variable is represented as a pointer.
-  bool isIndirect() const {
-    return (getHeaderFieldAs<unsigned>(3) & FlagIndirectVariable) != 0;
-  }
-
   /// \brief If this variable is inlined then return inline location.
   MDNode *getInlinedAt() const;
 
@@ -877,10 +871,26 @@ class DILocation : public DIDescriptor {
 public:
   explicit DILocation(const MDNode *N) : DIDescriptor(N) {}
 
-  unsigned getLineNumber() const { return getUnsignedField(0); }
-  unsigned getColumnNumber() const { return getUnsignedField(1); }
-  DIScope getScope() const { return getFieldAs<DIScope>(2); }
-  DILocation getOrigLocation() const { return getFieldAs<DILocation>(3); }
+  unsigned getLineNumber() const {
+    if (auto *L = dyn_cast_or_null<MDLocation>(DbgNode))
+      return L->getLine();
+    return 0;
+  }
+  unsigned getColumnNumber() const {
+    if (auto *L = dyn_cast_or_null<MDLocation>(DbgNode))
+      return L->getColumn();
+    return 0;
+  }
+  DIScope getScope() const {
+    if (auto *L = dyn_cast_or_null<MDLocation>(DbgNode))
+      return DIScope(dyn_cast_or_null<MDNode>(L->getScope()));
+    return DIScope(nullptr);
+  }
+  DILocation getOrigLocation() const {
+    if (auto *L = dyn_cast_or_null<MDLocation>(DbgNode))
+      return DILocation(dyn_cast_or_null<MDNode>(L->getInlinedAt()));
+    return DILocation(nullptr);
+  }
   StringRef getFilename() const { return getScope().getFilename(); }
   StringRef getDirectory() const { return getScope().getDirectory(); }
   bool Verify() const;
@@ -901,7 +911,9 @@ public:
     // sure this location is a lexical block before retrieving its
     // value.
     return getScope().isLexicalBlockFile()
-               ? getFieldAs<DILexicalBlockFile>(2).getDiscriminator()
+               ? DILexicalBlockFile(
+                     cast<MDNode>(cast<MDLocation>(DbgNode)->getScope()))
+                     .getDiscriminator()
                : 0;
   }
 

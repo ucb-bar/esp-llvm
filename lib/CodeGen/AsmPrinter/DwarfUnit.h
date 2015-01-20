@@ -22,9 +22,9 @@
 #include "llvm/CodeGen/DIE.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DebugInfo.h"
+#include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCSection.h"
-#include "llvm/MC/MCDwarf.h"
 
 namespace llvm {
 
@@ -138,6 +138,7 @@ public:
   }
 
   // Accessors.
+  AsmPrinter* getAsmPrinter() const { return Asm; }
   unsigned getUniqueID() const { return UniqueID; }
   uint16_t getLanguage() const { return CUNode.getLanguage(); }
   DICompileUnit getCUNode() const { return CUNode; }

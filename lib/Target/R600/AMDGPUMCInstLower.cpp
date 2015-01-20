@@ -22,6 +22,7 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
@@ -39,47 +40,23 @@ AMDGPUMCInstLower::AMDGPUMCInstLower(MCContext &ctx, const AMDGPUSubtarget &st):
   Ctx(ctx), ST(st)
 { }
 
-enum AMDGPUMCInstLower::SISubtarget
-AMDGPUMCInstLower::AMDGPUSubtargetToSISubtarget(unsigned Gen) const {
-  switch (Gen) {
-  default:
-    return AMDGPUMCInstLower::SI;
-  case AMDGPUSubtarget::VOLCANIC_ISLANDS:
-    return AMDGPUMCInstLower::VI;
-  }
-}
-
-unsigned AMDGPUMCInstLower::getMCOpcode(unsigned MIOpcode) const {
-
-  int MCOpcode = AMDGPU::getMCOpcode(MIOpcode,
-                              AMDGPUSubtargetToSISubtarget(ST.getGeneration()));
-  if (MCOpcode == -1)
-    MCOpcode = MIOpcode;
-
-  return MCOpcode;
-}
-
 void AMDGPUMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
 
-  OutMI.setOpcode(getMCOpcode(MI->getOpcode()));
+  int MCOpcode = ST.getInstrInfo()->pseudoToMCOpcode(MI->getOpcode());
+
+  if (MCOpcode == -1) {
+    LLVMContext &C = MI->getParent()->getParent()->getFunction()->getContext();
+    C.emitError("AMDGPUMCInstLower::lower - Pseudo instruction doesn't have "
+                "a target-specific version: " + Twine(MI->getOpcode()));
+  }
+
+  OutMI.setOpcode(MCOpcode);
 
   for (const MachineOperand &MO : MI->explicit_operands()) {
     MCOperand MCOp;
     switch (MO.getType()) {
     default:
       llvm_unreachable("unknown operand type");
-    case MachineOperand::MO_FPImmediate: {
-      const APFloat &FloatValue = MO.getFPImm()->getValueAPF();
-
-      if (&FloatValue.getSemantics() == &APFloat::IEEEsingle)
-        MCOp = MCOperand::CreateFPImm(FloatValue.convertToFloat());
-      else if (&FloatValue.getSemantics() == &APFloat::IEEEdouble)
-        MCOp = MCOperand::CreateFPImm(FloatValue.convertToDouble());
-      else
-        llvm_unreachable("Unhandled floating point type");
-
-      break;
-    }
     case MachineOperand::MO_Immediate:
       MCOp = MCOperand::CreateImm(MO.getImm());
       break;
