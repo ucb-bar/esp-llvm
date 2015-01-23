@@ -83,6 +83,8 @@
 
 # CHECK64: addi      x2, x0, 0             # encoding: [0x13,0x01,0x00,0x00]
 
+# CHECK64: jalr      x28, x27, 8           # encoding: [0x67,0x8e,0x8d,0x00]
+
 # CHECK64: fence
 # CHECK64: fence.i                         # encoding: [0x0f,0x10,0x00,0x00]
 

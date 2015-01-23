@@ -70,7 +70,10 @@
 # CHECK32: sll     x24, x23, x22           # encoding: [0x33,0x9c,0x6b,0x01]
 # CHECK32: srl     x25, x24, x23           # encoding: [0xb3,0x5c,0x7c,0x01]
 # CHECK32: sra     x26, x25, x24           # encoding: [0x33,0xdd,0x8c,0x41]
+
 # CHECK32: addi    x2, x0, 0               # encoding: [0x13,0x01,0x00,0x00]
+
+# CHECK32: jalr    x28, x27, 8             # encoding: [0x67,0x8e,0x8d,0x00]
 
 # CHECK32: fence
 # CHECK32: fence.i                         # encoding: [0x0f,0x10,0x00,0x00]
