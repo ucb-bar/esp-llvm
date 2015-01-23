@@ -72,6 +72,18 @@
 # CHECK32: sra     x26, x25, x24           # encoding: [0x33,0xdd,0x8c,0x41]
 # CHECK32: addi    x2, x0, 0               # encoding: [0x13,0x01,0x00,0x00]
 
+# CHECK32: fence
+# CHECK32: fence.i                         # encoding: [0x0f,0x10,0x00,0x00]
+
+# CHECK32: scall                           # encoding: [0x73,0x00,0x00,0x00]
+# CHECK32: sbreak                          # encoding: [0x73,0x00,0x10,0x00]
+# CHECK32: rdcycle    x5                   # encoding: [0xf3,0x22,0x00,0xc0]
+# CHECK32: rdcycleh   x6                   # encoding: [0x73,0x23,0x00,0xc8]
+# CHECK32: rdtime     x7                   # encoding: [0xf3,0x23,0x10,0xc0]
+# CHECK32: rdtimeh    x8                   # encoding: [0x73,0x24,0x10,0xc8]
+# CHECK32: rdinstret  x9                   # encoding: [0xf3,0x24,0x20,0xc0]
+# CHECK32: rdinstreth x10                  # encoding: [0x73,0x25,0x20,0xc8]
+
 #-- register encodings: x0-x31
 #--                     x0 == $0
 	addi	x0, x0, 0
