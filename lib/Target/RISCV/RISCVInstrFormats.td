@@ -50,7 +50,7 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
 class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
             SDPatternOperator operator, RegisterOperand cls1, 
             RegisterOperand cls2>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2, cls2:$src1), 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, cls2:$src2),
                 mnemonic#"\t$dst, $src1, $src2", 
                 [(set cls1:$dst, (operator cls2:$src1, cls2:$src2))]> {
   field bits<32> Inst;
@@ -60,8 +60,8 @@ class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
   bits<5> RS2;
 
   let Inst{31-25} = funct7;
-  let Inst{24-20} = RS1;
-  let Inst{19-15} = RS2;
+  let Inst{24-20} = RS2;
+  let Inst{19-15} = RS1;
   let Inst{14-12} = funct3;
   let Inst{11- 7} = RD;
   let Inst{6 - 0} = op;
