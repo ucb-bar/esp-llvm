@@ -61,7 +61,7 @@ public:
   enum MetadataKind {
     MDTupleKind,
     MDLocationKind,
-    GenericDwarfNodeKind,
+    GenericDebugNodeKind,
     ConstantAsMetadataKind,
     LocalAsMetadataKind,
     MDStringKind
@@ -727,7 +727,8 @@ public:
 
   /// \brief Deallocate a node created by getTemporary.
   ///
-  /// The node must not have any users.
+  /// Calls \c replaceAllUsesWith(nullptr) before deleting, so any remaining
+  /// references will be reset.
   static void deleteTemporary(MDNode *N);
 
   LLVMContext &getContext() const { return Context.getContext(); }
@@ -866,7 +867,7 @@ public:
   static bool classof(const Metadata *MD) {
     return MD->getMetadataID() == MDTupleKind ||
            MD->getMetadataID() == MDLocationKind ||
-           MD->getMetadataID() == GenericDwarfNodeKind;
+           MD->getMetadataID() == GenericDebugNodeKind;
   }
 
   /// \brief Check whether MDNode is a vtable access.
@@ -1024,56 +1025,60 @@ public:
   }
 };
 
-/// \brief Tagged dwarf node.
+/// \brief Tagged DWARF-like metadata node.
 ///
-/// A metadata node with a DWARF tag.
-class DwarfNode : public MDNode {
+/// A metadata node with a DWARF tag (i.e., a constant named \c DW_TAG_*,
+/// defined in llvm/Support/Dwarf.h).  Called \a DebugNode because it's
+/// potentially used for non-DWARF output.
+class DebugNode : public MDNode {
   friend class LLVMContextImpl;
   friend class MDNode;
 
 protected:
-  DwarfNode(LLVMContext &C, unsigned ID, StorageType Storage, unsigned Tag,
+  DebugNode(LLVMContext &C, unsigned ID, StorageType Storage, unsigned Tag,
             ArrayRef<Metadata *> Ops1, ArrayRef<Metadata *> Ops2 = None)
       : MDNode(C, ID, Storage, Ops1, Ops2) {
     assert(Tag < 1u << 16);
     SubclassData16 = Tag;
   }
-  ~DwarfNode() {}
+  ~DebugNode() {}
 
 public:
   unsigned getTag() const { return SubclassData16; }
 
   static bool classof(const Metadata *MD) {
-    return MD->getMetadataID() == GenericDwarfNodeKind;
+    return MD->getMetadataID() == GenericDebugNodeKind;
   }
 };
 
-/// \brief Generic tagged dwarf node.
+/// \brief Generic tagged DWARF-like metadata node.
 ///
-/// A generic metadata node with a DWARF tag that doesn't have special
-/// handling.
-class GenericDwarfNode : public DwarfNode {
+/// An un-specialized DWARF-like metadata node.  The first operand is a
+/// (possibly empty) null-separated \a MDString header that contains arbitrary
+/// fields.  The remaining operands are \a dwarf_operands(), and are pointers
+/// to other metadata.
+class GenericDebugNode : public DebugNode {
   friend class LLVMContextImpl;
   friend class MDNode;
 
-  GenericDwarfNode(LLVMContext &C, StorageType Storage, unsigned Hash,
+  GenericDebugNode(LLVMContext &C, StorageType Storage, unsigned Hash,
                    unsigned Tag, ArrayRef<Metadata *> Ops1,
                    ArrayRef<Metadata *> Ops2)
-      : DwarfNode(C, GenericDwarfNodeKind, Storage, Tag, Ops1, Ops2) {
+      : DebugNode(C, GenericDebugNodeKind, Storage, Tag, Ops1, Ops2) {
     setHash(Hash);
   }
-  ~GenericDwarfNode() { dropAllReferences(); }
+  ~GenericDebugNode() { dropAllReferences(); }
 
   void setHash(unsigned Hash) { SubclassData32 = Hash; }
   void recalculateHash();
 
-  static GenericDwarfNode *getImpl(LLVMContext &Context, unsigned Tag,
-                                   MDString *Header,
+  static GenericDebugNode *getImpl(LLVMContext &Context, unsigned Tag,
+                                   StringRef Header,
                                    ArrayRef<Metadata *> DwarfOps,
                                    StorageType Storage,
                                    bool ShouldCreate = true);
 
-  TempGenericDwarfNode cloneImpl() const {
+  TempGenericDebugNode cloneImpl() const {
     return getTemporary(
         getContext(), getTag(), getHeader(),
         SmallVector<Metadata *, 4>(dwarf_op_begin(), dwarf_op_end()));
@@ -1082,35 +1087,38 @@ class GenericDwarfNode : public DwarfNode {
 public:
   unsigned getHash() const { return SubclassData32; }
 
-  static GenericDwarfNode *get(LLVMContext &Context,
-                               unsigned Tag,
-                               MDString *Header,
+  static GenericDebugNode *get(LLVMContext &Context, unsigned Tag,
+                               StringRef Header,
                                ArrayRef<Metadata *> DwarfOps) {
     return getImpl(Context, Tag, Header, DwarfOps, Uniqued);
   }
-  static GenericDwarfNode *getIfExists(LLVMContext &Context, unsigned Tag,
-                                       MDString *Header,
+  static GenericDebugNode *getIfExists(LLVMContext &Context, unsigned Tag,
+                                       StringRef Header,
                                        ArrayRef<Metadata *> DwarfOps) {
     return getImpl(Context, Tag, Header, DwarfOps, Uniqued,
                    /* ShouldCreate */ false);
   }
-  static GenericDwarfNode *getDistinct(LLVMContext &Context, unsigned Tag,
-                                       MDString *Header,
+  static GenericDebugNode *getDistinct(LLVMContext &Context, unsigned Tag,
+                                       StringRef Header,
                                        ArrayRef<Metadata *> DwarfOps) {
     return getImpl(Context, Tag, Header, DwarfOps, Distinct);
   }
-  static TempGenericDwarfNode getTemporary(LLVMContext &Context, unsigned Tag,
-                                           MDString *Header,
+  static TempGenericDebugNode getTemporary(LLVMContext &Context, unsigned Tag,
+                                           StringRef Header,
                                            ArrayRef<Metadata *> DwarfOps) {
-    return TempGenericDwarfNode(
+    return TempGenericDebugNode(
         getImpl(Context, Tag, Header, DwarfOps, Temporary));
   }
 
   /// \brief Return a (temporary) clone of this.
-  TempGenericDwarfNode clone() const { return cloneImpl(); }
+  TempGenericDebugNode clone() const { return cloneImpl(); }
 
   unsigned getTag() const { return SubclassData16; }
-  MDString *getHeader() const { return cast_or_null<MDString>(getOperand(0)); }
+  StringRef getHeader() const {
+    if (auto *S = cast_or_null<MDString>(getOperand(0)))
+      return S->getString();
+    return StringRef();
+  }
 
   op_iterator dwarf_op_begin() const { return op_begin() + 1; }
   op_iterator dwarf_op_end() const { return op_end(); }
@@ -1127,7 +1135,7 @@ public:
   }
 
   static bool classof(const Metadata *MD) {
-    return MD->getMetadataID() == GenericDwarfNodeKind;
+    return MD->getMetadataID() == GenericDebugNodeKind;
   }
 };
 

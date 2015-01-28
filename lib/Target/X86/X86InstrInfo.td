@@ -609,6 +609,14 @@ def ImmSExti64i8AsmOperand : ImmSExtAsmOperandClass {
                       ImmSExti64i32AsmOperand];
 }
 
+// Unsigned immediate used by SSE/AVX instructions
+// [0, 0xFF]
+//   [0xFFFFFFFFFFFFFF80, 0xFFFFFFFFFFFFFFFF]
+def ImmUnsignedi8AsmOperand : AsmOperandClass {
+  let Name = "ImmUnsignedi8";
+  let RenderMethod = "addImmOperands";
+}
+
 // A couple of more descriptive operand definitions.
 // 16-bits but only 8 bits are significant.
 def i16i8imm  : Operand<i16> {
@@ -627,18 +635,33 @@ def i64i32imm  : Operand<i64> {
   let OperandType = "OPERAND_IMMEDIATE";
 }
 
+// 64-bits but only 8 bits are significant.
+def i64i8imm   : Operand<i64> {
+  let ParserMatchClass = ImmSExti64i8AsmOperand;
+  let OperandType = "OPERAND_IMMEDIATE";
+}
+
+// Unsigned 8-bit immediate used by SSE/AVX instructions.
+def u8imm : Operand<i8> {
+  let PrintMethod = "printU8Imm";
+  let ParserMatchClass = ImmUnsignedi8AsmOperand;
+  let OperandType = "OPERAND_IMMEDIATE";
+}
+
+// 32-bit immediate but only 8-bits are significant and they are unsigned.
+// Used by some SSE/AVX instructions that use intrinsics.
+def i32u8imm : Operand<i32> {
+  let PrintMethod = "printU8Imm";
+  let ParserMatchClass = ImmUnsignedi8AsmOperand;
+  let OperandType = "OPERAND_IMMEDIATE";
+}
+
 // 64-bits but only 32 bits are significant, and those bits are treated as being
 // pc relative.
 def i64i32imm_pcrel : Operand<i64> {
   let PrintMethod = "printPCRelImm";
   let ParserMatchClass = X86AbsMemAsmOperand;
   let OperandType = "OPERAND_PCREL";
-}
-
-// 64-bits but only 8 bits are significant.
-def i64i8imm   : Operand<i64> {
-  let ParserMatchClass = ImmSExti64i8AsmOperand;
-  let OperandType = "OPERAND_IMMEDIATE";
 }
 
 def lea64_32mem : Operand<i32> {
@@ -767,6 +790,8 @@ def Not16BitMode : Predicate<"!Subtarget->is16Bit()">,
 def In32BitMode  : Predicate<"Subtarget->is32Bit()">,
                              AssemblerPredicate<"Mode32Bit", "32-bit mode">;
 def IsWin64      : Predicate<"Subtarget->isTargetWin64()">;
+def IsPS4        : Predicate<"Subtarget->isTargetPS4()">;
+def NotPS4       : Predicate<"!Subtarget->isTargetPS4()">;
 def IsNaCl       : Predicate<"Subtarget->isTargetNaCl()">;
 def NotNaCl      : Predicate<"!Subtarget->isTargetNaCl()">;
 def SmallCode    : Predicate<"TM.getCodeModel() == CodeModel::Small">;

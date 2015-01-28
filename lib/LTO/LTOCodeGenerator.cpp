@@ -108,7 +108,7 @@ void LTOCodeGenerator::initializeLTOPasses() {
   initializeGlobalOptPass(R);
   initializeConstantMergePass(R);
   initializeDAHPass(R);
-  initializeInstCombinerPass(R);
+  initializeInstructionCombiningPassPass(R);
   initializeSimpleInlinerPass(R);
   initializePruneEHPass(R);
   initializeGlobalDCEPass(R);
@@ -406,11 +406,12 @@ void LTOCodeGenerator::applyScopeRestrictions() {
   passes.add(createDebugInfoVerifierPass());
 
   // mark which symbols can not be internalized
-  Mangler Mangler(TargetMach->getSubtargetImpl()->getDataLayout());
+  Mangler Mangler(TargetMach->getDataLayout());
   std::vector<const char*> MustPreserveList;
   SmallPtrSet<GlobalValue*, 8> AsmUsed;
   std::vector<StringRef> Libcalls;
-  TargetLibraryInfo TLI(Triple(TargetMach->getTargetTriple()));
+  TargetLibraryInfoImpl TLII(Triple(TargetMach->getTargetTriple()));
+  TargetLibraryInfo TLI(TLII);
   accumulateAndSortLibcalls(
       Libcalls, TLI, TargetMach->getSubtargetImpl()->getTargetLowering());
 
@@ -475,7 +476,7 @@ bool LTOCodeGenerator::generateObjectFile(raw_ostream &out,
   PassManager passes;
 
   // Add an appropriate DataLayout instance for this module...
-  mergedModule->setDataLayout(TargetMach->getSubtargetImpl()->getDataLayout());
+  mergedModule->setDataLayout(TargetMach->getDataLayout());
 
   Triple TargetTriple(TargetMach->getTargetTriple());
   PassManagerBuilder PMB;
@@ -484,7 +485,7 @@ bool LTOCodeGenerator::generateObjectFile(raw_ostream &out,
   PMB.SLPVectorize = !DisableVectorization;
   if (!DisableInline)
     PMB.Inliner = createFunctionInliningPass();
-  PMB.LibraryInfo = new TargetLibraryInfo(TargetTriple);
+  PMB.LibraryInfo = new TargetLibraryInfoImpl(TargetTriple);
   if (DisableOpt)
     PMB.OptLevel = 0;
   PMB.VerifyInput = true;

@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "MipsRegisterInfo.h"
@@ -95,6 +96,7 @@ class MipsAsmParser : public MCTargetAsmParser {
   }
 
   MCSubtargetInfo &STI;
+  MipsABIInfo ABI;
   SmallVector<std::unique_ptr<MipsAssemblerOptions>, 2> AssemblerOptions;
   MCSymbol *CurrentFn; // Pointer to the function being parsed. It may be a
                        // nullptr, which indicates that no function is currently
@@ -315,7 +317,9 @@ public:
 
   MipsAsmParser(MCSubtargetInfo &sti, MCAsmParser &parser,
                 const MCInstrInfo &MII, const MCTargetOptions &Options)
-      : MCTargetAsmParser(), STI(sti) {
+      : MCTargetAsmParser(), STI(sti),
+        ABI(MipsABIInfo::computeTargetABI(Triple(sti.getTargetTriple()),
+                                          sti.getCPU(), Options)) {
     MCAsmParserExtension::Initialize(parser);
 
     // Initialize the set of available features.
@@ -331,12 +335,6 @@ public:
 
     getTargetStreamer().updateABIInfo(*this);
 
-    // Assert exactly one ABI was chosen.
-    assert((((STI.getFeatureBits() & Mips::FeatureO32) != 0) +
-            ((STI.getFeatureBits() & Mips::FeatureEABI) != 0) +
-            ((STI.getFeatureBits() & Mips::FeatureN32) != 0) +
-            ((STI.getFeatureBits() & Mips::FeatureN64) != 0)) == 1);
-
     if (!isABI_O32() && !useOddSPReg() != 0)
       report_fatal_error("-mno-odd-spreg requires the O32 ABI");
 
@@ -348,9 +346,10 @@ public:
 
   bool isGP64bit() const { return STI.getFeatureBits() & Mips::FeatureGP64Bit; }
   bool isFP64bit() const { return STI.getFeatureBits() & Mips::FeatureFP64Bit; }
-  bool isABI_N32() const { return STI.getFeatureBits() & Mips::FeatureN32; }
-  bool isABI_N64() const { return STI.getFeatureBits() & Mips::FeatureN64; }
-  bool isABI_O32() const { return STI.getFeatureBits() & Mips::FeatureO32; }
+  const MipsABIInfo &getABI() const { return ABI; }
+  bool isABI_N32() const { return ABI.IsN32(); }
+  bool isABI_N64() const { return ABI.IsN64(); }
+  bool isABI_O32() const { return ABI.IsO32(); }
   bool isABI_FPXX() const { return STI.getFeatureBits() & Mips::FeatureFPXX; }
 
   bool useOddSPReg() const {
@@ -382,6 +381,9 @@ public:
   }
   bool hasMips64r6() const {
     return (STI.getFeatureBits() & Mips::FeatureMips64r6);
+  }
+  bool hasCnMips() const {
+    return (STI.getFeatureBits() & Mips::FeatureCnMips);
   }
   bool hasDSP() const { return (STI.getFeatureBits() & Mips::FeatureDSP); }
   bool hasDSPR2() const { return (STI.getFeatureBits() & Mips::FeatureDSPR2); }
@@ -1169,6 +1171,13 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     switch (Opcode) {
     default:
       break;
+    case Mips::BBIT0:
+    case Mips::BBIT032:
+    case Mips::BBIT1:
+    case Mips::BBIT132:
+      assert(hasCnMips() && "instruction only valid for octeon cpus");
+      // Fall through
+
     case Mips::BEQ:
     case Mips::BNE:
     case Mips::BEQ_MM:
@@ -1229,6 +1238,74 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     std::string ISA = hasMips64r6() ? "MIPS64r6" : "MIPS32r6";
     Warning(IDLoc, "ssnop is deprecated for " + ISA + " and is equivalent to a "
                                                       "nop instruction");
+  }
+
+  if (hasCnMips()) {
+    const unsigned Opcode = Inst.getOpcode();
+    MCOperand Opnd;
+    int Imm;
+
+    switch (Opcode) {
+      default:
+        break;
+
+      case Mips::BBIT0:
+      case Mips::BBIT032:
+      case Mips::BBIT1:
+      case Mips::BBIT132:
+        assert(MCID.getNumOperands() == 3 && "unexpected number of operands");
+        // The offset is handled above
+        Opnd = Inst.getOperand(1);
+        if (!Opnd.isImm())
+          return Error(IDLoc, "expected immediate operand kind");
+        Imm = Opnd.getImm();
+        if (Imm < 0 || Imm > (Opcode == Mips::BBIT0 ||
+                              Opcode == Mips::BBIT1 ? 63 : 31))
+          return Error(IDLoc, "immediate operand value out of range");
+        if (Imm > 31) {
+          Inst.setOpcode(Opcode == Mips::BBIT0 ? Mips::BBIT032
+                                               : Mips::BBIT132);
+          Inst.getOperand(1).setImm(Imm - 32);
+        }
+        break;
+
+      case Mips::CINS:
+      case Mips::CINS32:
+      case Mips::EXTS:
+      case Mips::EXTS32:
+        assert(MCID.getNumOperands() == 4 && "unexpected number of operands");
+        // Check length
+        Opnd = Inst.getOperand(3);
+        if (!Opnd.isImm())
+          return Error(IDLoc, "expected immediate operand kind");
+        Imm = Opnd.getImm();
+        if (Imm < 0 || Imm > 31)
+          return Error(IDLoc, "immediate operand value out of range");
+        // Check position
+        Opnd = Inst.getOperand(2);
+        if (!Opnd.isImm())
+          return Error(IDLoc, "expected immediate operand kind");
+        Imm = Opnd.getImm();
+        if (Imm < 0 || Imm > (Opcode == Mips::CINS ||
+                              Opcode == Mips::EXTS ? 63 : 31))
+          return Error(IDLoc, "immediate operand value out of range");
+        if (Imm > 31) {
+          Inst.setOpcode(Opcode == Mips::CINS ? Mips::CINS32 : Mips::EXTS32);
+          Inst.getOperand(2).setImm(Imm - 32);
+        }
+        break;
+
+      case Mips::SEQi:
+      case Mips::SNEi:
+        assert(MCID.getNumOperands() == 3 && "unexpected number of operands");
+        Opnd = Inst.getOperand(2);
+        if (!Opnd.isImm())
+          return Error(IDLoc, "expected immediate operand kind");
+        Imm = Opnd.getImm();
+        if (!isInt<10>(Imm))
+          return Error(IDLoc, "immediate operand value out of range");
+        break;
+    }
   }
 
   if (MCID.hasDelaySlot() && AssemblerOptions.back()->isReorder()) {
@@ -1396,6 +1473,14 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
           return Error(IDLoc, "expected immediate operand kind");
         Imm = Opnd.getImm();
         if (!isUInt<5>(Imm))
+          return Error(IDLoc, "immediate operand value out of range");
+        break;
+      case Mips::ADDIUPC_MM:
+        MCOperand Opnd = Inst.getOperand(1);
+        if (!Opnd.isImm())
+          return Error(IDLoc, "expected immediate operand kind");
+        int Imm = Opnd.getImm();
+        if ((Imm % 4 != 0) || !isIntN(25, Imm))
           return Error(IDLoc, "immediate operand value out of range");
         break;
     }
@@ -1726,9 +1811,8 @@ MipsAsmParser::expandLoadAddressSym(MCInst &Inst, SMLoc IDLoc,
   }
 }
 
-bool MipsAsmParser::
-expandUncondBranchMMPseudo(MCInst &Inst, SMLoc IDLoc,
-                           SmallVectorImpl<MCInst> &Instructions) {
+bool MipsAsmParser::expandUncondBranchMMPseudo(
+    MCInst &Inst, SMLoc IDLoc, SmallVectorImpl<MCInst> &Instructions) {
   assert(getInstDesc(Inst.getOpcode()).getNumOperands() == 1 &&
          "unexpected number of operands");
 
@@ -3716,43 +3800,44 @@ bool MipsAsmParser::parseDirectiveModule() {
     return false;
   }
 
-  if (Lexer.is(AsmToken::Identifier)) {
-    StringRef Option = Parser.getTok().getString();
-    Parser.Lex();
-
-    if (Option == "oddspreg") {
-      getTargetStreamer().emitDirectiveModuleOddSPReg(true, isABI_O32());
-      clearFeatureBits(Mips::FeatureNoOddSPReg, "nooddspreg");
-
-      if (getLexer().isNot(AsmToken::EndOfStatement)) {
-        reportParseError("unexpected token, expected end of statement");
-        return false;
-      }
-
-      return false;
-    } else if (Option == "nooddspreg") {
-      if (!isABI_O32()) {
-        Error(L, "'.module nooddspreg' requires the O32 ABI");
-        return false;
-      }
-
-      getTargetStreamer().emitDirectiveModuleOddSPReg(false, isABI_O32());
-      setFeatureBits(Mips::FeatureNoOddSPReg, "nooddspreg");
-
-      if (getLexer().isNot(AsmToken::EndOfStatement)) {
-        reportParseError("unexpected token, expected end of statement");
-        return false;
-      }
-
-      return false;
-    } else if (Option == "fp") {
-      return parseDirectiveModuleFP();
-    }
-
-    return Error(L, "'" + Twine(Option) + "' is not a valid .module option.");
+  StringRef Option;
+  if (Parser.parseIdentifier(Option)) {
+    reportParseError("expected .module option identifier");
+    return false;
   }
 
-  return false;
+  if (Option == "oddspreg") {
+    getTargetStreamer().emitDirectiveModuleOddSPReg(true, isABI_O32());
+    clearFeatureBits(Mips::FeatureNoOddSPReg, "nooddspreg");
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "nooddspreg") {
+    if (!isABI_O32()) {
+      Error(L, "'.module nooddspreg' requires the O32 ABI");
+      return false;
+    }
+
+    getTargetStreamer().emitDirectiveModuleOddSPReg(false, isABI_O32());
+    setFeatureBits(Mips::FeatureNoOddSPReg, "nooddspreg");
+
+    // If this is not the end of the statement, report an error.
+    if (getLexer().isNot(AsmToken::EndOfStatement)) {
+      reportParseError("unexpected token, expected end of statement");
+      return false;
+    }
+
+    return false; // parseDirectiveModule has finished successfully.
+  } else if (Option == "fp") {
+    return parseDirectiveModuleFP();
+  } else {
+    return Error(L, "'" + Twine(Option) + "' is not a valid .module option.");
+  }
 }
 
 /// parseDirectiveModuleFP

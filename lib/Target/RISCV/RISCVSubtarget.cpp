@@ -33,18 +33,11 @@ RISCVSubtarget &RISCVSubtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-static std::string computeDataLayout(const RISCVSubtarget &ST) {
-  std::string Ret =
-      ST.isRV64() ? "e-m:e-n32:64-S128" : "e-m:e-p:32:32-n32-S128";
-  return Ret;
-}
-
 RISCVSubtarget::RISCVSubtarget(const std::string &TT, const std::string &CPU,
                                const std::string &FS, const TargetMachine &TM)
     : RISCVGenSubtargetInfo(TT, CPU, FS), RISCVArchVersion(RV32), HasM(false),
       HasA(false), HasF(false), HasD(false), TargetTriple(TT),
-      DL(computeDataLayout(initializeSubtargetDependencies(CPU, FS))),
-      InstrInfo(*this), TLInfo(TM), TSInfo(&DL), FrameLowering() {}
+      InstrInfo(initializeSubtargetDependencies(CPU,FS)), TLInfo(TM), TSInfo(TM.getDataLayout()), FrameLowering() {}
 
 // Return true if GV binds locally under reloc model RM.
 static bool bindsLocally(const GlobalValue *GV, Reloc::Model RM) {

@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Passes.h"
+#include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Analysis/LazyCallGraph.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -24,6 +25,8 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar/LowerExpectIntrinsic.h"
 
 using namespace llvm;
 

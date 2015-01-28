@@ -51,7 +51,7 @@ EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
       getSymbol(ZCPV->getGlobalValue()),
       getModifierVariantKind(ZCPV->getModifier()), OutContext);
   uint64_t Size =
-      TM.getSubtargetImpl()->getDataLayout()->getTypeAllocSize(ZCPV->getType());
+      TM.getDataLayout()->getTypeAllocSize(ZCPV->getType());
 
   OutStreamer.EmitValue(Expr, Size);
 }
@@ -131,7 +131,7 @@ void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
       OutStreamer.SwitchSection(TLOFELF.getDataRelSection());
-      const DataLayout *TD = TM.getSubtargetImpl()->getDataLayout();
+      const DataLayout *TD = TM.getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
         OutStreamer.EmitLabel(Stubs[i].first);
@@ -145,5 +145,6 @@ void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
 
 // Force static initialization.
 extern "C" void LLVMInitializeRISCVAsmPrinter() {
-  RegisterAsmPrinter<RISCVAsmPrinter> X(TheRISCVTarget);
+  RegisterAsmPrinter<RISCVAsmPrinter> A(TheRISCVTarget);
+  RegisterAsmPrinter<RISCVAsmPrinter> B(TheRISCV64Target);
 }

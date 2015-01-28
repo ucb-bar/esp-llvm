@@ -16,7 +16,17 @@ using namespace llvm;
 
 extern "C" void LLVMInitializeRISCVTarget() {
   // Register the target.
-  RegisterTargetMachine<RISCVTargetMachine> X(TheRISCVTarget);
+  RegisterTargetMachine<RISCVTargetMachine> A(TheRISCVTarget);
+  RegisterTargetMachine<RISCV64TargetMachine> B(TheRISCV64Target);
+}
+
+static std::string computeDataLayout(const Triple &TT) {
+  
+  std::string Ret =
+       TT.isArch64Bit() ? "e-m:e-i1:8:16-i8:8:16-i64:64-f80:128-n32:64" :
+       "e-m:e-p:32:32:32-i1:8:16-i8:8:16-i16:16-i32:32-"
+       "f32:32-f64:64-f80:128-f128:128-n32";
+  return Ret;
 }
 
 RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
@@ -25,10 +35,19 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
                                        Reloc::Model RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
     : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
+      DL(computeDataLayout(Triple(TT))),
       TLOF(make_unique<TargetLoweringObjectFileELF>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }
+
+RISCV64TargetMachine::RISCV64TargetMachine(const Target &T, StringRef TT,
+                                       StringRef CPU, StringRef FS,
+                                       const TargetOptions &Options,
+                                       Reloc::Model RM, CodeModel::Model CM,
+                                       CodeGenOpt::Level OL)
+  :RISCVTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
+
 
 namespace {
 /// RISCV Code Generator Pass Configuration Options.

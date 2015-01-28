@@ -23,8 +23,6 @@ namespace llvm {
 class TargetFrameLowering;
 
 class RISCVTargetMachine : public LLVMTargetMachine {
-  std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  RISCVSubtarget Subtarget;
 
 public:
   RISCVTargetMachine(const Target &T, StringRef TT, StringRef CPU,
@@ -39,6 +37,21 @@ public:
   TargetLoweringObjectFile *getObjFileLowering() const override {
     return TLOF.get();
   }
+  const DataLayout *getDataLayout() const override { return &DL; }
+
+protected:
+  const DataLayout DL;
+  std::unique_ptr<TargetLoweringObjectFile> TLOF;
+  RISCVSubtarget Subtarget;
+};
+
+class RISCV64TargetMachine : public RISCVTargetMachine {
+
+public:
+  RISCV64TargetMachine(const Target &T, StringRef TT, StringRef CPU,
+                       StringRef FS, const TargetOptions &Options,
+                       Reloc::Model RM, CodeModel::Model CM,
+                       CodeGenOpt::Level OL);
 };
 
 } // end namespace llvm

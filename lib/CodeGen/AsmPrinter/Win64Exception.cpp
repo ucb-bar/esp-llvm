@@ -105,8 +105,8 @@ void Win64Exception::endFunction(const MachineFunction *) {
 
     // Emit the tables appropriate to the personality function in use. If we
     // don't recognize the personality, assume it uses an Itanium-style LSDA.
-    const Function *Per = MMI->getPersonality();
-    if (Per && Per->getName() == "__C_specific_handler")
+    EHPersonality Per = MMI->getPersonalityType();
+    if (Per == EHPersonality::Win64SEH)
       emitCSpecificHandlerTable();
     else
       emitExceptionTable();
@@ -145,7 +145,7 @@ const MCSymbolRefExpr *Win64Exception::createImageRel32(const MCSymbol *Value) {
 ///     struct Entry {
 ///       imagerel32 LabelStart;
 ///       imagerel32 LabelEnd;
-///       imagerel32 FilterOrFinally;  // Zero means catch-all.
+///       imagerel32 FilterOrFinally;  // One means catch-all.
 ///       imagerel32 LabelLPad;        // Zero means __finally.
 ///     } Entries[NumEntries];
 ///   };
@@ -221,12 +221,11 @@ void Win64Exception::emitCSpecificHandlerTable() {
 
     // Do a parallel iteration across typeids and clause labels, skipping filter
     // clauses.
-    assert(LPad->TypeIds.size() == LPad->ClauseLabels.size());
+    size_t NextClauseLabel = 0;
     for (size_t I = 0, E = LPad->TypeIds.size(); I < E; ++I) {
       // AddLandingPadInfo stores the clauses in reverse, but there is a FIXME
       // to change that.
       int Selector = LPad->TypeIds[E - I - 1];
-      MCSymbol *ClauseLabel = LPad->ClauseLabels[I];
 
       // Ignore C++ filter clauses in SEH.
       // FIXME: Implement cleanup clauses.
@@ -241,8 +240,9 @@ void Win64Exception::emitCSpecificHandlerTable() {
         if (TI) // Emit the filter function pointer.
           Asm->OutStreamer.EmitValue(createImageRel32(Asm->getSymbol(TI)), 4);
         else  // Otherwise, this is a "catch i8* null", or catch all.
-          Asm->OutStreamer.EmitIntValue(0, 4);
+          Asm->OutStreamer.EmitIntValue(1, 4);
       }
+      MCSymbol *ClauseLabel = LPad->ClauseLabels[NextClauseLabel++];
       Asm->OutStreamer.EmitValue(createImageRel32(ClauseLabel), 4);
     }
   }

@@ -3189,8 +3189,8 @@ unsigned X86FastISel::X86MaterializeFP(const ConstantFP *CFP, MVT VT) {
                                       TII.get(Opc), ResultReg);
     addDirectMem(MIB, AddrReg);
     MachineMemOperand *MMO = FuncInfo.MF->getMachineMemOperand(
-      MachinePointerInfo::getConstantPool(), MachineMemOperand::MOLoad,
-      TM.getSubtargetImpl()->getDataLayout()->getPointerSize(), Align);
+        MachinePointerInfo::getConstantPool(), MachineMemOperand::MOLoad,
+        TM.getDataLayout()->getPointerSize(), Align);
     MIB->addMemOperand(*FuncInfo.MF, MMO);
     return ResultReg;
   }
@@ -3224,7 +3224,10 @@ unsigned X86FastISel::X86MaterializeGV(const GlobalValue *GV, MVT VT) {
               ResultReg)
         .addGlobalAddress(GV);
     } else {
-      unsigned Opc = TLI.getPointerTy() == MVT::i32 ? X86::LEA32r : X86::LEA64r;
+      unsigned Opc = TLI.getPointerTy() == MVT::i32
+                     ? (Subtarget->isTarget64BitILP32()
+                        ? X86::LEA64_32r : X86::LEA32r)
+                     : X86::LEA64r;
       addFullAddress(BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
                              TII.get(Opc), ResultReg), AM);
     }
@@ -3266,7 +3269,10 @@ unsigned X86FastISel::fastMaterializeAlloca(const AllocaInst *C) {
   X86AddressMode AM;
   if (!X86SelectAddress(C, AM))
     return 0;
-  unsigned Opc = TLI.getPointerTy() == MVT::i32 ? X86::LEA32r : X86::LEA64r;
+  unsigned Opc = TLI.getPointerTy() == MVT::i32
+                 ? (Subtarget->isTarget64BitILP32()
+                    ? X86::LEA64_32r : X86::LEA32r)
+                 : X86::LEA64r;
   const TargetRegisterClass* RC = TLI.getRegClassFor(TLI.getPointerTy());
   unsigned ResultReg = createResultReg(RC);
   addFullAddress(BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,

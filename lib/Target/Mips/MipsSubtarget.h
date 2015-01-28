@@ -45,9 +45,6 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // Mips architecture version
   MipsArchEnum MipsArchVersion;
 
-  // Selected ABI
-  MipsABIInfo ABI;
-
   // IsLittle - The target is Little Endian
   bool IsLittle;
 
@@ -140,7 +137,6 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 
   Triple TargetTriple;
 
-  const DataLayout DL; // Calculates type size & alignment
   const MipsSelectionDAGInfo TSInfo;
   std::unique_ptr<const MipsInstrInfo> InstrInfo;
   std::unique_ptr<const MipsFrameLowering> FrameLowering;
@@ -153,12 +149,12 @@ public:
   CodeGenOpt::Level getOptLevelToEnablePostRAScheduler() const override;
 
   /// Only O32 and EABI supported right now.
-  bool isABI_EABI() const { return ABI.IsEABI(); }
-  bool isABI_N64() const { return ABI.IsN64(); }
-  bool isABI_N32() const { return ABI.IsN32(); }
-  bool isABI_O32() const { return ABI.IsO32(); }
+  bool isABI_EABI() const;
+  bool isABI_N64() const;
+  bool isABI_N32() const;
+  bool isABI_O32() const;
+  const MipsABIInfo &getABI() const;
   bool isABI_FPXX() const { return isABI_O32() && IsFPXX; }
-  const MipsABIInfo &getABI() const { return ABI; }
 
   /// This constructor initializes the data members to match that
   /// of the specified triple.
@@ -270,7 +266,6 @@ public:
   const MipsSelectionDAGInfo *getSelectionDAGInfo() const override {
     return &TSInfo;
   }
-  const DataLayout *getDataLayout() const override { return &DL; }
   const MipsInstrInfo *getInstrInfo() const override { return InstrInfo.get(); }
   const TargetFrameLowering *getFrameLowering() const override {
     return FrameLowering.get();

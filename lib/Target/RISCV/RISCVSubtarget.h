@@ -48,7 +48,6 @@ protected:
 
 private:
   Triple TargetTriple;
-  const DataLayout DL;
   RISCVInstrInfo InstrInfo;
   RISCVTargetLowering TLInfo;
   TargetSelectionDAGInfo TSInfo;
@@ -62,7 +61,6 @@ public:
 
   const TargetFrameLowering *getFrameLowering() const { return &FrameLowering; }
   const RISCVInstrInfo *getInstrInfo() const { return &InstrInfo; }
-  const DataLayout *getDataLayout() const { return &DL; }
   const RISCVRegisterInfo *getRegisterInfo() const {
     return &InstrInfo.getRegisterInfo();
   }

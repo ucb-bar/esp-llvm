@@ -98,7 +98,7 @@ static unsigned getNumSubRegsForSpillOp(unsigned Op) {
 void SIRegisterInfo::buildScratchLoadStore(MachineBasicBlock::iterator MI,
                                            unsigned LoadStoreOp,
                                            unsigned Value,
-                                           unsigned ScratchPtr,
+                                           unsigned ScratchRsrcReg,
                                            unsigned ScratchOffset,
                                            int64_t Offset,
                                            RegScavenger *RS) const {
@@ -113,34 +113,11 @@ void SIRegisterInfo::buildScratchLoadStore(MachineBasicBlock::iterator MI,
   bool RanOutOfSGPRs = false;
   unsigned SOffset = ScratchOffset;
 
-  unsigned RsrcReg = RS->scavengeRegister(&AMDGPU::SReg_128RegClass, MI, 0);
-  if (RsrcReg == AMDGPU::NoRegister) {
-    RanOutOfSGPRs = true;
-    RsrcReg = AMDGPU::SGPR0_SGPR1_SGPR2_SGPR3;
-  }
-
   unsigned NumSubRegs = getNumSubRegsForSpillOp(MI->getOpcode());
   unsigned Size = NumSubRegs * 4;
 
-  uint64_t Rsrc = AMDGPU::RSRC_DATA_FORMAT | AMDGPU::RSRC_TID_ENABLE |
-                  0xffffffff; // Size
-
-  BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_MOV_B64),
-          getSubReg(RsrcReg, AMDGPU::sub0_sub1))
-          .addReg(ScratchPtr)
-          .addReg(RsrcReg, RegState::ImplicitDefine);
-
-  BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_MOV_B32),
-          getSubReg(RsrcReg, AMDGPU::sub2))
-          .addImm(Rsrc & 0xffffffff)
-          .addReg(RsrcReg, RegState::ImplicitDefine);
-
-  BuildMI(*MBB, MI, DL, TII->get(AMDGPU::S_MOV_B32),
-          getSubReg(RsrcReg, AMDGPU::sub3))
-          .addImm(Rsrc >> 32)
-          .addReg(RsrcReg, RegState::ImplicitDefine);
-
   if (!isUInt<12>(Offset + Size)) {
+    dbgs() << "Offset scavenge\n";
     SOffset = RS->scavengeRegister(&AMDGPU::SGPR_32RegClass, MI, 0);
     if (SOffset == AMDGPU::NoRegister) {
       RanOutOfSGPRs = true;
@@ -163,9 +140,9 @@ void SIRegisterInfo::buildScratchLoadStore(MachineBasicBlock::iterator MI,
 
     BuildMI(*MBB, MI, DL, TII->get(LoadStoreOp))
             .addReg(SubReg, getDefRegState(IsLoad))
-            .addReg(RsrcReg, getKillRegState(IsKill))
+            .addReg(ScratchRsrcReg, getKillRegState(IsKill))
             .addImm(Offset)
-            .addReg(SOffset, getKillRegState(IsKill))
+            .addReg(SOffset)
             .addImm(0) // glc
             .addImm(0) // slc
             .addImm(0) // tfe
@@ -236,6 +213,7 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
         }
 
         if (isM0) {
+          dbgs() << "Scavenge M0\n";
           SubReg = RS->scavengeRegister(&AMDGPU::SGPR_32RegClass, MI, 0);
         }
 
@@ -262,7 +240,7 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     case AMDGPU::SI_SPILL_V32_SAVE:
       buildScratchLoadStore(MI, AMDGPU::BUFFER_STORE_DWORD_OFFSET,
             TII->getNamedOperand(*MI, AMDGPU::OpName::src)->getReg(),
-            TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_ptr)->getReg(),
+            TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_rsrc)->getReg(),
             TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_offset)->getReg(),
              FrameInfo->getObjectOffset(Index), RS);
       MI->eraseFromParent();
@@ -274,7 +252,7 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
     case AMDGPU::SI_SPILL_V512_RESTORE: {
       buildScratchLoadStore(MI, AMDGPU::BUFFER_LOAD_DWORD_OFFSET,
             TII->getNamedOperand(*MI, AMDGPU::OpName::dst)->getReg(),
-            TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_ptr)->getReg(),
+            TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_rsrc)->getReg(),
             TII->getNamedOperand(*MI, AMDGPU::OpName::scratch_offset)->getReg(),
             FrameInfo->getObjectOffset(Index), RS);
       MI->eraseFromParent();
@@ -289,7 +267,7 @@ void SIRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator MI,
         BuildMI(*MBB, MI, MI->getDebugLoc(),
                 TII->get(AMDGPU::V_MOV_B32_e32), TmpReg)
                 .addImm(Offset);
-        FIOp.ChangeToRegister(TmpReg, false);
+        FIOp.ChangeToRegister(TmpReg, false, false, true);
       }
     }
   }
@@ -446,6 +424,8 @@ unsigned SIRegisterInfo::getPreloadedValue(const MachineFunction &MF,
   case SIRegisterInfo::TGID_Z:
     return AMDGPU::SReg_32RegClass.getRegister(MFI->NumUserSGPRs + 2);
   case SIRegisterInfo::SCRATCH_WAVE_OFFSET:
+    if (MFI->getShaderType() != ShaderType::COMPUTE)
+      return MFI->ScratchOffsetReg;
     return AMDGPU::SReg_32RegClass.getRegister(MFI->NumUserSGPRs + 4);
   case SIRegisterInfo::SCRATCH_PTR:
     return AMDGPU::SGPR2_SGPR3;

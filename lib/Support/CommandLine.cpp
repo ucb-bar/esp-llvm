@@ -655,6 +655,13 @@ void cl::TokenizeWindowsCommandLine(StringRef Src, StringSaver &Saver,
     NewArgv.push_back(nullptr);
 }
 
+// It is called byte order marker but the UTF-8 BOM is actually not affected
+// by the host system's endianness.
+static bool hasUTF8ByteOrderMark(ArrayRef<char> S) {
+  return (S.size() >= 3 &&
+          S[0] == '\xef' && S[1] == '\xbb' && S[2] == '\xbf');
+}
+
 static bool ExpandResponseFile(const char *FName, StringSaver &Saver,
                                TokenizerCallback Tokenizer,
                                SmallVectorImpl<const char *> &NewArgv,
@@ -674,6 +681,11 @@ static bool ExpandResponseFile(const char *FName, StringSaver &Saver,
       return false;
     Str = StringRef(UTF8Buf);
   }
+  // If we see UTF-8 BOM sequence at the beginning of a file, we shall remove
+  // these bytes before parsing.
+  // Reference: http://en.wikipedia.org/wiki/UTF-8#Byte_order_mark
+  else if (hasUTF8ByteOrderMark(BufRef))
+    Str = StringRef(BufRef.data() + 3, BufRef.size() - 3);
 
   // Tokenize the contents into NewArgv.
   Tokenizer(Str, Saver, NewArgv, MarkEOLs);
@@ -1653,39 +1665,45 @@ static HelpPrinterWrapper WrappedNormalPrinter(UncategorizedNormalPrinter,
 static HelpPrinterWrapper WrappedHiddenPrinter(UncategorizedHiddenPrinter,
                                                CategorizedHiddenPrinter);
 
+// Define a category for generic options that all tools should have.
+static cl::OptionCategory GenericCategory("Generic Options");
+
 // Define uncategorized help printers.
 // -help-list is hidden by default because if Option categories are being used
 // then -help behaves the same as -help-list.
 static cl::opt<HelpPrinter, true, parser<bool>> HLOp(
     "help-list",
     cl::desc("Display list of available options (-help-list-hidden for more)"),
-    cl::location(UncategorizedNormalPrinter), cl::Hidden, cl::ValueDisallowed);
+    cl::location(UncategorizedNormalPrinter), cl::Hidden, cl::ValueDisallowed,
+    cl::cat(GenericCategory));
 
 static cl::opt<HelpPrinter, true, parser<bool>>
     HLHOp("help-list-hidden", cl::desc("Display list of all available options"),
           cl::location(UncategorizedHiddenPrinter), cl::Hidden,
-          cl::ValueDisallowed);
+          cl::ValueDisallowed, cl::cat(GenericCategory));
 
 // Define uncategorized/categorized help printers. These printers change their
 // behaviour at runtime depending on whether one or more Option categories have
 // been declared.
 static cl::opt<HelpPrinterWrapper, true, parser<bool>>
     HOp("help", cl::desc("Display available options (-help-hidden for more)"),
-        cl::location(WrappedNormalPrinter), cl::ValueDisallowed);
+        cl::location(WrappedNormalPrinter), cl::ValueDisallowed,
+        cl::cat(GenericCategory));
 
 static cl::opt<HelpPrinterWrapper, true, parser<bool>>
     HHOp("help-hidden", cl::desc("Display all available options"),
-         cl::location(WrappedHiddenPrinter), cl::Hidden, cl::ValueDisallowed);
+         cl::location(WrappedHiddenPrinter), cl::Hidden, cl::ValueDisallowed,
+         cl::cat(GenericCategory));
 
 static cl::opt<bool> PrintOptions(
     "print-options",
     cl::desc("Print non-default options after command line parsing"),
-    cl::Hidden, cl::init(false));
+    cl::Hidden, cl::init(false), cl::cat(GenericCategory));
 
 static cl::opt<bool> PrintAllOptions(
     "print-all-options",
     cl::desc("Print all option values after command line parsing"), cl::Hidden,
-    cl::init(false));
+    cl::init(false), cl::cat(GenericCategory));
 
 void HelpPrinterWrapper::operator=(bool Value) {
   if (Value == false)
@@ -1790,7 +1808,8 @@ static VersionPrinter VersionPrinterInstance;
 
 static cl::opt<VersionPrinter, true, parser<bool>>
     VersOp("version", cl::desc("Display the version of this program"),
-           cl::location(VersionPrinterInstance), cl::ValueDisallowed);
+           cl::location(VersionPrinterInstance), cl::ValueDisallowed,
+           cl::cat(GenericCategory));
 
 // Utility function for printing the help message.
 void cl::PrintHelpMessage(bool Hidden, bool Categorized) {
@@ -1826,10 +1845,33 @@ void cl::AddExtraVersionPrinter(void (*func)()) {
 void cl::getRegisteredOptions(StringMap<Option *> &Map) {
   // Get all the options.
   SmallVector<Option *, 4> PositionalOpts; // NOT USED
-  SmallVector<Option *, 4> SinkOpts; // NOT USED
+  SmallVector<Option *, 4> SinkOpts;       // NOT USED
   assert(Map.size() == 0 && "StringMap must be empty");
   GetOptionInfo(PositionalOpts, SinkOpts, Map);
   return;
+}
+
+void cl::HideUnrelatedOptions(cl::OptionCategory &Category) {
+  StringMap<cl::Option *> Options;
+  cl::getRegisteredOptions(Options);
+  for (auto &I : Options) {
+    if (I.second->Category != &Category &&
+        I.second->Category != &GenericCategory)
+      I.second->setHiddenFlag(cl::ReallyHidden);
+  }
+}
+
+void cl::HideUnrelatedOptions(ArrayRef<const cl::OptionCategory *> Categories) {
+  auto CategoriesBegin = Categories.begin();
+  auto CategoriesEnd = Categories.end();
+  StringMap<cl::Option *> Options;
+  cl::getRegisteredOptions(Options);
+  for (auto &I : Options) {
+    if (std::find(CategoriesBegin, CategoriesEnd, I.second->Category) ==
+            CategoriesEnd &&
+        I.second->Category != &GenericCategory)
+      I.second->setHiddenFlag(cl::ReallyHidden);
+  }
 }
 
 void LLVMParseCommandLineOptions(int argc, const char *const *argv,

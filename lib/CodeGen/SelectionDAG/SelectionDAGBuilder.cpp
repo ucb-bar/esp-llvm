@@ -26,6 +26,7 @@
 #include "llvm/CodeGen/FastISel.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
 #include "llvm/CodeGen/GCMetadata.h"
+#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -40,7 +41,6 @@
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
@@ -873,7 +873,7 @@ void SelectionDAGBuilder::init(GCFunctionInfo *gfi, AliasAnalysis &aa,
   AA = &aa;
   GFI = gfi;
   LibInfo = li;
-  DL = DAG.getSubtarget().getDataLayout();
+  DL = DAG.getTarget().getDataLayout();
   Context = DAG.getContext();
   LPadToCallSiteMap.clear();
 }
@@ -2424,6 +2424,7 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
   DEBUG(dbgs() << "Selecting best pivot: \n"
                << "First: " << First << ", Last: " << Last <<'\n'
                << "LSize: " << LSize << ", RSize: " << RSize << '\n');
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   for (CaseItr I = CR.Range.first, J=I+1, E = CR.Range.second;
        J!=E; ++I, ++J) {
     const APInt &LEnd = cast<ConstantInt>(I->High)->getValue();
@@ -2433,10 +2434,16 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
            "Invalid case distance");
     // Use volatile double here to avoid excess precision issues on some hosts,
     // e.g. that use 80-bit X87 registers.
+    // Only consider the density of sub-ranges that actually have sufficient
+    // entries to be lowered as a jump table.
     volatile double LDensity =
-        LSize.roundToDouble() / (LEnd - First + 1ULL).roundToDouble();
+        LSize.ult(TLI.getMinimumJumpTableEntries())
+            ? 0.0
+            : LSize.roundToDouble() / (LEnd - First + 1ULL).roundToDouble();
     volatile double RDensity =
-        RSize.roundToDouble() / (Last - RBegin + 1ULL).roundToDouble();
+        RSize.ult(TLI.getMinimumJumpTableEntries())
+            ? 0.0
+            : RSize.roundToDouble() / (Last - RBegin + 1ULL).roundToDouble();
     volatile double Metric = Range.logBase2() * (LDensity + RDensity);
     // Should always split in some non-trivial place
     DEBUG(dbgs() <<"=>Step\n"
@@ -2454,13 +2461,8 @@ bool SelectionDAGBuilder::handleBTSplitSwitchCase(CaseRec& CR,
     RSize -= J->size();
   }
 
-  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-  if (areJTsAllowed(TLI)) {
-    // If our case is dense we *really* should handle it earlier!
-    assert((FMetric > 0) && "Should handle dense range earlier!");
-  } else {
+  if (FMetric == 0 || !areJTsAllowed(TLI))
     Pivot = CR.Range.first + Size/2;
-  }
   splitSwitchCase(CR, Pivot, WorkList, SV, SwitchBB);
   return true;
 }
@@ -3699,7 +3701,8 @@ void SelectionDAGBuilder::visitMaskedStore(const CallInst &I) {
     getMachineMemOperand(MachinePointerInfo(PtrOperand),
                           MachineMemOperand::MOStore,  VT.getStoreSize(),
                           Alignment, AAInfo);
-  SDValue StoreNode = DAG.getMaskedStore(getRoot(), sdl, Src0, Ptr, Mask, MMO);
+  SDValue StoreNode = DAG.getMaskedStore(getRoot(), sdl, Src0, Ptr, Mask, VT,
+                                         MMO, false);
   DAG.setRoot(StoreNode);
   setValue(&I, StoreNode);
 }
@@ -3738,7 +3741,8 @@ void SelectionDAGBuilder::visitMaskedLoad(const CallInst &I) {
                           MachineMemOperand::MOLoad,  VT.getStoreSize(),
                           Alignment, AAInfo, Ranges);
 
-  SDValue Load = DAG.getMaskedLoad(VT, sdl, InChain, Ptr, Mask, Src0, MMO);
+  SDValue Load = DAG.getMaskedLoad(VT, sdl, InChain, Ptr, Mask, Src0, VT, MMO,
+                                   ISD::NON_EXTLOAD);
   SDValue OutChain = Load.getValue(1);
   DAG.setRoot(OutChain);
   setValue(&I, Load);
@@ -4775,6 +4779,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   case Intrinsic::longjmp:
     return &"_longjmp"[!TLI.usesUnderscoreLongJmp()];
   case Intrinsic::memcpy: {
+    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -4795,6 +4800,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memset: {
+    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -4812,6 +4818,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     return nullptr;
   }
   case Intrinsic::memmove: {
+    // FIXME: this definition of "user defined address space" is x86-specific
     // Assert for address < 256 since we support only user defined address
     // spaces.
     assert(cast<PointerType>(I.getArgOperand(0)->getType())->getAddressSpace()
@@ -5604,7 +5611,8 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
   }
   case Intrinsic::experimental_gc_result_int:
   case Intrinsic::experimental_gc_result_float:
-  case Intrinsic::experimental_gc_result_ptr: {
+  case Intrinsic::experimental_gc_result_ptr:
+  case Intrinsic::experimental_gc_result: {
     visitGCResult(I);
     return nullptr;
   }
@@ -5698,9 +5706,8 @@ SelectionDAGBuilder::lowerInvokable(TargetLowering::CallLoweringInfo &CLI,
 
     CLI.setChain(getRoot());
   }
-
-  const TargetLowering *TLI = TM.getSubtargetImpl()->getTargetLowering();
-  std::pair<SDValue, SDValue> Result = TLI->LowerCallTo(CLI);
+  const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+  std::pair<SDValue, SDValue> Result = TLI.LowerCallTo(CLI);
 
   assert((CLI.IsTailCall || Result.second.getNode()) &&
          "Non-null chain expected with non-tail call!");

@@ -30,7 +30,7 @@ typedef MCDisassembler::DecodeStatus DecodeStatus;
 
 namespace {
 
-/// A disasembler class for Mips.
+/// A disassembler class for Mips.
 class MipsDisassemblerBase : public MCDisassembler {
 public:
   MipsDisassemblerBase(const MCSubtargetInfo &STI, MCContext &Ctx,
@@ -49,7 +49,7 @@ protected:
   bool IsBigEndian;
 };
 
-/// A disasembler class for Mips32.
+/// A disassembler class for Mips32.
 class MipsDisassembler : public MipsDisassemblerBase {
   bool IsMicroMips;
 public:
@@ -77,7 +77,7 @@ public:
                               raw_ostream &CStream) const override;
 };
 
-/// A disasembler class for Mips64.
+/// A disassembler class for Mips64.
 class Mips64Disassembler : public MipsDisassemblerBase {
 public:
   Mips64Disassembler(const MCSubtargetInfo &STI, MCContext &Ctx,
@@ -311,6 +311,10 @@ static DecodeStatus DecodeFMem3(MCInst &Inst, unsigned Insn,
                                uint64_t Address,
                                const void *Decoder);
 
+static DecodeStatus DecodeFMemCop2R6(MCInst &Inst, unsigned Insn,
+                               uint64_t Address,
+                               const void *Decoder);
+
 static DecodeStatus DecodeSpecial3LlSc(MCInst &Inst,
                                        unsigned Insn,
                                        uint64_t Address,
@@ -372,6 +376,9 @@ static DecodeStatus DecodeANDI16Imm(MCInst &Inst, unsigned Insn,
 
 static DecodeStatus DecodeUImm5lsl2(MCInst &Inst, unsigned Insn,
                                    uint64_t Address, const void *Decoder);
+
+static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
+                                     uint64_t Address, const void *Decoder);
 
 /// INSVE_[BHWD] have an implicit operand that the generated decoder doesn't
 /// handle.
@@ -1361,6 +1368,23 @@ static DecodeStatus DecodeFMem3(MCInst &Inst,
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodeFMemCop2R6(MCInst &Inst,
+                                    unsigned Insn,
+                                    uint64_t Address,
+                                    const void *Decoder) {
+  int Offset = SignExtend32<11>(Insn & 0x07ff);
+  unsigned Reg = fieldFromInstruction(Insn, 16, 5);
+  unsigned Base = fieldFromInstruction(Insn, 11, 5);
+
+  Reg = getReg(Decoder, Mips::COP2RegClassID, Reg);
+  Base = getReg(Decoder, Mips::GPR32RegClassID, Base);
+
+  Inst.addOperand(MCOperand::CreateReg(Reg));
+  Inst.addOperand(MCOperand::CreateReg(Base));
+  Inst.addOperand(MCOperand::CreateImm(Offset));
+
+  return MCDisassembler::Success;
+}
 static DecodeStatus DecodeSpecial3LlSc(MCInst &Inst,
                                        unsigned Insn,
                                        uint64_t Address,
@@ -1749,5 +1773,11 @@ static DecodeStatus DecodeRegListOperand16(MCInst &Inst, unsigned Insn,
 
   Inst.addOperand(MCOperand::CreateReg(Mips::RA));
 
+  return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
+                                     uint64_t Address, const void *Decoder) {
+  Inst.addOperand(MCOperand::CreateImm(SignExtend32<23>(Insn) << 2));
   return MCDisassembler::Success;
 }

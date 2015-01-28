@@ -50,17 +50,22 @@ CGSCC_PASS("no-op-cgscc", NoOpCGSCCPass())
 #ifndef FUNCTION_ANALYSIS
 #define FUNCTION_ANALYSIS(NAME, CREATE_PASS)
 #endif
+FUNCTION_ANALYSIS("assumptions", AssumptionAnalysis())
 FUNCTION_ANALYSIS("domtree", DominatorTreeAnalysis())
 FUNCTION_ANALYSIS("loops", LoopAnalysis())
 FUNCTION_ANALYSIS("no-op-function", NoOpFunctionAnalysis())
+FUNCTION_ANALYSIS("targetlibinfo", TargetLibraryAnalysis())
 #undef FUNCTION_ANALYSIS
 
 #ifndef FUNCTION_PASS
 #define FUNCTION_PASS(NAME, CREATE_PASS)
 #endif
+FUNCTION_PASS("instcombine", InstCombinePass())
 FUNCTION_PASS("invalidate<all>", InvalidateAllAnalysesPass())
 FUNCTION_PASS("no-op-function", NoOpFunctionPass())
+FUNCTION_PASS("lower-expect", LowerExpectIntrinsicPass())
 FUNCTION_PASS("print", PrintFunctionPass(dbgs()))
+FUNCTION_PASS("print<assumptions>", AssumptionPrinterPass(dbgs()))
 FUNCTION_PASS("print<domtree>", DominatorTreePrinterPass(dbgs()))
 FUNCTION_PASS("print<loops>", LoopPrinterPass(dbgs()))
 FUNCTION_PASS("verify", VerifierPass())

@@ -66,10 +66,10 @@ class DIHeaderFieldIterator
 
 public:
   DIHeaderFieldIterator() {}
-  DIHeaderFieldIterator(StringRef Header)
+  explicit DIHeaderFieldIterator(StringRef Header)
       : Header(Header), Current(Header.slice(0, Header.find('\0'))) {}
   StringRef operator*() const { return Current; }
-  const StringRef * operator->() const { return &Current; }
+  const StringRef *operator->() const { return &Current; }
   DIHeaderFieldIterator &operator++() {
     increment();
     return *this;
@@ -97,6 +97,16 @@ public:
     if (Current.end() == Header.end())
       return StringRef();
     return Header.slice(Current.end() - Header.begin() + 1, StringRef::npos);
+  }
+
+  /// \brief Get the current field as a number.
+  ///
+  /// Convert the current field into a number.  Return \c 0 on error.
+  template <class T> T getNumber() const {
+    T Int;
+    if (getCurrent().getAsInteger(0, Int))
+      return 0;
+    return Int;
   }
 
 private:
@@ -181,29 +191,33 @@ public:
   bool operator==(DIDescriptor Other) const { return DbgNode == Other.DbgNode; }
   bool operator!=(DIDescriptor Other) const { return !operator==(Other); }
 
-  StringRef getHeader() const {
-    return getStringField(0);
-  }
+  StringRef getHeader() const { return getStringField(0); }
 
   size_t getNumHeaderFields() const {
     return std::distance(DIHeaderFieldIterator(getHeader()),
                          DIHeaderFieldIterator());
   }
 
-  StringRef getHeaderField(unsigned Index) const {
+  DIHeaderFieldIterator header_begin() const {
+    return DIHeaderFieldIterator(getHeader());
+  }
+  DIHeaderFieldIterator header_end() const { return DIHeaderFieldIterator(); }
+
+  DIHeaderFieldIterator getHeaderIterator(unsigned Index) const {
     // Since callers expect an empty string for out-of-range accesses, we can't
     // use std::advance() here.
-    for (DIHeaderFieldIterator I(getHeader()), E; I != E; ++I, --Index)
+    for (auto I = header_begin(), E = header_end(); I != E; ++I, --Index)
       if (!Index)
-        return *I;
-    return StringRef();
+        return I;
+    return header_end();
+  }
+
+  StringRef getHeaderField(unsigned Index) const {
+    return *getHeaderIterator(Index);
   }
 
   template <class T> T getHeaderFieldAs(unsigned Index) const {
-    T Int;
-    if (getHeaderField(Index).getAsInteger(0, Int))
-      return 0;
-    return Int;
+    return getHeaderIterator(Index).getNumber<T>();
   }
 
   uint16_t getTag() const { return getHeaderFieldAs<uint16_t>(0); }
@@ -258,9 +272,7 @@ public:
   unsigned getNumElements() const {
     return DbgNode ? DbgNode->getNumOperands() : 0;
   }
-  T getElement(unsigned Idx) const {
-    return getFieldAs<T>(Idx);
-  }
+  T getElement(unsigned Idx) const { return getFieldAs<T>(Idx); }
 };
 
 typedef DITypedArray<DIDescriptor> DIArray;
@@ -381,7 +393,7 @@ template <> DITypeRef DIDescriptor::getFieldAs<DITypeRef>(unsigned Elt) const;
 /// \brief Specialize DIRef constructor for DITypeRef.
 template <> DIRef<DIType>::DIRef(const Metadata *V);
 
-/// \briefThis is a wrapper for a type.
+/// \brief This is a wrapper for a type.
 ///
 /// FIXME: Types should be factored much better so that CV qualifiers and
 /// others do not require a huge and empty descriptor full of zeros.
@@ -392,7 +404,7 @@ protected:
 
 public:
   explicit DIType(const MDNode *N = nullptr) : DIScope(N) {}
-  operator DITypeRef () const {
+  operator DITypeRef() const {
     assert(isType() &&
            "constructing DITypeRef from an MDNode that is not a type");
     return DITypeRef(&*getRef());
@@ -402,20 +414,12 @@ public:
 
   DIScopeRef getContext() const { return getFieldAs<DIScopeRef>(2); }
   StringRef getName() const { return getHeaderField(1); }
-  unsigned getLineNumber() const {
-    return getHeaderFieldAs<unsigned>(2);
-  }
-  uint64_t getSizeInBits() const {
-    return getHeaderFieldAs<unsigned>(3);
-  }
-  uint64_t getAlignInBits() const {
-    return getHeaderFieldAs<unsigned>(4);
-  }
+  unsigned getLineNumber() const { return getHeaderFieldAs<unsigned>(2); }
+  uint64_t getSizeInBits() const { return getHeaderFieldAs<unsigned>(3); }
+  uint64_t getAlignInBits() const { return getHeaderFieldAs<unsigned>(4); }
   // FIXME: Offset is only used for DW_TAG_member nodes.  Making every type
   // carry this is just plain insane.
-  uint64_t getOffsetInBits() const {
-    return getHeaderFieldAs<unsigned>(5);
-  }
+  uint64_t getOffsetInBits() const { return getHeaderFieldAs<unsigned>(5); }
   unsigned getFlags() const { return getHeaderFieldAs<unsigned>(6); }
   bool isPrivate() const {
     return (getFlags() & FlagAccessibility) == FlagPrivate;
@@ -517,16 +521,15 @@ public:
 private:
   template <typename T>
   void setArrays(DITypedArray<T> Elements, DIArray TParams = DIArray()) {
-    assert((!TParams || DbgNode->getNumOperands() == 8) &&
-           "If you're setting the template parameters this should include a slot "
-           "for that!");
+    assert(
+        (!TParams || DbgNode->getNumOperands() == 8) &&
+        "If you're setting the template parameters this should include a slot "
+        "for that!");
     setArraysHelper(Elements, TParams);
   }
 
 public:
-  unsigned getRunTimeLang() const {
-    return getHeaderFieldAs<unsigned>(7);
-  }
+  unsigned getRunTimeLang() const { return getHeaderFieldAs<unsigned>(7); }
   DITypeRef getContainingType() const { return getFieldAs<DITypeRef>(5); }
 
 private:
@@ -671,7 +674,6 @@ public:
   unsigned isRValueReference() const {
     return (getFlags() & FlagRValueReference) != 0;
   }
-
 };
 
 /// \brief This is a wrapper for a lexical block.
@@ -679,12 +681,8 @@ class DILexicalBlock : public DIScope {
 public:
   explicit DILexicalBlock(const MDNode *N = nullptr) : DIScope(N) {}
   DIScope getContext() const { return getFieldAs<DIScope>(2); }
-  unsigned getLineNumber() const {
-    return getHeaderFieldAs<unsigned>(1);
-  }
-  unsigned getColumnNumber() const {
-    return getHeaderFieldAs<unsigned>(2);
-  }
+  unsigned getLineNumber() const { return getHeaderFieldAs<unsigned>(1); }
+  unsigned getColumnNumber() const { return getHeaderFieldAs<unsigned>(2); }
   bool Verify() const;
 };
 
@@ -721,7 +719,7 @@ public:
 class DITemplateTypeParameter : public DIDescriptor {
 public:
   explicit DITemplateTypeParameter(const MDNode *N = nullptr)
-    : DIDescriptor(N) {}
+      : DIDescriptor(N) {}
 
   StringRef getName() const { return getHeaderField(1); }
   unsigned getLineNumber() const { return getHeaderFieldAs<unsigned>(2); }
@@ -740,7 +738,7 @@ public:
 class DITemplateValueParameter : public DIDescriptor {
 public:
   explicit DITemplateValueParameter(const MDNode *N = nullptr)
-    : DIDescriptor(N) {}
+      : DIDescriptor(N) {}
 
   StringRef getName() const { return getHeaderField(1); }
   unsigned getLineNumber() const { return getHeaderFieldAs<unsigned>(2); }
@@ -834,7 +832,13 @@ public:
   void printExtendedName(raw_ostream &OS) const;
 };
 
-/// \brief A complex location expression.
+/// \brief A complex location expression in postfix notation.
+///
+/// This is (almost) a DWARF expression that modifies the location of a
+/// variable or (or the location of a single piece of a variable).
+///
+/// FIXME: Instead of DW_OP_plus taking an argument, this should use DW_OP_const
+/// and have DW_OP_plus consume the topmost elements on the stack.
 class DIExpression : public DIDescriptor {
   friend class DIDescriptor;
   void printInternal(raw_ostream &OS) const;
@@ -862,6 +866,67 @@ public:
   uint64_t getPieceOffset() const;
   /// \brief Return the size of this piece in bytes.
   uint64_t getPieceSize() const;
+
+  class iterator;
+  /// \brief A lightweight wrapper around an element of a DIExpression.
+  class Operand {
+    friend class iterator;
+    DIHeaderFieldIterator I;
+    Operand() {}
+    Operand(DIHeaderFieldIterator I) : I(I) {}
+  public:
+    /// \brief Operands such as DW_OP_piece have explicit (non-stack) arguments.
+    /// Argument 0 is the operand itself.
+    uint64_t getArg(unsigned N) const {
+      DIHeaderFieldIterator In = I;
+      std::advance(In, N);
+      return In.getNumber<uint64_t>();
+    }
+    operator uint64_t () const { return I.getNumber<uint64_t>(); }
+    /// \brief Returns underlying DIHeaderFieldIterator.
+    const DIHeaderFieldIterator &getBase() const { return I; }
+    /// \brief Returns the next operand.
+    Operand getNext() const;
+  };
+
+  /// \brief An iterator for DIExpression elements.
+  class iterator : public std::iterator<std::input_iterator_tag, StringRef,
+                                        unsigned, const Operand*, Operand> {
+    friend class Operand;
+    DIHeaderFieldIterator I;
+    Operand Tmp;
+    iterator(DIHeaderFieldIterator I) : I(I) {}
+  public:
+    iterator() {}
+    iterator(const DIExpression &Expr) : I(++Expr.header_begin()) {}
+    const Operand &operator*() { return Tmp = Operand(I); }
+    const Operand *operator->() { return &(Tmp = Operand(I)); }
+    iterator &operator++() {
+      increment();
+      return *this;
+    }
+    iterator operator++(int) {
+      iterator X(*this);
+      increment();
+      return X;
+    }
+    bool operator==(const iterator &X) const { return I == X.I; }
+    bool operator!=(const iterator &X) const { return !(*this == X); }
+
+  private:
+    void increment() {
+      switch (**this) {
+      case dwarf::DW_OP_piece: std::advance(I, 3); break;
+      case dwarf::DW_OP_plus:  std::advance(I, 2); break;
+      case dwarf::DW_OP_deref: std::advance(I, 1); break;
+      default:
+        llvm_unreachable("unsupported operand");
+      }
+    }
+  };
+
+  iterator begin() const;
+  iterator end() const;
 };
 
 /// \brief This object holds location information.
@@ -1036,6 +1101,9 @@ public:
   /// \brief Process DILocation.
   void processLocation(const Module &M, DILocation Loc);
 
+  /// \brief Process DIExpression.
+  void processExpression(DIExpression Expr);
+
   /// \brief Clear all lists.
   void reset();
 
@@ -1054,7 +1122,8 @@ private:
 public:
   typedef SmallVectorImpl<DICompileUnit>::const_iterator compile_unit_iterator;
   typedef SmallVectorImpl<DISubprogram>::const_iterator subprogram_iterator;
-  typedef SmallVectorImpl<DIGlobalVariable>::const_iterator global_variable_iterator;
+  typedef SmallVectorImpl<DIGlobalVariable>::const_iterator
+      global_variable_iterator;
   typedef SmallVectorImpl<DIType>::const_iterator type_iterator;
   typedef SmallVectorImpl<DIScope>::const_iterator scope_iterator;
 

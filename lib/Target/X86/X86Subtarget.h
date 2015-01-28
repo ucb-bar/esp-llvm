@@ -242,8 +242,6 @@ protected:
   InstrItineraryData InstrItins;
 
 private:
-  // Calculates type size & alignment
-  const DataLayout DL;
 
   /// StackAlignOverride - Override the stack alignment.
   unsigned StackAlignOverride;
@@ -276,7 +274,6 @@ public:
     return &TLInfo;
   }
   const X86InstrInfo *getInstrInfo() const override { return &InstrInfo; }
-  const DataLayout *getDataLayout() const override { return &DL; }
   const X86FrameLowering *getFrameLowering() const override {
     return &FrameLowering;
   }
@@ -406,6 +403,7 @@ public:
   bool isTargetFreeBSD() const { return TargetTriple.isOSFreeBSD(); }
   bool isTargetDragonFly() const { return TargetTriple.isOSDragonFly(); }
   bool isTargetSolaris() const { return TargetTriple.isOSSolaris(); }
+  bool isTargetPS4() const { return TargetTriple.isPS4(); }
 
   bool isTargetELF() const { return TargetTriple.isOSBinFormatELF(); }
   bool isTargetCOFF() const { return TargetTriple.isOSBinFormatCOFF(); }

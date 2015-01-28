@@ -12,9 +12,12 @@
 
 using namespace llvm;
 
-Target llvm::TheRISCVTarget;
+Target llvm::TheRISCVTarget, llvm::TheRISCV64Target;
 
 extern "C" void LLVMInitializeRISCVTargetInfo() {
   RegisterTarget<Triple::riscv, /*HasJIT=*/false>
-    X(TheRISCVTarget, "riscv", "RISCV");
+    A(TheRISCVTarget, "riscv", "RISCV");
+
+  RegisterTarget<Triple::riscv64, /*HasJIT=*/false>
+    B(TheRISCV64Target, "riscv64", "RISCV 64");
 }

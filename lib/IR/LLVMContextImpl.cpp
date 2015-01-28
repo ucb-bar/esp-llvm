@@ -15,7 +15,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DiagnosticInfo.h"
-#include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/Module.h"
 #include <algorithm>
 using namespace llvm;
@@ -97,8 +96,7 @@ LLVMContextImpl::~LLVMContextImpl() {
     delete I;
 #include "llvm/IR/Metadata.def"
 
-  // Free the constants.  This is important to do here to ensure that they are
-  // freed before the LeakDetector is torn down.
+  // Free the constants.
   std::for_each(ExprConstants.map_begin(), ExprConstants.map_end(),
                 DropFirst());
   std::for_each(ArrayConstants.map_begin(), ArrayConstants.map_end(),
@@ -163,6 +161,28 @@ LLVMContextImpl::~LLVMContextImpl() {
   MDStringCache.clear();
 }
 
+void LLVMContextImpl::dropTriviallyDeadConstantArrays() {
+  bool Changed;
+  do {
+    Changed = false;
+
+    for (auto I = ArrayConstants.map_begin(), E = ArrayConstants.map_end();
+         I != E; ) {
+      auto *C = I->first;
+      I++;
+      if (C->use_empty()) {
+        Changed = true;
+        C->destroyConstant();
+      }
+    }
+
+  } while (Changed);
+}
+
+void Module::dropTriviallyDeadConstantArrays() {
+  Context.pImpl->dropTriviallyDeadConstantArrays();
+}
+
 namespace llvm {
 /// \brief Make MDOperand transparent for hashing.
 ///
@@ -217,26 +237,4 @@ void InsertValueConstantExpr::anchor() { }
 void GetElementPtrConstantExpr::anchor() { }
 
 void CompareConstantExpr::anchor() { }
-
-GCStrategy *LLVMContextImpl::getGCStrategy(const StringRef Name) {
-  // TODO: Arguably, just doing a linear search would be faster for small N
-  auto NMI = GCStrategyMap.find(Name);
-  if (NMI != GCStrategyMap.end())
-    return NMI->getValue();
-  
-  for (auto& Entry : GCRegistry::entries()) {
-    if (Name == Entry.getName()) {
-      std::unique_ptr<GCStrategy> S = Entry.instantiate();
-      S->Name = Name;
-      GCStrategyMap[Name] = S.get();
-      GCStrategyList.push_back(std::move(S));
-      return GCStrategyList.back().get();
-    }
-  }
-
-  // No GCStrategy found for that name, error reporting is the job of our
-  // callers. 
-  return nullptr;
-}
-
 

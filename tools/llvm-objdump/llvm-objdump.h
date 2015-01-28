@@ -36,6 +36,14 @@ extern cl::opt<bool> LazyBind;
 extern cl::opt<bool> WeakBind;
 extern cl::opt<bool> UniversalHeaders;
 extern cl::opt<bool> ArchiveHeaders;
+extern cl::opt<bool> IndirectSymbols;
+extern cl::opt<bool> DataInCode;
+extern cl::opt<bool> LinkOptHints;
+extern cl::opt<bool> Relocations;
+extern cl::opt<bool> SectionHeaders;
+extern cl::opt<bool> SectionContents;
+extern cl::opt<bool> SymbolTable;
+extern cl::opt<bool> UnwindInfo;
 
 // Various helper functions.
 bool error(std::error_code ec);
@@ -57,6 +65,10 @@ void printRebaseTable(const object::ObjectFile *o);
 void printBindTable(const object::ObjectFile *o);
 void printLazyBindTable(const object::ObjectFile *o);
 void printWeakBindTable(const object::ObjectFile *o);
+void PrintRelocations(const object::ObjectFile *o);
+void PrintSectionHeaders(const object::ObjectFile *o);
+void PrintSectionContents(const object::ObjectFile *o);
+void PrintSymbolTable(const object::ObjectFile *o);
 
 } // end namespace llvm
 

@@ -462,7 +462,7 @@ unsigned MachineFunction::addLiveIn(unsigned PReg,
 /// normal 'L' label is returned.
 MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
                                         bool isLinkerPrivate) const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
+  const DataLayout *DL = getTarget().getDataLayout();
   assert(JumpTableInfo && "No jump tables");
   assert(JTI < JumpTableInfo->getJumpTables().size() && "Invalid JTI!");
 
@@ -477,7 +477,7 @@ MCSymbol *MachineFunction::getJTISymbol(unsigned JTI, MCContext &Ctx,
 /// getPICBaseSymbol - Return a function-local symbol to represent the PIC
 /// base.
 MCSymbol *MachineFunction::getPICBaseSymbol() const {
-  const DataLayout *DL = getSubtarget().getDataLayout();
+  const DataLayout *DL = getTarget().getDataLayout();
   return Ctx.GetOrCreateSymbol(Twine(DL->getPrivateGlobalPrefix())+
                                Twine(getFunctionNumber())+"$pb");
 }
@@ -600,8 +600,7 @@ MachineFrameInfo::getPristineRegs(const MachineBasicBlock *MBB) const {
   assert(MBB && "MBB must be valid");
   const MachineFunction *MF = MBB->getParent();
   assert(MF && "MBB must be part of a MachineFunction");
-  const TargetMachine &TM = MF->getTarget();
-  const TargetRegisterInfo *TRI = TM.getSubtargetImpl()->getRegisterInfo();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
   BitVector BV(TRI->getNumRegs());
 
   // Before CSI is calculated, no registers are considered pristine. They can be
@@ -821,7 +820,7 @@ void MachineJumpTableInfo::dump() const { print(dbgs()); }
 void MachineConstantPoolValue::anchor() { }
 
 const DataLayout *MachineConstantPool::getDataLayout() const {
-  return TM.getSubtargetImpl()->getDataLayout();
+  return TM.getDataLayout();
 }
 
 Type *MachineConstantPoolEntry::getType() const {

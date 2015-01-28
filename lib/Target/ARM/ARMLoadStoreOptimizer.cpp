@@ -567,10 +567,21 @@ ARMLoadStoreOpt::MergeOps(MachineBasicBlock &MBB,
       //   MOV  NewBase, Base
       //   ADDS NewBase, #imm8.
       if (Base != NewBase && Offset >= 8) {
+        const ARMSubtarget &Subtarget = MBB.getParent()->getTarget()
+                       .getSubtarget<ARMSubtarget>();
         // Need to insert a MOV to the new base first.
-        BuildMI(MBB, MBBI, dl, TII->get(ARM::tMOVr), NewBase)
-          .addReg(Base, getKillRegState(BaseKill))
-          .addImm(Pred).addReg(PredReg);
+        if (isARMLowRegister(NewBase) && isARMLowRegister(Base) &&
+            !Subtarget.hasV6Ops()) {
+          // thumbv4t doesn't have lo->lo copies, and we can't predicate tMOVSr
+          if (Pred != ARMCC::AL)
+            return false;
+          BuildMI(MBB, MBBI, dl, TII->get(ARM::tMOVSr), NewBase)
+            .addReg(Base, getKillRegState(BaseKill));
+        } else
+          BuildMI(MBB, MBBI, dl, TII->get(ARM::tMOVr), NewBase)
+            .addReg(Base, getKillRegState(BaseKill))
+            .addImm(Pred).addReg(PredReg);
+
         // Set up BaseKill and Base correctly to insert the ADDS/SUBS below.
         Base = NewBase;
         BaseKill = false;
@@ -1850,7 +1861,7 @@ namespace {
 }
 
 bool ARMPreAllocLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
-  TD = Fn.getSubtarget().getDataLayout();
+  TD = Fn.getTarget().getDataLayout();
   TII = Fn.getSubtarget().getInstrInfo();
   TRI = Fn.getSubtarget().getRegisterInfo();
   STI = &static_cast<const ARMSubtarget &>(Fn.getSubtarget());

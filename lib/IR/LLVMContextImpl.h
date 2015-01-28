@@ -17,7 +17,6 @@
 
 #include "AttributeImpl.h"
 #include "ConstantsContext.h"
-#include "LeaksContext.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
@@ -285,44 +284,44 @@ struct MDLocationInfo {
   }
 };
 
-/// \brief DenseMapInfo for GenericDwarfNode.
-struct GenericDwarfNodeInfo {
+/// \brief DenseMapInfo for GenericDebugNode.
+struct GenericDebugNodeInfo {
   struct KeyTy : MDNodeOpsKey {
     unsigned Tag;
-    MDString *Header;
-    KeyTy(unsigned Tag, MDString *Header, ArrayRef<Metadata *> DwarfOps)
+    StringRef Header;
+    KeyTy(unsigned Tag, StringRef Header, ArrayRef<Metadata *> DwarfOps)
         : MDNodeOpsKey(DwarfOps), Tag(Tag), Header(Header) {}
-    KeyTy(GenericDwarfNode *N)
+    KeyTy(GenericDebugNode *N)
         : MDNodeOpsKey(N, 1), Tag(N->getTag()), Header(N->getHeader()) {}
 
-    bool operator==(const GenericDwarfNode *RHS) const {
+    bool operator==(const GenericDebugNode *RHS) const {
       if (RHS == getEmptyKey() || RHS == getTombstoneKey())
         return false;
       return Tag == RHS->getTag() && Header == RHS->getHeader() &&
              compareOps(RHS, 1);
     }
 
-    static unsigned calculateHash(GenericDwarfNode *N) {
+    static unsigned calculateHash(GenericDebugNode *N) {
       return MDNodeOpsKey::calculateHash(N, 1);
     }
   };
-  static inline GenericDwarfNode *getEmptyKey() {
-    return DenseMapInfo<GenericDwarfNode *>::getEmptyKey();
+  static inline GenericDebugNode *getEmptyKey() {
+    return DenseMapInfo<GenericDebugNode *>::getEmptyKey();
   }
-  static inline GenericDwarfNode *getTombstoneKey() {
-    return DenseMapInfo<GenericDwarfNode *>::getTombstoneKey();
+  static inline GenericDebugNode *getTombstoneKey() {
+    return DenseMapInfo<GenericDebugNode *>::getTombstoneKey();
   }
   static unsigned getHashValue(const KeyTy &Key) {
     return hash_combine(Key.getHash(), Key.Tag, Key.Header);
   }
-  static unsigned getHashValue(const GenericDwarfNode *U) {
+  static unsigned getHashValue(const GenericDebugNode *U) {
     return hash_combine(U->getHash(), U->getTag(), U->getHeader());
   }
-  static bool isEqual(const KeyTy &LHS, const GenericDwarfNode *RHS) {
+  static bool isEqual(const KeyTy &LHS, const GenericDebugNode *RHS) {
     return LHS == RHS;
   }
-  static bool isEqual(const GenericDwarfNode *LHS,
-                      const GenericDwarfNode *RHS) {
+  static bool isEqual(const GenericDebugNode *LHS,
+                      const GenericDebugNode *RHS) {
     return LHS == RHS;
   }
 };
@@ -359,7 +358,7 @@ public:
 
   DenseSet<MDTuple *, MDTupleInfo> MDTuples;
   DenseSet<MDLocation *, MDLocationInfo> MDLocations;
-  DenseSet<GenericDwarfNode *, GenericDwarfNodeInfo> GenericDwarfNodes;
+  DenseSet<GenericDebugNode *, GenericDebugNodeInfo> GenericDebugNodes;
 
   // MDNodes may be uniqued or not uniqued.  When they're not uniqued, they
   // aren't in the MDNodeSet, but they're still shared between objects, so no
@@ -392,9 +391,6 @@ public:
 
   ConstantInt *TheTrueVal;
   ConstantInt *TheFalseVal;
-  
-  LeakDetectorImpl<Value> LLVMObjects;
-  LeakDetectorImpl<Metadata> LLVMMDObjects;
 
   // Basic type instances.
   Type VoidTy, LabelTy, HalfTy, FloatTy, DoubleTy, MetadataTy;
@@ -461,19 +457,11 @@ public:
   int getOrAddScopeRecordIdxEntry(MDNode *N, int ExistingIdx);
   int getOrAddScopeInlinedAtIdxEntry(MDNode *Scope, MDNode *IA,int ExistingIdx);
 
-  /// An owning list of all GCStrategies which have been created
-  SmallVector<std::unique_ptr<GCStrategy>, 1> GCStrategyList;
-  /// A helper map to speedup lookups into the above list
-  StringMap<GCStrategy*> GCStrategyMap;
-
-  /// Lookup the GCStrategy object associated with the given gc name.  If one
-  /// can't be found, returns nullptr.  The lifetime of the returned objects
-  /// is dictated by the lifetime of the associated context.  No caller should
-  /// attempt to delete the returned objects.
-  GCStrategy *getGCStrategy(const StringRef Name);
-  
   LLVMContextImpl(LLVMContext &C);
   ~LLVMContextImpl();
+
+  /// Destroy the ConstantArrays if they are not used.
+  void dropTriviallyDeadConstantArrays();
 };
 
 }

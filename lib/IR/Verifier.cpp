@@ -2391,6 +2391,7 @@ bool Verifier::VerifyIntrinsicType(Type *Ty,
     ArgTys.push_back(Ty);
 
     switch (D.getArgumentKind()) {
+    case IITDescriptor::AK_Any:        return false; // Success
     case IITDescriptor::AK_AnyInteger: return !Ty->isIntOrIntVectorTy();
     case IITDescriptor::AK_AnyFloat:   return !Ty->isFPOrFPVectorTy();
     case IITDescriptor::AK_AnyVector:  return !isa<VectorType>(Ty);
@@ -2639,8 +2640,6 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
             "gc.statepoint callee must be of function pointer type",
             &CI, Target);
     FunctionType *TargetFuncType = cast<FunctionType>(PT->getElementType());
-    Assert1(!TargetFuncType->isVarArg(),
-            "gc.statepoint support for var arg functions not implemented", &CI);
 
     const Value *NumCallArgsV = CI.getArgOperand(1);
     Assert1(isa<ConstantInt>(NumCallArgsV),
@@ -2650,8 +2649,18 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
     Assert1(NumCallArgs >= 0,
             "gc.statepoint number of arguments to underlying call "
             "must be positive", &CI);
-    Assert1(NumCallArgs == (int)TargetFuncType->getNumParams(),
-            "gc.statepoint mismatch in number of call args", &CI);
+    const int NumParams = (int)TargetFuncType->getNumParams();
+    if (TargetFuncType->isVarArg()) {
+      Assert1(NumCallArgs >= NumParams,
+              "gc.statepoint mismatch in number of vararg call args", &CI);
+
+      // TODO: Remove this limitation
+      Assert1(TargetFuncType->getReturnType()->isVoidTy(),
+              "gc.statepoint doesn't support wrapping non-void "
+              "vararg functions yet", &CI);
+    } else
+      Assert1(NumCallArgs == NumParams,
+              "gc.statepoint mismatch in number of call args", &CI);
 
     const Value *Unused = CI.getArgOperand(2);
     Assert1(isa<ConstantInt>(Unused) &&
@@ -2660,7 +2669,7 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
 
     // Verify that the types of the call parameter arguments match
     // the type of the wrapped callee.
-    for (int i = 0; i < NumCallArgs; i++) {
+    for (int i = 0; i < NumParams; i++) {
       Type *ParamType = TargetFuncType->getParamType(i);
       Type *ArgType = CI.getArgOperand(3+i)->getType();
       Assert1(ArgType == ParamType,
@@ -2713,7 +2722,8 @@ void Verifier::visitIntrinsicFunctionCall(Intrinsic::ID ID, CallInst &CI) {
   }
   case Intrinsic::experimental_gc_result_int:
   case Intrinsic::experimental_gc_result_float:
-  case Intrinsic::experimental_gc_result_ptr: {
+  case Intrinsic::experimental_gc_result_ptr:
+  case Intrinsic::experimental_gc_result: {
     // Are we tied to a statepoint properly?
     CallSite StatepointCS(CI.getArgOperand(0));
     const Function *StatepointFn =
@@ -2833,12 +2843,20 @@ void DebugInfoVerifier::processCallInst(DebugInfoFinder &Finder,
   if (Function *F = CI.getCalledFunction())
     if (Intrinsic::ID ID = (Intrinsic::ID)F->getIntrinsicID())
       switch (ID) {
-      case Intrinsic::dbg_declare:
-        Finder.processDeclare(*M, cast<DbgDeclareInst>(&CI));
+      case Intrinsic::dbg_declare: {
+        auto *DDI = cast<DbgDeclareInst>(&CI);
+        Finder.processDeclare(*M, DDI);
+        if (auto E = DDI->getExpression())
+          Assert1(DIExpression(E).Verify(), "DIExpression does not Verify!", E);
         break;
-      case Intrinsic::dbg_value:
-        Finder.processValue(*M, cast<DbgValueInst>(&CI));
+      }
+      case Intrinsic::dbg_value: {
+        auto *DVI = cast<DbgValueInst>(&CI);
+        Finder.processValue(*M, DVI);
+        if (auto E = DVI->getExpression())
+          Assert1(DIExpression(E).Verify(), "DIExpression does not Verify!", E);
         break;
+      }
       default:
         break;
       }

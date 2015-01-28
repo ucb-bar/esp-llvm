@@ -379,7 +379,6 @@ class JMP_IDX_COMPACT_DESC_BASE<string opstr, DAGOperand opnd,
   list<dag> Pattern = [];
   bit isTerminator = 1;
   bit hasDelaySlot = 0;
-  string DecoderMethod = "DecodeSimm16";
 }
 
 class JIALC_DESC : JMP_IDX_COMPACT_DESC_BASE<"jialc", calloffset16,
@@ -561,6 +560,7 @@ class COP2LD_DESC_BASE<string instr_asm, RegisterOperand COPOpnd> {
   string AsmString = !strconcat(instr_asm, "\t$rt, $addr");
   list<dag> Pattern = [];
   bit mayLoad = 1;
+  string DecoderMethod = "DecodeFMemCop2R6";
 }
 
 class LDC2_R6_DESC : COP2LD_DESC_BASE<"ldc2", COP2Opnd>;
@@ -572,6 +572,7 @@ class COP2ST_DESC_BASE<string instr_asm, RegisterOperand COPOpnd> {
   string AsmString = !strconcat(instr_asm, "\t$rt, $addr");
   list<dag> Pattern = [];
   bit mayStore = 1;
+  string DecoderMethod = "DecodeFMemCop2R6";
 }
 
 class SDC2_R6_DESC : COP2ST_DESC_BASE<"sdc2", COP2Opnd>;

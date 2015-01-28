@@ -40,7 +40,7 @@ void initializeObjCARCOpts(PassRegistry&);
 void initializeVectorization(PassRegistry&);
 
 /// initializeInstCombine - Initialize all passes linked into the
-/// ScalarOpts library.
+/// InstCombine library.
 void initializeInstCombine(PassRegistry&);
 
 /// initializeIPO - Initialize all passes linked into the IPO library.
@@ -129,7 +129,7 @@ void initializeThreadSanitizerPass(PassRegistry&);
 void initializeSanitizerCoverageModulePass(PassRegistry&);
 void initializeDataFlowSanitizerPass(PassRegistry&);
 void initializeScalarizerPass(PassRegistry&);
-void initializeEarlyCSEPass(PassRegistry&);
+void initializeEarlyCSELegacyPassPass(PassRegistry &);
 void initializeExpandISelPseudosPass(PassRegistry&);
 void initializeFunctionAttrsPass(PassRegistry&);
 void initializeGCMachineCodeAnalysisPass(PassRegistry&);
@@ -145,7 +145,7 @@ void initializeIfConverterPass(PassRegistry&);
 void initializeInductiveRangeCheckEliminationPass(PassRegistry&);
 void initializeIndVarSimplifyPass(PassRegistry&);
 void initializeInlineCostAnalysisPass(PassRegistry&);
-void initializeInstCombinerPass(PassRegistry&);
+void initializeInstructionCombiningPassPass(PassRegistry&);
 void initializeInstCountPass(PassRegistry&);
 void initializeInstNamerPass(PassRegistry&);
 void initializeInternalizePassPass(PassRegistry&);

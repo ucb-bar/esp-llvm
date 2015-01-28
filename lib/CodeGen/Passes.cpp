@@ -249,7 +249,7 @@ TargetPassConfig::TargetPassConfig(TargetMachine *tm, PassManagerBase &pm)
   substitutePass(&PostRAMachineLICMID, &MachineLICMID);
 
   // Temporarily disable experimental passes.
-  const TargetSubtargetInfo &ST = TM->getSubtarget<TargetSubtargetInfo>();
+  const TargetSubtargetInfo &ST = *TM->getSubtargetImpl();
   if (!ST.useMachineScheduler())
     disablePass(&MachineSchedulerID);
 }
@@ -447,8 +447,7 @@ void TargetPassConfig::addPassesToHandleExceptions() {
     // FALLTHROUGH
   case ExceptionHandling::DwarfCFI:
   case ExceptionHandling::ARM:
-  case ExceptionHandling::ItaniumWinEH:
-  case ExceptionHandling::MSVC: // FIXME: Needs preparation.
+  case ExceptionHandling::WinEH:
     addPass(createDwarfEHPass(TM));
     break;
   case ExceptionHandling::None:

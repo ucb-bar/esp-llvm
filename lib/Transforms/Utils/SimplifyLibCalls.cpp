@@ -1968,8 +1968,12 @@ Value *LibCallSimplifier::optimizeCall(CallInst *CI) {
     // Try to further simplify the result.
     CallInst *SimplifiedCI = dyn_cast<CallInst>(SimplifiedFortifiedCI);
     if (SimplifiedCI && SimplifiedCI->getCalledFunction())
-      if (Value *V = optimizeStringMemoryLibCall(SimplifiedCI, Builder))
+      if (Value *V = optimizeStringMemoryLibCall(SimplifiedCI, Builder)) {
+        // If we were able to further simplify, remove the now redundant call.
+        SimplifiedCI->replaceAllUsesWith(V);
+        SimplifiedCI->eraseFromParent();
         return V;
+      }
     return SimplifiedFortifiedCI;
   }
 
@@ -2084,15 +2088,19 @@ Value *LibCallSimplifier::optimizeCall(CallInst *CI) {
   return nullptr;
 }
 
-LibCallSimplifier::LibCallSimplifier(const DataLayout *DL,
-                                     const TargetLibraryInfo *TLI) :
-                                     FortifiedSimplifier(DL, TLI),
-                                     DL(DL),
-                                     TLI(TLI),
-                                     UnsafeFPShrink(false) {
+LibCallSimplifier::LibCallSimplifier(
+    const DataLayout *DL, const TargetLibraryInfo *TLI,
+    function_ref<void(Instruction *, Value *)> Replacer)
+    : FortifiedSimplifier(DL, TLI), DL(DL), TLI(TLI), UnsafeFPShrink(false),
+      Replacer(Replacer) {}
+
+void LibCallSimplifier::replaceAllUsesWith(Instruction *I, Value *With) {
+  // Indirect through the replacer used in this instance.
+  Replacer(I, With);
 }
 
-void LibCallSimplifier::replaceAllUsesWith(Instruction *I, Value *With) const {
+/*static*/ void LibCallSimplifier::replaceAllUsesWithDefault(Instruction *I,
+                                                             Value *With) {
   I->replaceAllUsesWith(With);
   I->eraseFromParent();
 }
@@ -2218,11 +2226,11 @@ Value *FortifiedLibCallSimplifier::optimizeMemSetChk(CallInst *CI, IRBuilder<> &
   return nullptr;
 }
 
-Value *FortifiedLibCallSimplifier::optimizeStrCpyChk(CallInst *CI, IRBuilder<> &B) {
+Value *FortifiedLibCallSimplifier::optimizeStrpCpyChk(CallInst *CI,
+                                                      IRBuilder<> &B,
+                                                      LibFunc::Func Func) {
   Function *Callee = CI->getCalledFunction();
   StringRef Name = Callee->getName();
-  LibFunc::Func Func =
-      Name.startswith("str") ? LibFunc::strcpy_chk : LibFunc::stpcpy_chk;
 
   if (!checkStringCopyLibFuncSignature(Callee, Func, DL))
     return nullptr;
@@ -2231,7 +2239,7 @@ Value *FortifiedLibCallSimplifier::optimizeStrCpyChk(CallInst *CI, IRBuilder<> &
         *ObjSize = CI->getArgOperand(2);
 
   // __stpcpy_chk(x,x,...)  -> x+strlen(x)
-  if (!OnlyLowerUnknownSize && Dst == Src) {
+  if (Func == LibFunc::stpcpy_chk && !OnlyLowerUnknownSize && Dst == Src) {
     Value *StrLen = EmitStrLen(Src, B, DL, TLI);
     return StrLen ? B.CreateInBoundsGEP(Dst, StrLen) : nullptr;
   }
@@ -2266,11 +2274,11 @@ Value *FortifiedLibCallSimplifier::optimizeStrCpyChk(CallInst *CI, IRBuilder<> &
   return nullptr;
 }
 
-Value *FortifiedLibCallSimplifier::optimizeStrNCpyChk(CallInst *CI, IRBuilder<> &B) {
+Value *FortifiedLibCallSimplifier::optimizeStrpNCpyChk(CallInst *CI,
+                                                       IRBuilder<> &B,
+                                                       LibFunc::Func Func) {
   Function *Callee = CI->getCalledFunction();
   StringRef Name = Callee->getName();
-  LibFunc::Func Func =
-      Name.startswith("str") ? LibFunc::strncpy_chk : LibFunc::stpncpy_chk;
 
   if (!checkStringCopyLibFuncSignature(Callee, Func, DL))
     return nullptr;
@@ -2310,10 +2318,10 @@ Value *FortifiedLibCallSimplifier::optimizeCall(CallInst *CI) {
     return optimizeMemSetChk(CI, Builder);
   case LibFunc::stpcpy_chk:
   case LibFunc::strcpy_chk:
-    return optimizeStrCpyChk(CI, Builder);
+    return optimizeStrpCpyChk(CI, Builder, Func);
   case LibFunc::stpncpy_chk:
   case LibFunc::strncpy_chk:
-    return optimizeStrNCpyChk(CI, Builder);
+    return optimizeStrpNCpyChk(CI, Builder, Func);
   default:
     break;
   }

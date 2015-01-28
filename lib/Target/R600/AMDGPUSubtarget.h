@@ -30,6 +30,8 @@
 
 namespace llvm {
 
+class SIMachineFunctionInfo;
+
 class AMDGPUSubtarget : public AMDGPUGenSubtargetInfo {
 
 public:
@@ -63,8 +65,9 @@ private:
   unsigned WavefrontSize;
   bool CFALUBug;
   int LocalMemorySize;
+  bool EnableVGPRSpilling;
 
-  const DataLayout DL;
+  DataLayout DL;
   AMDGPUFrameLowering FrameLowering;
   std::unique_ptr<AMDGPUTargetLowering> TLInfo;
   std::unique_ptr<AMDGPUInstrInfo> InstrInfo;
@@ -74,6 +77,10 @@ private:
 public:
   AMDGPUSubtarget(StringRef TT, StringRef CPU, StringRef FS, TargetMachine &TM);
   AMDGPUSubtarget &initializeSubtargetDependencies(StringRef GPU, StringRef FS);
+
+  // FIXME: This routine needs to go away. See comments in
+  // AMDGPUTargetMachine.h.
+  const DataLayout *getDataLayout() const { return &DL; }
 
   const AMDGPUFrameLowering *getFrameLowering() const override {
     return &FrameLowering;
@@ -87,7 +94,6 @@ public:
   AMDGPUTargetLowering *getTargetLowering() const override {
     return TLInfo.get();
   }
-  const DataLayout *getDataLayout() const override { return &DL; }
   const InstrItineraryData *getInstrItineraryData() const override {
     return &InstrItins;
   }
@@ -224,6 +230,7 @@ public:
   bool isAmdHsaOS() const {
     return TargetTriple.getOS() == Triple::AMDHSA;
   }
+  bool isVGPRSpillingEnabled(const SIMachineFunctionInfo *MFI) const;
 };
 
 } // End namespace llvm

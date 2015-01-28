@@ -773,4 +773,5 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 // Force static initialization.
 extern "C" void LLVMInitializeRISCVAsmParser() {
   RegisterMCAsmParser<RISCVAsmParser> X(TheRISCVTarget);
+  RegisterMCAsmParser<RISCVAsmParser> Y(TheRISCV64Target);
 }

@@ -26,6 +26,7 @@ class Target;
 class raw_ostream;
 
 extern Target TheRISCVTarget;
+extern Target TheRISCV64Target;
 
 namespace RISCVMC {
   // How many bytes are in the ABI-defined, caller-allocated part of

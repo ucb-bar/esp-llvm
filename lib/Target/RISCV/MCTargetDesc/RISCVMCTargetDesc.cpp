@@ -125,36 +125,54 @@ extern "C" void LLVMInitializeRISCVTargetMC() {
   // Register the MCAsmInfo.
   TargetRegistry::RegisterMCAsmInfo(TheRISCVTarget,
                                     createRISCVMCAsmInfo);
+  TargetRegistry::RegisterMCAsmInfo(TheRISCV64Target,
+                                    createRISCVMCAsmInfo);
 
   // Register the MCCodeGenInfo.
   TargetRegistry::RegisterMCCodeGenInfo(TheRISCVTarget,
+                                        createRISCVMCCodeGenInfo);
+  TargetRegistry::RegisterMCCodeGenInfo(TheRISCV64Target,
                                         createRISCVMCCodeGenInfo);
 
   // Register the MCCodeEmitter.
   TargetRegistry::RegisterMCCodeEmitter(TheRISCVTarget,
 					createRISCVMCCodeEmitter);
+  TargetRegistry::RegisterMCCodeEmitter(TheRISCV64Target,
+					createRISCVMCCodeEmitter);
 
   // Register the MCInstrInfo.
+  TargetRegistry::RegisterMCInstrInfo(TheRISCVTarget,
+                                      createRISCVMCInstrInfo);
   TargetRegistry::RegisterMCInstrInfo(TheRISCVTarget,
                                       createRISCVMCInstrInfo);
 
   // Register the MCRegisterInfo.
   TargetRegistry::RegisterMCRegInfo(TheRISCVTarget,
                                     createRISCVMCRegisterInfo);
+  TargetRegistry::RegisterMCRegInfo(TheRISCV64Target,
+                                    createRISCVMCRegisterInfo);
 
   // Register the MCSubtargetInfo.
   TargetRegistry::RegisterMCSubtargetInfo(TheRISCVTarget,
+                                          createRISCVMCSubtargetInfo);
+  TargetRegistry::RegisterMCSubtargetInfo(TheRISCV64Target,
                                           createRISCVMCSubtargetInfo);
 
   // Register the MCAsmBackend.
   TargetRegistry::RegisterMCAsmBackend(TheRISCVTarget,
                                        createRISCVMCAsmBackend);
+  TargetRegistry::RegisterMCAsmBackend(TheRISCV64Target,
+                                       createRISCVMCAsmBackend);
 
   // Register the MCInstPrinter.
   TargetRegistry::RegisterMCInstPrinter(TheRISCVTarget,
                                         createRISCVMCInstPrinter);
+  TargetRegistry::RegisterMCInstPrinter(TheRISCV64Target,
+                                        createRISCVMCInstPrinter);
 
   // Register the MCObjectStreamer;
   TargetRegistry::RegisterMCObjectStreamer(TheRISCVTarget,
+                                           createRISCVMCObjectStreamer);
+  TargetRegistry::RegisterMCObjectStreamer(TheRISCV64Target,
                                            createRISCVMCObjectStreamer);
 }
