@@ -1,0 +1,31 @@
+language: cpp
+compiler:
+  - gcc
+notifications:
+    email:
+        - colins@eecs.berkeley.edu
+cache: apt
+env:
+  global:
+    # required packages to install
+    - PKGS="gperf autoconf automake autotools-dev libmpc-dev libmpfr-dev libgmp-dev gawk build-essential bison flex texinfo"
+    - RISCV="/home/travis/riscv_install"
+git:
+      submodules: true
+before_install:
+    # change shell to bash 
+  - echo $0
+  - sudo chsh -s /bin/bash travis
+  - echo $0
+  - ls -la /bin/sh
+  - sudo rm /bin/sh
+  - sudo ln -s /bin/bash /bin/sh
+  - ls -la /bin/sh
+  - pwd
+  - mkdir ~/riscv_install
+  - sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq ${PKGS}
+  - if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.8; fi
+  - if [ "$CXX" = "g++" ]; then export CXX="g++-4.8" CC="gcc-4.8"; fi
+script: "./configure --prefix=${RISCV} && make && make check && make check-all"
