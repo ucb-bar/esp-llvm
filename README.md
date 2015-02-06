@@ -27,7 +27,7 @@ Version : (under version control)
 
 This repository contains a new target for LLVM RISC-V. It supports the latest
 version of the ISA 2.0. This backend currently only supports assembly generation
-and riscv-gcc must be used to assemble and link the executable.
+and riscv64-unknown-\*-gcc must be used to assemble and link the executable.
 
 The backend is structured similarly to most other LLVM backends and tries to use 
 the tablegen format as much as possible. The description of the instructions
@@ -51,7 +51,7 @@ generating assembly in an extensible way such that adding new ISA extensions
 and using them should be relatively painless. As the RISC-V support develops
 the backend may provide more features.
 
-The compiler is fairly robust with similar performance to riscv-gcc, so it use
+The compiler is fairly robust with similar performance to riscv64-unknown-\*-gcc, so it use
 in any and all projects is encouraged.
 
 Feedback and suggestions are welcome.
@@ -76,7 +76,7 @@ Use
 --------------------------------------------------------------------
 
 Using the llvm-riscv is fairly simple to build a full executable however you
-need riscv-gcc to do the assembling and linking. An example of compiling hello
+need riscv-64-unknown-\*-gcc to do the assembling and linking. An example of compiling hello
 world:
 
 	$ cat hello.c
@@ -85,5 +85,5 @@ world:
     	printf("Hello World!\n");
 	}
 	$ clang -target riscv -mriscv=RV64IAMFD -S hello.c -o hello.S
-	$ riscv-gcc -o hello.riscv hello.S
+	$ riscv-64-unknown-elf-gcc -o hello.riscv hello.S
 
