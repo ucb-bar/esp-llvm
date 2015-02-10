@@ -29,4 +29,4 @@ before_install:
   - if [ "$CXX" = "g++" ]; then sudo apt-get install -qq g++-4.9; fi
   - if [ "$CXX" = "g++" ]; then export CXX="g++-4.9" CC="gcc-4.9"; fi
   - $CXX --version
-script: "./configure --enable-optimized --prefix=${RISCV} && make -j4 && make check && make check-all"
+script: "mkdir build && cd build && ../configure --enable-optimized --enable-targets=riscv --prefix=${RISCV} && make -j4 && make check && make check-all"
