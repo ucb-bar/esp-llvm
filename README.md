@@ -61,7 +61,7 @@ Installation
 
 The LLVM RISCV backend is built just as the normal LLVM system.
 
-	$ git clone -b RISCV git@github.com:ucb-bar/riscv-llvm.git
+	$ git clone -b RISCV git@github.com:riscv/riscv-llvm.git
 	$ git submodule update --init
 	$ mkdir build
 	$ cd build
