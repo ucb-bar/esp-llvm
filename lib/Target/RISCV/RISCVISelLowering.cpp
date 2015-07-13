@@ -29,29 +29,29 @@
 
 using namespace llvm;
 
-static const uint16_t RV32IntRegs[8] = {
+static const MCPhysReg RV32IntRegs[8] = {
   RISCV::a0, RISCV::a1, RISCV::a2, RISCV::a3,
   RISCV::a4, RISCV::a5, RISCV::a6, RISCV::a7
 };
 
-static const uint16_t RV64IntRegs[8] = {
+static const MCPhysReg RV64IntRegs[8] = {
   RISCV::a0_64, RISCV::a1_64, RISCV::a2_64, RISCV::a3_64,
   RISCV::a4_64, RISCV::a5_64, RISCV::a6_64, RISCV::a7_64
 };
 
-static const uint16_t FPFRegs[8] = {
+static const MCPhysReg FPFRegs[8] = {
   RISCV::fa0, RISCV::fa1, RISCV::fa2, RISCV::fa3,
   RISCV::fa4, RISCV::fa5, RISCV::fa6, RISCV::fa7
 };
 
-static const uint16_t FPDRegs[8] = {
+static const MCPhysReg FPDRegs[8] = {
   RISCV::fa0_64, RISCV::fa1_64, RISCV::fa2_64, RISCV::fa3_64,
   RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64
 };
 
-RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
-    : TargetLowering(tm),
-      Subtarget(tm.getSubtarget<RISCVSubtarget>()), IsRV32(Subtarget.isRV32()) {
+RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm, 
+                                         const RISCVSubtarget &STI)
+    : TargetLowering(tm), Subtarget(STI), IsRV32(Subtarget.isRV32()) {
   MVT PtrVT = getPointerTy();
 
   // Set up the register classes.
@@ -397,7 +397,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm)
 
 
   // Compute derived properties from the register classes
-  computeRegisterProperties();
+  computeRegisterProperties(STI.getRegisterInfo());
 }
 
 
@@ -508,7 +508,7 @@ getSingleConstraintMatchWeight(AsmOperandInfo &info,
 }
 
 std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
-getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const {
+getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, const std::string &Constraint, MVT VT) const {
   if (Constraint.size() == 1) {
     // GCC Constraint Letters
     switch (Constraint[0]) {
@@ -529,7 +529,7 @@ getRegForInlineAsmConstraint(const std::string &Constraint, MVT VT) const {
       return std::make_pair(0U, &RISCV::GR32BitRegClass);
     }
   }
-  return TargetLowering::getRegForInlineAsmConstraint(Constraint, VT);
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
 }
 
 void RISCVTargetLowering::
@@ -542,35 +542,35 @@ LowerAsmOperandForConstraint(SDValue Op, std::string &Constraint,
     case 'I': // Unsigned 8-bit constant
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (isUInt<8>(C->getZExtValue()))
-          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(),
+          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(), SDLoc(Op),
                                               Op.getValueType()));
       return;
 
     case 'J': // Unsigned 12-bit constant
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (isUInt<12>(C->getZExtValue()))
-          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(),
+          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(), SDLoc(Op),
                                               Op.getValueType()));
       return;
 
     case 'K': // Signed 16-bit constant
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (isInt<16>(C->getSExtValue()))
-          Ops.push_back(DAG.getTargetConstant(C->getSExtValue(),
+          Ops.push_back(DAG.getTargetConstant(C->getSExtValue(), SDLoc(Op),
                                               Op.getValueType()));
       return;
 
     case 'L': // Signed 20-bit displacement (on all targets we support)
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (isInt<20>(C->getSExtValue()))
-          Ops.push_back(DAG.getTargetConstant(C->getSExtValue(),
+          Ops.push_back(DAG.getTargetConstant(C->getSExtValue(), SDLoc(Op),
                                               Op.getValueType()));
       return;
 
     case 'M': // 0x7fffffff
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (C->getZExtValue() == 0x7fffffff)
-          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(),
+          Ops.push_back(DAG.getTargetConstant(C->getZExtValue(), SDLoc(Op),
                                               Op.getValueType()));
       return;
     }
@@ -823,7 +823,7 @@ copyByValRegs(SDValue Chain, SDLoc DL, std::vector<SDValue> &OutChains,
     unsigned VReg = addLiveIn(MF, ArgReg, RC);
     unsigned Offset = I * CC.regSize();
     SDValue StorePtr = DAG.getNode(ISD::ADD, DL, PtrTy, FIN,
-                                   DAG.getConstant(Offset, PtrTy));
+                                   DAG.getConstant(Offset, DL, PtrTy));
     SDValue Store = DAG.getStore(Chain, DL, DAG.getRegister(VReg, RegTy),
                                  StorePtr, MachinePointerInfo(FuncArg, Offset),
                                  false, false, 0);
@@ -853,7 +853,7 @@ passByValArg(SDValue Chain, SDLoc DL,
     // Copy words to registers.
     for (; I < ByVal.NumRegs - LeftoverBytes; ++I, Offset += RegSize) {
       SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                                    DAG.getConstant(Offset, PtrTy));
+                                    DAG.getConstant(Offset, DL, PtrTy));
       SDValue LoadVal = DAG.getLoad(RegTy, DL, Chain, LoadPtr,
                                     MachinePointerInfo(), false, false, false,
                                     Alignment);
@@ -881,7 +881,7 @@ passByValArg(SDValue Chain, SDLoc DL,
 
         // Load subword.
         SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                                      DAG.getConstant(Offset, PtrTy));
+                                      DAG.getConstant(Offset, DL, PtrTy));
         SDValue LoadVal =
           DAG.getExtLoad(ISD::ZEXTLOAD, DL, RegTy, Chain, LoadPtr,
                          MachinePointerInfo(), MVT::getIntegerVT(LoadSize * 8),
@@ -897,7 +897,7 @@ passByValArg(SDValue Chain, SDLoc DL,
           Shamt = (RegSize - (TotalSizeLoaded + LoadSize)) * 8;
 
         SDValue Shift = DAG.getNode(ISD::SHL, DL, RegTy, LoadVal,
-                                    DAG.getConstant(Shamt, MVT::i32));
+                                    DAG.getConstant(Shamt, DL, MVT::i32));
 
         if (Val.getNode())
           Val = DAG.getNode(ISD::OR, DL, RegTy, Val, Shift);
@@ -918,12 +918,12 @@ passByValArg(SDValue Chain, SDLoc DL,
   // Copy remainder of byval arg to it with memcpy.
   unsigned MemCpySize = ByValSize - Offset;
   SDValue Src = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                            DAG.getConstant(Offset, PtrTy));
+                            DAG.getConstant(Offset, DL, PtrTy));
   SDValue Dst = DAG.getNode(ISD::ADD, DL, PtrTy, StackPtr,
-                            DAG.getIntPtrConstant(ByVal.Address));
+                            DAG.getIntPtrConstant(ByVal.Address, DL));
   Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
-                        DAG.getConstant(MemCpySize, PtrTy), Alignment,
-                        /*isVolatile=*/false, /*AlwaysInline=*/false,
+                        DAG.getConstant(MemCpySize, DL, PtrTy), Alignment,
+                        /*isVolatile=*/false, /*AlwaysInline=*/false, /*TailCall=*/false,
                         MachinePointerInfo(), MachinePointerInfo());
   MemOpChains.push_back(Chain);
 }
@@ -968,11 +968,11 @@ unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
   return 0;
 }
 
-const uint16_t *RISCVTargetLowering::RISCVCC::intArgRegs() const {
+const MCPhysReg *RISCVTargetLowering::RISCVCC::intArgRegs() const {
   return IsRV32 ? RV32IntRegs : RV64IntRegs;
 }
 
-const uint16_t *RISCVTargetLowering::RISCVCC::fpArgRegs() const {
+const MCPhysReg *RISCVTargetLowering::RISCVCC::fpArgRegs() const {
   return Subtarget.hasD() ? FPDRegs : 
          Subtarget.hasF() ? FPFRegs :
          intArgRegs();
@@ -994,12 +994,12 @@ void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
   unsigned RegSize = regSize(); 
   if(ValVT.isInteger()) {
     unsigned NumIntArgRegs = numIntArgRegs();
-    const uint16_t *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
+    const MCPhysReg *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
     assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
            "Byval argument's size and alignment should be a multiple of"
            "RegSize.");
   
-    ByVal.FirstIdx = CCInfo.getFirstUnallocated(IntArgRegs, NumIntArgRegs);
+    ByVal.FirstIdx = CCInfo.getFirstUnallocated(*IntArgRegs);
   
     // If Align > RegSize, the first arg register must be even.
     if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
@@ -1014,12 +1014,12 @@ void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
   }else if(ValVT.isFloatingPoint()){
     RegSize = fpRegSize();
     unsigned NumFPArgRegs = numFPArgRegs();
-    const uint16_t *FPArgRegs = fpArgRegs();//, *ShadowRegs = shadowRegs();
+    const MCPhysReg *FPArgRegs = fpArgRegs();//, *ShadowRegs = shadowRegs();
     assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
            "Byval argument's size and alignment should be a multiple of"
            "RegSize.");
   
-    ByVal.FirstIdx = CCInfo.getFirstUnallocated(FPArgRegs, NumFPArgRegs);
+    ByVal.FirstIdx = CCInfo.getFirstUnallocated(*FPArgRegs);
   
     // If Align > RegSize, the first arg register must be even.
     if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
@@ -1058,7 +1058,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo, Subtarget);
   Function::const_arg_iterator FuncArg =
     DAG.getMachineFunction().getFunction()->arg_begin();
-  bool UseSoftFloat = getTargetMachine().Options.UseSoftFloat;
+  bool UseSoftFloat = Subtarget.useSoftFloat();
 
   RISCVCCInfo.analyzeFormalArguments(Ins, UseSoftFloat, FuncArg);
   RISCVFI->setFormalArgInfo(CCInfo.getNextStackOffset(),
@@ -1230,14 +1230,14 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
   RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo, Subtarget);
-  RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, getTargetMachine().Options.UseSoftFloat,
+  RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, Subtarget.useSoftFloat(),
                                    Callee.getNode(), CLI.Args);
 
   // Get a count of how many bytes are to be pushed on the stack.
   unsigned NumBytes = ArgCCInfo.getNextStackOffset();
 
   // Mark the start of the call.
-  Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, PtrVT, true),
+  Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, DL, PtrVT, true),
                                DL);
 
   RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
@@ -1280,7 +1280,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
       unsigned Offset = VA.getLocMemOffset();
       SDValue Address = DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
-                                    DAG.getIntPtrConstant(Offset));
+                                    DAG.getIntPtrConstant(Offset, DL));
 
       // Emit the store.
       MemOpChains.push_back(DAG.getStore(Chain, DL, ArgValue, Address,
@@ -1337,8 +1337,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Mark the end of the call, which is glued to the call itself.
   Chain = DAG.getCALLSEQ_END(Chain,
-                             DAG.getConstant(NumBytes, PtrVT, true),
-                             DAG.getConstant(0, PtrVT, true),
+                             DAG.getConstant(NumBytes, DL, PtrVT, true),
+                             DAG.getConstant(0, DL, PtrVT, true),
                              Glue, DL);
   Glue = Chain.getValue(1);
 
@@ -1584,7 +1584,7 @@ SDValue RISCVTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const{
                                MachinePointerInfo(SV), false, false, false, 0);
   // Increment the pointer, VAList, to the next vaarg.
   SDValue NextPtr = DAG.getNode(ISD::ADD, DL, PtrVT, VAList,
-                                DAG.getIntPtrConstant(VT.getSizeInBits()/8));
+                                DAG.getIntPtrConstant(VT.getSizeInBits()/8, DL));
   // Store the incremented VAList to the legalized pointer.
   InChain = DAG.getStore(VAList.getValue(1), DL, NextPtr,
                          VAListPtr, MachinePointerInfo(SV), false, false, 0);
@@ -1625,8 +1625,8 @@ SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) co
   unsigned pred = PI | PO | PR | PW;
   unsigned succ = SI | SO | SR | SW;
   return DAG.getNode(RISCVISD::FENCE, DL, MVT::Other,Op.getOperand(0),
-                       DAG.getConstant(pred, Subtarget.isRV64() ? MVT::i64 : MVT::i32),
-                       DAG.getConstant(succ, Subtarget.isRV64() ? MVT::i64 : MVT::i32));
+                       DAG.getConstant(pred, DL, Subtarget.isRV64() ? MVT::i64 : MVT::i32),
+                       DAG.getConstant(succ, DL, Subtarget.isRV64() ? MVT::i64 : MVT::i32));
 }
 
 SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
@@ -1750,7 +1750,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   BB->addSuccessor(copy0MBB);
   BB->addSuccessor(sinkMBB);
 
-  const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl()->getRegisterInfo();
+  const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl(*F->getFunction())->getRegisterInfo();
   const TargetRegisterClass *RC = MI->getRegClassConstraint(1, TII, TRI);
   unsigned bne = RC == &RISCV::GR64BitRegClass ? RISCV::BNE64 : RISCV::BNE;
   unsigned zero = RC == &RISCV::GR64BitRegClass ? RISCV::zero_64 : RISCV::zero;
@@ -1836,9 +1836,9 @@ RISCVTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
                                     const RISCVCC &CC, SDValue Chain,
                                     SDLoc DL, SelectionDAG &DAG) const {
   unsigned NumRegs = CC.numIntArgRegs();
-  const uint16_t *ArgRegs = CC.intArgRegs();
+  const MCPhysReg *ArgRegs = CC.intArgRegs();
   const CCState &CCInfo = CC.getCCInfo();
-  unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs, NumRegs);
+  unsigned Idx = CCInfo.getFirstUnallocated(*ArgRegs);
   unsigned RegSize = CC.regSize();
   MVT RegTy = MVT::getIntegerVT(RegSize * 8);
   const TargetRegisterClass *RC = getRegClassFor(RegTy);

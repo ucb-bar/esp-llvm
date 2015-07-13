@@ -29,25 +29,47 @@ static std::string computeDataLayout(const Triple &TT) {
   return Ret;
 }
 
-RISCVTargetMachine::RISCVTargetMachine(const Target &T, StringRef TT,
+RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Reloc::Model RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
-    : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
-      DL(computeDataLayout(Triple(TT))),
+    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options, RM, CM, OL),
       TLOF(make_unique<TargetLoweringObjectFileELF>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }
 
-RISCV64TargetMachine::RISCV64TargetMachine(const Target &T, StringRef TT,
+RISCV64TargetMachine::RISCV64TargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Reloc::Model RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
   :RISCVTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
 
+
+const RISCVSubtarget *
+RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
+  Attribute CPUAttr = F.getFnAttribute("target-cpu");
+  Attribute FSAttr = F.getFnAttribute("target-features");
+
+  std::string CPU = !CPUAttr.hasAttribute(Attribute::None)
+                        ? CPUAttr.getValueAsString().str()
+                        : TargetCPU;
+  std::string FS = !FSAttr.hasAttribute(Attribute::None)
+                       ? FSAttr.getValueAsString().str()
+                       : TargetFS;
+
+  auto &I = SubtargetMap[CPU + FS];
+  if (!I) {
+    // This needs to be done before we create a new subtarget since any
+    // creation will depend on the TM and the code generation flags on the
+    // function that reside in TargetOptions.
+    resetTargetOptions(F);
+    I = llvm::make_unique<RISCVSubtarget>(TargetTriple, CPU, FS, *this);
+  }
+  return I.get();
+}
 
 namespace {
 /// RISCV Code Generator Pass Configuration Options.

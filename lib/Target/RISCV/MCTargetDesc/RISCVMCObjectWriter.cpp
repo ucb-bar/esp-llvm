@@ -112,7 +112,7 @@ unsigned RISCVObjectWriter::GetRelocType(const MCValue &Target,
   }
 }
 
-MCObjectWriter *llvm::createRISCVObjectWriter(raw_ostream &OS,
+MCObjectWriter *llvm::createRISCVObjectWriter(raw_pwrite_stream &OS,
                                                 uint8_t OSABI) {
   MCELFObjectTargetWriter *MOTW = new RISCVObjectWriter(OSABI);
   return createELFObjectWriter(MOTW, OS, /*IsLittleEndian=*/false);

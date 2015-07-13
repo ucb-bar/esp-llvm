@@ -34,14 +34,10 @@ std::error_code ObjectFile::printSymbolName(raw_ostream &OS,
   if (std::error_code EC = getSymbolName(Symb, Name))
     return EC;
   OS << Name;
-  return object_error::success;
+  return std::error_code();
 }
 
-std::error_code ObjectFile::getSymbolAlignment(DataRefImpl DRI,
-                                               uint32_t &Result) const {
-  Result = 0;
-  return object_error::success;
-}
+uint32_t ObjectFile::getSymbolAlignment(DataRefImpl DRI) const { return 0; }
 
 section_iterator ObjectFile::getRelocatedSection(DataRefImpl Sec) const {
   return section_iterator(SectionRef(Sec, this));
@@ -76,6 +72,7 @@ ObjectFile::createObjectFile(MemoryBufferRef Object, sys::fs::file_magic Type) {
   case sys::fs::file_magic::macho_bundle:
   case sys::fs::file_magic::macho_dynamically_linked_shared_lib_stub:
   case sys::fs::file_magic::macho_dsym_companion:
+  case sys::fs::file_magic::macho_kext_bundle:
     return createMachOObjectFile(Object);
   case sys::fs::file_magic::coff_object:
   case sys::fs::file_magic::coff_import_library:

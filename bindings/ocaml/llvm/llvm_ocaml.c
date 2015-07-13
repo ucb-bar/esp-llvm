@@ -1745,7 +1745,7 @@ CAMLprim LLVMValueRef llvm_build_invoke_bc(value Args[], int NumArgs) {
 CAMLprim LLVMValueRef llvm_build_landingpad(LLVMTypeRef Ty, LLVMValueRef PersFn,
                                             value NumClauses,  value Name,
                                             value B) {
-    return LLVMBuildLandingPad(Builder_val(B), Ty, PersFn, Int_val(NumClauses),
+    return LLVMBuildLandingPad(Builder_val(B), Ty, Int_val(NumClauses),
                                String_val(Name));
 }
 
@@ -2187,6 +2187,15 @@ CAMLprim LLVMValueRef llvm_build_phi(value Incoming, value Name, value B) {
     LLVMAddIncoming(PhiNode, (LLVMValueRef*) &Field(Hd, 0),
                     (LLVMBasicBlockRef*) &Field(Hd, 1), 1);
   }
+
+  return PhiNode;
+}
+
+/* lltype -> string -> llbuilder -> value */
+CAMLprim LLVMValueRef llvm_build_empty_phi(LLVMTypeRef Type, value Name, value B) {
+  LLVMValueRef PhiNode;
+
+  return LLVMBuildPhi(Builder_val(B), Type, String_val(Name));
 
   return PhiNode;
 }

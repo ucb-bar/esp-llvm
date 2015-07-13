@@ -13,7 +13,7 @@ F:
         ret void
 }
 
-define void @test2() {
+define void @test2() personality i32 (...)* @__gxx_personality_v0 {
 ; CHECK-LABEL: @test2(
 ; CHECK: entry:
 ; CHECK-NEXT: call void @test2()
@@ -22,10 +22,14 @@ entry:
         invoke void @test2( )
                         to label %N unwind label %U
 U:
+  %res = landingpad { i8* }
+          cleanup
         unreachable
 N:
         ret void
 }
+
+declare i32 @__gxx_personality_v0(...)
 
 define i32 @test3(i32 %v) {
 ; CHECK-LABEL: @test3(

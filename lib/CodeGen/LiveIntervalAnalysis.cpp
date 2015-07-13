@@ -67,6 +67,13 @@ static cl::opt<bool> EnableSubRegLiveness(
   "enable-subreg-liveness", cl::Hidden, cl::init(true),
   cl::desc("Enable subregister liveness tracking."));
 
+namespace llvm {
+cl::opt<bool> UseSegmentSetForPhysRegs(
+    "use-segment-set-for-physregs", cl::Hidden, cl::init(true),
+    cl::desc(
+        "Use segment set for the computation of the live ranges of physregs."));
+}
+
 void LiveIntervals::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addRequired<AliasAnalysis>();
@@ -192,7 +199,7 @@ void LiveIntervals::computeVirtRegInterval(LiveInterval &LI) {
   assert(LRCalc && "LRCalc not initialized.");
   assert(LI.empty() && "Should only compute empty intervals.");
   LRCalc->reset(MF, getSlotIndexes(), DomTree, &getVNInfoAllocator());
-  LRCalc->calculate(LI);
+  LRCalc->calculate(LI, MRI->shouldTrackSubRegLiveness(LI.reg));
   computeDeadValues(LI, nullptr);
 }
 
@@ -216,11 +223,11 @@ void LiveIntervals::computeRegMasks() {
     RMB.first = RegMaskSlots.size();
     for (MachineBasicBlock::iterator MI = MBB->begin(), ME = MBB->end();
          MI != ME; ++MI)
-      for (MIOperands MO(MI); MO.isValid(); ++MO) {
-        if (!MO->isRegMask())
+      for (const MachineOperand &MO : MI->operands()) {
+        if (!MO.isRegMask())
           continue;
           RegMaskSlots.push_back(Indexes->getInstructionIndex(MI).getRegSlot());
-          RegMaskBits.push_back(MO->getRegMask());
+          RegMaskBits.push_back(MO.getRegMask());
       }
     // Compute the number of register mask instructions in this block.
     RMB.second = RegMaskSlots.size() - RMB.first;
@@ -268,6 +275,10 @@ void LiveIntervals::computeRegUnitRange(LiveRange &LR, unsigned Unit) {
         LRCalc->extendToUses(LR, Reg);
     }
   }
+
+  // Flush the segment set to the segment vector.
+  if (UseSegmentSetForPhysRegs)
+    LR.flushSegmentSet();
 }
 
 
@@ -300,7 +311,8 @@ void LiveIntervals::computeLiveInRegUnits() {
         unsigned Unit = *Units;
         LiveRange *LR = RegUnitRanges[Unit];
         if (!LR) {
-          LR = RegUnitRanges[Unit] = new LiveRange();
+          // Use segment set to speed-up initial computation of the live range.
+          LR = RegUnitRanges[Unit] = new LiveRange(UseSegmentSetForPhysRegs);
           NewRanges.push_back(Unit);
         }
         VNInfo *VNI = LR->createDeadDef(Begin, getVNInfoAllocator());
@@ -454,7 +466,7 @@ bool LiveIntervals::computeDeadValues(LiveInterval &LI,
 
     // Is the register live before? Otherwise we may have to add a read-undef
     // flag for subregister defs.
-    if (MRI->tracksSubRegLiveness()) {
+    if (MRI->shouldTrackSubRegLiveness(LI.reg)) {
       if ((I == LI.begin() || std::prev(I)->end < Def) && !VNI->isPHIDef()) {
         MachineInstr *MI = getInstructionFromIndex(Def);
         MI->addRegisterDefReadUndef(LI.reg);
@@ -650,7 +662,7 @@ void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
       RU.push_back(std::make_pair(&RURange, RURange.find(LI.begin()->end)));
     }
 
-    if (MRI->tracksSubRegLiveness()) {
+    if (MRI->subRegLivenessEnabled()) {
       SRs.clear();
       for (const LiveInterval::SubRange &SR : LI.subranges()) {
         SRs.push_back(std::make_pair(&SR, SR.find(LI.begin()->end)));
@@ -688,7 +700,7 @@ void LiveIntervals::addKillFlags(const VirtRegMap *VRM) {
         goto CancelKill;
       }
 
-      if (MRI->tracksSubRegLiveness()) {
+      if (MRI->subRegLivenessEnabled()) {
         // When reading a partial undefined value we must not add a kill flag.
         // The regalloc might have used the undef lane for something else.
         // Example:
@@ -915,23 +927,23 @@ public:
   void updateAllRanges(MachineInstr *MI) {
     DEBUG(dbgs() << "handleMove " << OldIdx << " -> " << NewIdx << ": " << *MI);
     bool hasRegMask = false;
-    for (MIOperands MO(MI); MO.isValid(); ++MO) {
-      if (MO->isRegMask())
+    for (MachineOperand &MO : MI->operands()) {
+      if (MO.isRegMask())
         hasRegMask = true;
-      if (!MO->isReg())
+      if (!MO.isReg())
         continue;
       // Aggressively clear all kill flags.
       // They are reinserted by VirtRegRewriter.
-      if (MO->isUse())
-        MO->setIsKill(false);
+      if (MO.isUse())
+        MO.setIsKill(false);
 
-      unsigned Reg = MO->getReg();
+      unsigned Reg = MO.getReg();
       if (!Reg)
         continue;
       if (TargetRegisterInfo::isVirtualRegister(Reg)) {
         LiveInterval &LI = LIS.getInterval(Reg);
         if (LI.hasSubRanges()) {
-          unsigned SubReg = MO->getSubReg();
+          unsigned SubReg = MO.getSubReg();
           unsigned LaneMask = TRI.getSubRegIndexLaneMask(SubReg);
           for (LiveInterval::SubRange &S : LI.subranges()) {
             if ((S.LaneMask & LaneMask) == 0)

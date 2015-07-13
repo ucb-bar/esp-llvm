@@ -63,11 +63,11 @@ public:
     std::string Str;
     raw_string_ostream OS(Str);
 
-    if (DLoc.isUnknown() == false) {
-      DILocation DIL(DLoc.getAsMDNode(Fn.getContext()));
-      StringRef Filename = DIL.getFilename();
-      unsigned Line = DIL.getLineNumber();
-      unsigned Column = DIL.getColumnNumber();
+    if (DLoc) {
+      auto DIL = DLoc.get();
+      StringRef Filename = DIL->getFilename();
+      unsigned Line = DIL->getLine();
+      unsigned Column = DIL->getColumn();
       OS << Filename << ':' << Line << ':' << Column << ' ';
     }
 
@@ -88,14 +88,15 @@ public:
 int DiagnosticInfoUnsupported::KindID = 0;
 }
 
-BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM)
+BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM,
+                                     const BPFSubtarget &STI)
     : TargetLowering(TM) {
 
   // Set up the register classes.
   addRegisterClass(MVT::i64, &BPF::GPRRegClass);
 
   // Compute derived properties from the register classes
-  computeRegisterProperties();
+  computeRegisterProperties(STI.getRegisterInfo());
 
   setStackPointerRegisterToSaveRestore(BPF::R11);
 
@@ -136,7 +137,6 @@ BPFTargetLowering::BPFTargetLowering(const TargetMachine &TM)
   setOperationAction(ISD::SRL_PARTS, MVT::i64, Expand);
   setOperationAction(ISD::SRA_PARTS, MVT::i64, Expand);
 
-  setOperationAction(ISD::BSWAP, MVT::i64, Expand);
   setOperationAction(ISD::CTTZ, MVT::i64, Custom);
   setOperationAction(ISD::CTLZ, MVT::i64, Custom);
   setOperationAction(ISD::CTTZ_ZERO_UNDEF, MVT::i64, Custom);
@@ -303,7 +303,7 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
 
   Chain = DAG.getCALLSEQ_START(
-      Chain, DAG.getConstant(NumBytes, getPointerTy(), true), CLI.DL);
+      Chain, DAG.getConstant(NumBytes, CLI.DL, getPointerTy(), true), CLI.DL);
 
   SmallVector<std::pair<unsigned, SDValue>, 5> RegsToPass;
 
@@ -374,8 +374,8 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
 
   // Create the CALLSEQ_END node.
   Chain = DAG.getCALLSEQ_END(
-      Chain, DAG.getConstant(NumBytes, getPointerTy(), true),
-      DAG.getConstant(0, getPointerTy(), true), InFlag, CLI.DL);
+      Chain, DAG.getConstant(NumBytes, CLI.DL, getPointerTy(), true),
+      DAG.getConstant(0, CLI.DL, getPointerTy(), true), InFlag, CLI.DL);
   InFlag = Chain.getValue(1);
 
   // Handle result values, copying them out of physregs into vregs that we
@@ -487,7 +487,7 @@ SDValue BPFTargetLowering::LowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
   NegateCC(LHS, RHS, CC);
 
   return DAG.getNode(BPFISD::BR_CC, DL, Op.getValueType(), Chain, LHS, RHS,
-                     DAG.getConstant(CC, MVT::i64), Dest);
+                     DAG.getConstant(CC, DL, MVT::i64), Dest);
 }
 
 SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
@@ -500,7 +500,7 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 
   NegateCC(LHS, RHS, CC);
 
-  SDValue TargetCC = DAG.getConstant(CC, MVT::i64);
+  SDValue TargetCC = DAG.getConstant(CC, DL, MVT::i64);
 
   SDVTList VTs = DAG.getVTList(Op.getValueType(), MVT::Glue);
   SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
@@ -509,9 +509,9 @@ SDValue BPFTargetLowering::LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
 }
 
 const char *BPFTargetLowering::getTargetNodeName(unsigned Opcode) const {
-  switch (Opcode) {
-  default:
-    return NULL;
+  switch ((BPFISD::NodeType)Opcode) {
+  case BPFISD::FIRST_NUMBER:
+    break;
   case BPFISD::RET_FLAG:
     return "BPFISD::RET_FLAG";
   case BPFISD::CALL:
@@ -523,6 +523,7 @@ const char *BPFTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case BPFISD::Wrapper:
     return "BPFISD::Wrapper";
   }
+  return nullptr;
 }
 
 SDValue BPFTargetLowering::LowerGlobalAddress(SDValue Op,
@@ -537,13 +538,10 @@ SDValue BPFTargetLowering::LowerGlobalAddress(SDValue Op,
 MachineBasicBlock *
 BPFTargetLowering::EmitInstrWithCustomInserter(MachineInstr *MI,
                                                MachineBasicBlock *BB) const {
-  unsigned Opc = MI->getOpcode();
-
-  const TargetInstrInfo &TII =
-      *getTargetMachine().getSubtargetImpl()->getInstrInfo();
+  const TargetInstrInfo &TII = *BB->getParent()->getSubtarget().getInstrInfo();
   DebugLoc DL = MI->getDebugLoc();
 
-  assert(Opc == BPF::Select && "Unexpected instr type to insert");
+  assert(MI->getOpcode() == BPF::Select && "Unexpected instr type to insert");
 
   // To "insert" a SELECT instruction, we actually have to insert the diamond
   // control-flow pattern.  The incoming instruction knows the destination vreg

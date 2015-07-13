@@ -63,7 +63,7 @@ FunctionPass *llvm::createRISCVBranchSelectionPass() {
 
 bool RISCVBSel::runOnMachineFunction(MachineFunction &Fn) {
   const RISCVInstrInfo *TII = static_cast<const RISCVInstrInfo *>(
-      Fn.getTarget().getSubtargetImpl()->getInstrInfo());
+      Fn.getTarget().getSubtargetImpl(*Fn.getFunction())->getInstrInfo());
   // Give the blocks of the function a dense, in-order, numbering.
   Fn.RenumberBlocks();
   BlockSizes.resize(Fn.getNumBlockIDs());

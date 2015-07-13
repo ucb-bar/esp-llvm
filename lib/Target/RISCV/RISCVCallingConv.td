@@ -14,7 +14,7 @@ class CCIfExtend<CCAction A>
 
 /// CCIfSubtarget - Match if the current subtarget has a feature F.
 class CCIfSubtarget<string F, CCAction A>
-    : CCIf<!strconcat("!static_cast<const RISCVSubtarget&>"
+    : CCIf<!strconcat("static_cast<const RISCVSubtarget&>"
 		      "(State.getMachineFunction().getSubtarget()).",
 		     F),
           A>;

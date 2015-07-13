@@ -49,11 +49,11 @@ SparcSubtarget &SparcSubtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-SparcSubtarget::SparcSubtarget(const std::string &TT, const std::string &CPU,
+SparcSubtarget::SparcSubtarget(const Triple &TT, const std::string &CPU,
                                const std::string &FS, TargetMachine &TM,
                                bool is64Bit)
     : SparcGenSubtargetInfo(TT, CPU, FS), Is64Bit(is64Bit),
-      InstrInfo(initializeSubtargetDependencies(CPU, FS)), TLInfo(TM),
+      InstrInfo(initializeSubtargetDependencies(CPU, FS)), TLInfo(TM, *this),
       TSInfo(*TM.getDataLayout()), FrameLowering(*this) {}
 
 int SparcSubtarget::getAdjustedFrameSize(int frameSize) const {

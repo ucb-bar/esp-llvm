@@ -13,7 +13,7 @@
 
 using namespace llvm;
 
-RISCVMCAsmInfo::RISCVMCAsmInfo(StringRef TT) {
+RISCVMCAsmInfo::RISCVMCAsmInfo() {
   PointerSize = 8;
   CalleeSaveStackSlotSize = 8;
   IsLittleEndian = false;
@@ -24,10 +24,4 @@ RISCVMCAsmInfo::RISCVMCAsmInfo(StringRef TT) {
   UsesELFSectionDirectiveForBSS = true;
   SupportsDebugInformation = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
-}
-
-const MCSection *
-RISCVMCAsmInfo::getNonexecutableStackSection(MCContext &Ctx) const {
-  return Ctx.getELFSection(".note.GNU-stack", ELF::SHT_PROGBITS,
-                           0, SectionKind::getMetadata());
 }

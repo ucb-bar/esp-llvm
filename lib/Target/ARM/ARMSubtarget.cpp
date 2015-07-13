@@ -106,7 +106,7 @@ ARMFrameLowering *ARMSubtarget::initializeFrameLowering(StringRef CPU,
   return new ARMFrameLowering(STI);
 }
 
-ARMSubtarget::ARMSubtarget(const std::string &TT, const std::string &CPU,
+ARMSubtarget::ARMSubtarget(const Triple &TT, const std::string &CPU,
                            const std::string &FS,
                            const ARMBaseTargetMachine &TM, bool IsLittle)
     : ARMGenSubtargetInfo(TT, CPU, FS), ARMProcFamily(Others),
@@ -121,7 +121,7 @@ ARMSubtarget::ARMSubtarget(const std::string &TT, const std::string &CPU,
                     : !isThumb()
                           ? (ARMBaseInstrInfo *)new ARMInstrInfo(*this)
                           : (ARMBaseInstrInfo *)new Thumb2InstrInfo(*this)),
-      TLInfo(TM) {}
+      TLInfo(TM, *this) {}
 
 void ARMSubtarget::initializeEnvironment() {
   HasV4TOps = false;
@@ -129,9 +129,11 @@ void ARMSubtarget::initializeEnvironment() {
   HasV5TEOps = false;
   HasV6Ops = false;
   HasV6MOps = false;
+  HasV6KOps = false;
   HasV6T2Ops = false;
   HasV7Ops = false;
   HasV8Ops = false;
+  HasV8_1aOps = false;
   HasVFPv2 = false;
   HasVFPv3 = false;
   HasVFPv4 = false;
@@ -143,6 +145,7 @@ void ARMSubtarget::initializeEnvironment() {
   HasVMLxForwarding = false;
   SlowFPBrcc = false;
   InThumbMode = false;
+  UseSoftFloat = false;
   HasThumb2 = false;
   NoARM = false;
   IsR9Reserved = ReserveR9;
@@ -184,11 +187,10 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   // Insert the architecture feature derived from the target triple into the
   // feature string. This is important for setting features that are implied
   // based on the architecture version.
-  std::string ArchFS =
-      ARM_MC::ParseARMTriple(TargetTriple.getTriple(), CPUString);
+  std::string ArchFS = ARM_MC::ParseARMTriple(TargetTriple, CPUString);
   if (!FS.empty()) {
     if (!ArchFS.empty())
-      ArchFS = ArchFS + "," + FS.str();
+      ArchFS = (Twine(ArchFS) + "," + FS).str();
     else
       ArchFS = FS;
   }
@@ -251,7 +253,7 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
 
   switch (IT) {
   case DefaultIT:
-    RestrictIT = hasV8Ops() ? true : false;
+    RestrictIT = hasV8Ops();
     break;
   case RestrictedIT:
     RestrictIT = true;
@@ -262,8 +264,8 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   }
 
   // NEON f32 ops are non-IEEE 754 compliant. Darwin is ok with it by default.
-  uint64_t Bits = getFeatureBits();
-  if ((Bits & ARM::ProcA5 || Bits & ARM::ProcA8) && // Where this matters
+  const FeatureBitset &Bits = getFeatureBits();
+  if ((Bits[ARM::ProcA5] || Bits[ARM::ProcA8]) && // Where this matters
       (Options.UnsafeFPMath || isTargetDarwin()))
     UseNEONForSinglePrecisionFP = true;
 }
@@ -335,7 +337,7 @@ bool ARMSubtarget::hasSinCos() const {
 }
 
 // This overrides the PostRAScheduler bit in the SchedModel for any CPU.
-bool ARMSubtarget::enablePostMachineScheduler() const {
+bool ARMSubtarget::enablePostRAScheduler() const {
   return (!isThumb() || hasThumb2());
 }
 
@@ -348,6 +350,12 @@ bool ARMSubtarget::useMovt(const MachineFunction &MF) const {
   // immediates as it is inherently position independent, and may be out of
   // range otherwise.
   return UseMovt && (isTargetWindows() ||
-                     !MF.getFunction()->getAttributes().hasAttribute(
-                         AttributeSet::FunctionIndex, Attribute::MinSize));
+                     !MF.getFunction()->hasFnAttribute(Attribute::MinSize));
+}
+
+bool ARMSubtarget::useFastISel() const {
+  // Thumb2 support on iOS; ARM support on iOS, Linux and NaCl.
+  return TM.Options.EnableFastISel &&
+         ((isTargetMachO() && !isThumb1Only()) ||
+          (isTargetLinux() && !isThumb()) || (isTargetNaCl() && !isThumb()));
 }

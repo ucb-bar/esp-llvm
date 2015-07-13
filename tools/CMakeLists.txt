@@ -37,7 +37,7 @@ add_llvm_tool_subdirectory(llvm-readobj)
 add_llvm_tool_subdirectory(llvm-rtdyld)
 add_llvm_tool_subdirectory(llvm-dwarfdump)
 add_llvm_tool_subdirectory(dsymutil)
-add_llvm_tool_subdirectory(llvm-vtabledump)
+add_llvm_tool_subdirectory(llvm-cxxdump)
 if( LLVM_USE_INTEL_JITEVENTS )
   add_llvm_tool_subdirectory(llvm-jitlistener)
 else()
@@ -61,9 +61,7 @@ add_llvm_tool_subdirectory(yaml2obj)
 
 add_llvm_tool_subdirectory(llvm-go)
 
-if(MSVC)
-  add_llvm_tool_subdirectory(llvm-pdbdump)
-endif()
+add_llvm_tool_subdirectory(llvm-pdbdump)
 
 if(NOT CYGWIN AND LLVM_ENABLE_PIC)
   add_llvm_tool_subdirectory(lto)
@@ -77,14 +75,11 @@ add_llvm_tool_subdirectory(gold)
 
 add_llvm_external_project(clang)
 add_llvm_external_project(llgo)
+add_llvm_external_project(lld)
+add_llvm_external_project(lldb)
 
-if( NOT LLVM_INCLUDE_TOOLS STREQUAL "bootstrap-only" )
-  add_llvm_external_project(lld)
-  add_llvm_external_project(lldb)
-
-  # Automatically add remaining sub-directories containing a 'CMakeLists.txt'
-  # file as external projects.
-  add_llvm_implicit_external_projects()
-endif()
+# Automatically add remaining sub-directories containing a 'CMakeLists.txt'
+# file as external projects.
+add_llvm_implicit_external_projects()
 
 set(LLVM_COMMON_DEPENDS ${LLVM_COMMON_DEPENDS} PARENT_SCOPE)

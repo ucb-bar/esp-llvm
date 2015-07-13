@@ -136,8 +136,8 @@ bool llvm::MergeBlockIntoPredecessor(BasicBlock *BB, DominatorTree *DT,
   // Can't merge if there is PHI loop.
   for (BasicBlock::iterator BI = BB->begin(), BE = BB->end(); BI != BE; ++BI) {
     if (PHINode *PN = dyn_cast<PHINode>(BI)) {
-      for (unsigned i = 0, e = PN->getNumIncomingValues(); i != e; ++i)
-        if (PN->getIncomingValue(i) == PN)
+      for (Value *IncValue : PN->incoming_values())
+        if (IncValue == PN)
           return false;
     } else
       break;
@@ -210,6 +210,11 @@ void llvm::ReplaceInstWithInst(BasicBlock::InstListType &BIL,
                                BasicBlock::iterator &BI, Instruction *I) {
   assert(I->getParent() == nullptr &&
          "ReplaceInstWithInst: Instruction already inserted into basic block!");
+
+  // Copy debug location to newly added instruction, if it wasn't already set
+  // by the caller.
+  if (!I->getDebugLoc())
+    I->setDebugLoc(BI->getDebugLoc());
 
   // Insert the new instruction into the basic block...
   BasicBlock::iterator New = BIL.insert(BI, I);
@@ -454,11 +459,15 @@ static void UpdatePHINodes(BasicBlock *OrigBB, BasicBlock *NewBB,
   }
 }
 
-/// SplitBlockPredecessors - This method transforms BB by introducing a new
-/// basic block into the function, and moving some of the predecessors of BB to
-/// be predecessors of the new block.  The new predecessors are indicated by the
-/// Preds array, which has NumPreds elements in it.  The new block is given a
-/// suffix of 'Suffix'.
+/// SplitBlockPredecessors - This method introduces at least one new basic block
+/// into the function and moves some of the predecessors of BB to be
+/// predecessors of the new block. The new predecessors are indicated by the
+/// Preds array. The new block is given a suffix of 'Suffix'. Returns new basic
+/// block to which predecessors from Preds are now pointing.
+///
+/// If BB is a landingpad block then additional basicblock might be introduced.
+/// It will have suffix of 'Suffix'+".split_lp".
+/// See SplitLandingPadPredecessors for more details on this case.
 ///
 /// This currently updates the LLVM IR, AliasAnalysis, DominatorTree,
 /// LoopInfo, and LCCSA but no other analyses. In particular, it does not
@@ -470,12 +479,24 @@ BasicBlock *llvm::SplitBlockPredecessors(BasicBlock *BB,
                                          const char *Suffix, AliasAnalysis *AA,
                                          DominatorTree *DT, LoopInfo *LI,
                                          bool PreserveLCSSA) {
+  // For the landingpads we need to act a bit differently.
+  // Delegate this work to the SplitLandingPadPredecessors.
+  if (BB->isLandingPad()) {
+    SmallVector<BasicBlock*, 2> NewBBs;
+    std::string NewName = std::string(Suffix) + ".split-lp";
+
+    SplitLandingPadPredecessors(BB, Preds, Suffix, NewName.c_str(),
+                                NewBBs, AA, DT, LI, PreserveLCSSA);
+    return NewBBs[0];
+  }
+
   // Create new basic block, insert right before the original block.
-  BasicBlock *NewBB = BasicBlock::Create(BB->getContext(), BB->getName()+Suffix,
-                                         BB->getParent(), BB);
+  BasicBlock *NewBB = BasicBlock::Create(
+      BB->getContext(), BB->getName() + Suffix, BB->getParent(), BB);
 
   // The new block unconditionally branches to the old block.
   BranchInst *BI = BranchInst::Create(BB, NewBB);
+  BI->setDebugLoc(BB->getFirstNonPHI()->getDebugLoc());
 
   // Move the edges from Preds to point to NewBB instead of BB.
   for (unsigned i = 0, e = Preds.size(); i != e; ++i) {
@@ -538,6 +559,7 @@ void llvm::SplitLandingPadPredecessors(BasicBlock *OrigBB,
 
   // The new block unconditionally branches to the old block.
   BranchInst *BI1 = BranchInst::Create(OrigBB, NewBB1);
+  BI1->setDebugLoc(OrigBB->getFirstNonPHI()->getDebugLoc());
 
   // Move the edges from Preds to point to NewBB1 instead of OrigBB.
   for (unsigned i = 0, e = Preds.size(); i != e; ++i) {
@@ -578,6 +600,7 @@ void llvm::SplitLandingPadPredecessors(BasicBlock *OrigBB,
 
     // The new block unconditionally branches to the old block.
     BranchInst *BI2 = BranchInst::Create(OrigBB, NewBB2);
+    BI2->setDebugLoc(OrigBB->getFirstNonPHI()->getDebugLoc());
 
     // Move the remaining edges from OrigBB to point to NewBB2.
     for (SmallVectorImpl<BasicBlock*>::iterator
@@ -698,7 +721,6 @@ TerminatorInst *llvm::SplitBlockAndInsertIfThen(Value *Cond,
   CheckTerm->setDebugLoc(SplitBefore->getDebugLoc());
   BranchInst *HeadNewTerm =
     BranchInst::Create(/*ifTrue*/ThenBlock, /*ifFalse*/Tail, Cond);
-  HeadNewTerm->setDebugLoc(SplitBefore->getDebugLoc());
   HeadNewTerm->setMetadata(LLVMContext::MD_prof, BranchWeights);
   ReplaceInstWithInst(HeadOldTerm, HeadNewTerm);
 
@@ -748,7 +770,6 @@ void llvm::SplitBlockAndInsertIfThenElse(Value *Cond, Instruction *SplitBefore,
   (*ElseTerm)->setDebugLoc(SplitBefore->getDebugLoc());
   BranchInst *HeadNewTerm =
     BranchInst::Create(/*ifTrue*/ThenBlock, /*ifFalse*/ElseBlock, Cond);
-  HeadNewTerm->setDebugLoc(SplitBefore->getDebugLoc());
   HeadNewTerm->setMetadata(LLVMContext::MD_prof, BranchWeights);
   ReplaceInstWithInst(HeadOldTerm, HeadNewTerm);
 }

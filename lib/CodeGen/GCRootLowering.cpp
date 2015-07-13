@@ -12,11 +12,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GCMetadata.h"
+#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
-#include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -57,7 +57,6 @@ public:
 /// in the machine code. It inserts labels at safe points and populates a
 /// GCMetadata record for each function.
 class GCMachineCodeAnalysis : public MachineFunctionPass {
-  const TargetMachine *TM;
   GCFunctionInfo *FI;
   MachineModuleInfo *MMI;
   const TargetInstrInfo *TII;
@@ -111,30 +110,15 @@ static bool NeedsDefaultLoweringPass(const GCStrategy &C) {
          C.initializeRoots();
 }
 
-static bool NeedsCustomLoweringPass(const GCStrategy &C) {
-  // Custom lowering is only necessary if enabled for some action.
-  return C.customWriteBarrier() || C.customReadBarrier() || C.customRoots();
-}
-
 /// doInitialization - If this module uses the GC intrinsics, find them now.
 bool LowerIntrinsics::doInitialization(Module &M) {
-  // FIXME: This is rather antisocial in the context of a JIT since it performs
-  //        work against the entire module. But this cannot be done at
-  //        runFunction time (initializeCustomLowering likely needs to change
-  //        the module).
   GCModuleInfo *MI = getAnalysisIfAvailable<GCModuleInfo>();
   assert(MI && "LowerIntrinsics didn't require GCModuleInfo!?");
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I)
     if (!I->isDeclaration() && I->hasGC())
       MI->getFunctionInfo(*I); // Instantiate the GC strategy.
 
-  bool MadeChange = false;
-  for (GCModuleInfo::iterator I = MI->begin(), E = MI->end(); I != E; ++I)
-    if (NeedsCustomLoweringPass(**I))
-      if ((*I)->initializeCustomLowering(M))
-        MadeChange = true;
-
-  return MadeChange;
+  return false;
 }
 
 /// CouldBecomeSafePoint - Predicate to conservatively determine whether the
@@ -158,7 +142,7 @@ static bool CouldBecomeSafePoint(Instruction *I) {
   // llvm.gcroot is safe because it doesn't do anything at runtime.
   if (CallInst *CI = dyn_cast<CallInst>(I))
     if (Function *F = CI->getCalledFunction())
-      if (unsigned IID = F->getIntrinsicID())
+      if (Intrinsic::ID IID = F->getIntrinsicID())
         if (IID == Intrinsic::gcroot)
           return false;
 
@@ -210,17 +194,6 @@ bool LowerIntrinsics::runOnFunction(Function &F) {
 
   if (NeedsDefaultLoweringPass(S))
     MadeChange |= PerformDefaultLowering(F, S);
-
-  bool UseCustomLoweringPass = NeedsCustomLoweringPass(S);
-  if (UseCustomLoweringPass)
-    MadeChange |= S.performCustomLowering(F);
-
-  // Custom lowering may modify the CFG, so dominators must be recomputed.
-  if (UseCustomLoweringPass) {
-    if (DominatorTreeWrapperPass *DTWP =
-            getAnalysisIfAvailable<DominatorTreeWrapperPass>())
-      DTWP->getDomTree().recalculate(F);
-  }
 
   return MadeChange;
 }
@@ -299,7 +272,7 @@ void GCMachineCodeAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
 MCSymbol *GCMachineCodeAnalysis::InsertLabel(MachineBasicBlock &MBB,
                                              MachineBasicBlock::iterator MI,
                                              DebugLoc DL) const {
-  MCSymbol *Label = MBB.getParent()->getContext().CreateTempSymbol();
+  MCSymbol *Label = MBB.getParent()->getContext().createTempSymbol();
   BuildMI(MBB, MI, DL, TII->get(TargetOpcode::GC_LABEL)).addSym(Label);
   return Label;
 }
@@ -338,7 +311,7 @@ void GCMachineCodeAnalysis::FindSafePoints(MachineFunction &MF) {
 }
 
 void GCMachineCodeAnalysis::FindStackOffsets(MachineFunction &MF) {
-  const TargetFrameLowering *TFI = TM->getSubtargetImpl()->getFrameLowering();
+  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
   assert(TFI && "TargetRegisterInfo not available!");
 
   for (GCFunctionInfo::roots_iterator RI = FI->roots_begin();
@@ -359,20 +332,22 @@ bool GCMachineCodeAnalysis::runOnMachineFunction(MachineFunction &MF) {
     return false;
 
   FI = &getAnalysis<GCModuleInfo>().getFunctionInfo(*MF.getFunction());
-  if (!FI->getStrategy().needsSafePoints())
-    return false;
-
-  TM = &MF.getTarget();
   MMI = &getAnalysis<MachineModuleInfo>();
-  TII = TM->getSubtargetImpl()->getInstrInfo();
+  TII = MF.getSubtarget().getInstrInfo();
 
-  // Find the size of the stack frame.
-  FI->setFrameSize(MF.getFrameInfo()->getStackSize());
+  // Find the size of the stack frame.  There may be no correct static frame
+  // size, we use UINT64_MAX to represent this.
+  const MachineFrameInfo *MFI = MF.getFrameInfo();
+  const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
+  const bool DynamicFrameSize = MFI->hasVarSizedObjects() ||
+    RegInfo->needsStackRealignment(MF);
+  FI->setFrameSize(DynamicFrameSize ? UINT64_MAX : MFI->getStackSize());
 
   // Find all safe points.
-  FindSafePoints(MF);
+  if (FI->getStrategy().needsSafePoints())
+    FindSafePoints(MF);
 
-  // Find the stack offsets for all roots.
+  // Find the concrete stack offsets for all roots (stack slots)
   FindStackOffsets(MF);
 
   return false;

@@ -23,30 +23,23 @@ namespace llvm {
 
 class AArch64TargetMachine : public LLVMTargetMachine {
 protected:
-  const DataLayout DL;
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  AArch64Subtarget Subtarget;
   mutable StringMap<std::unique_ptr<AArch64Subtarget>> SubtargetMap;
 
 public:
-  AArch64TargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
                        Reloc::Model RM, CodeModel::Model CM,
                        CodeGenOpt::Level OL, bool IsLittleEndian);
 
   ~AArch64TargetMachine() override;
-
-  const DataLayout *getDataLayout() const override { return &DL; }
-  const AArch64Subtarget *getSubtargetImpl() const override {
-    return &Subtarget;
-  }
   const AArch64Subtarget *getSubtargetImpl(const Function &F) const override;
 
   // Pass Pipeline Configuration
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
-  /// \brief Register AArch64 analysis passes with a pass manager.
-  void addAnalysisPasses(PassManagerBase &PM) override;
+  /// \brief Get the TargetIRAnalysis for this target.
+  TargetIRAnalysis getTargetIRAnalysis() override;
 
   TargetLoweringObjectFile* getObjFileLowering() const override {
     return TLOF.get();
@@ -61,7 +54,7 @@ private:
 class AArch64leTargetMachine : public AArch64TargetMachine {
   virtual void anchor();
 public:
-  AArch64leTargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64leTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                          StringRef FS, const TargetOptions &Options,
                          Reloc::Model RM, CodeModel::Model CM,
                          CodeGenOpt::Level OL);
@@ -72,7 +65,7 @@ public:
 class AArch64beTargetMachine : public AArch64TargetMachine {
   virtual void anchor();
 public:
-  AArch64beTargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  AArch64beTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                          StringRef FS, const TargetOptions &Options,
                          Reloc::Model RM, CodeModel::Model CM,
                          CodeGenOpt::Level OL);

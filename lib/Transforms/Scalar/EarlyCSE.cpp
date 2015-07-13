@@ -12,12 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/InstructionSimplify.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
@@ -27,7 +28,8 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/RecyclingAllocator.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include <deque>
 using namespace llvm;
@@ -40,10 +42,6 @@ STATISTIC(NumCSE,      "Number of instructions CSE'd");
 STATISTIC(NumCSELoad,  "Number of load instructions CSE'd");
 STATISTIC(NumCSECall,  "Number of call instructions CSE'd");
 STATISTIC(NumDSE,      "Number of trivial dead stores removed");
-
-static unsigned getHash(const void *V) {
-  return DenseMapInfo<const void*>::getHashValue(V);
-}
 
 //===----------------------------------------------------------------------===//
 // SimpleValue
@@ -238,16 +236,10 @@ template <> struct DenseMapInfo<CallValue> {
 
 unsigned DenseMapInfo<CallValue>::getHashValue(CallValue Val) {
   Instruction *Inst = Val.Inst;
-  // Hash in all of the operands as pointers.
-  unsigned Res = 0;
-  for (unsigned i = 0, e = Inst->getNumOperands(); i != e; ++i) {
-    assert(!Inst->getOperand(i)->getType()->isMetadataTy() &&
-           "Cannot value number calls with metadata operands");
-    Res ^= getHash(Inst->getOperand(i)) << (i & 0xF);
-  }
-
-  // Mix in the opcode.
-  return (Res << 1) ^ Inst->getOpcode();
+  // Hash all of the operands as pointers and mix in the opcode.
+  return hash_combine(
+      Inst->getOpcode(),
+      hash_combine_range(Inst->value_op_begin(), Inst->value_op_end()));
 }
 
 bool DenseMapInfo<CallValue>::isEqual(CallValue LHS, CallValue RHS) {
@@ -272,7 +264,6 @@ namespace {
 class EarlyCSE {
 public:
   Function &F;
-  const DataLayout *DL;
   const TargetLibraryInfo &TLI;
   const TargetTransformInfo &TTI;
   DominatorTree &DT;
@@ -317,11 +308,10 @@ public:
   unsigned CurrentGeneration;
 
   /// \brief Set up the EarlyCSE runner for a particular function.
-  EarlyCSE(Function &F, const DataLayout *DL, const TargetLibraryInfo &TLI,
+  EarlyCSE(Function &F, const TargetLibraryInfo &TLI,
            const TargetTransformInfo &TTI, DominatorTree &DT,
            AssumptionCache &AC)
-      : F(F), DL(DL), TLI(TLI), TTI(TTI), DT(DT), AC(AC), CurrentGeneration(0) {
-  }
+      : F(F), TLI(TLI), TTI(TTI), DT(DT), AC(AC), CurrentGeneration(0) {}
 
   bool run();
 
@@ -337,8 +327,8 @@ private:
           CallScope(AvailableCalls) {}
 
   private:
-    NodeScope(const NodeScope &) LLVM_DELETED_FUNCTION;
-    void operator=(const NodeScope &) LLVM_DELETED_FUNCTION;
+    NodeScope(const NodeScope &) = delete;
+    void operator=(const NodeScope &) = delete;
 
     ScopedHTType::ScopeTy Scope;
     LoadHTType::ScopeTy LoadScope;
@@ -374,8 +364,8 @@ private:
     void process() { Processed = true; }
 
   private:
-    StackNode(const StackNode &) LLVM_DELETED_FUNCTION;
-    void operator=(const StackNode &) LLVM_DELETED_FUNCTION;
+    StackNode(const StackNode &) = delete;
+    void operator=(const StackNode &) = delete;
 
     // Members.
     unsigned CurrentGeneration;
@@ -471,6 +461,30 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
   if (!BB->getSinglePredecessor())
     ++CurrentGeneration;
 
+  // If this node has a single predecessor which ends in a conditional branch,
+  // we can infer the value of the branch condition given that we took this
+  // path.  We need the single predeccesor to ensure there's not another path
+  // which reaches this block where the condition might hold a different
+  // value.  Since we're adding this to the scoped hash table (like any other
+  // def), it will have been popped if we encounter a future merge block.
+  if (BasicBlock *Pred = BB->getSinglePredecessor())
+    if (auto *BI = dyn_cast<BranchInst>(Pred->getTerminator()))
+      if (BI->isConditional())
+        if (auto *CondInst = dyn_cast<Instruction>(BI->getCondition()))
+          if (SimpleValue::canHandle(CondInst)) {
+            assert(BI->getSuccessor(0) == BB || BI->getSuccessor(1) == BB);
+            auto *ConditionalConstant = (BI->getSuccessor(0) == BB) ?
+              ConstantInt::getTrue(BB->getContext()) :
+              ConstantInt::getFalse(BB->getContext());
+            AvailableValues.insert(CondInst, ConditionalConstant);
+            DEBUG(dbgs() << "EarlyCSE CVP: Add conditional value for '"
+                  << CondInst->getName() << "' as " << *ConditionalConstant
+                  << " in " << BB->getName() << "\n");
+            // Replace all dominated uses with the known value
+            replaceDominatedUsesWith(CondInst, ConditionalConstant, DT,
+                                     BasicBlockEdge(Pred, BB));
+          }
+
   /// LastStore - Keep track of the last non-volatile store that we saw... for
   /// as long as there in no instruction that reads memory.  If we see a store
   /// to the same location, we delete the dead store.  This zaps trivial dead
@@ -478,6 +492,7 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
   Instruction *LastStore = nullptr;
 
   bool Changed = false;
+  const DataLayout &DL = BB->getModule()->getDataLayout();
 
   // See if any instructions in the block can be eliminated.  If so, do it.  If
   // not, add them to AvailableValues.
@@ -536,6 +551,9 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
       // Ignore volatile loads.
       if (MemInst.isVolatile()) {
         LastStore = nullptr;
+        // Don't CSE across synchronization boundaries.
+        if (Inst->mayWriteToMemory())
+          ++CurrentGeneration;
         continue;
       }
 
@@ -689,6 +707,25 @@ bool EarlyCSE::run() {
   return Changed;
 }
 
+PreservedAnalyses EarlyCSEPass::run(Function &F,
+                                    AnalysisManager<Function> *AM) {
+  auto &TLI = AM->getResult<TargetLibraryAnalysis>(F);
+  auto &TTI = AM->getResult<TargetIRAnalysis>(F);
+  auto &DT = AM->getResult<DominatorTreeAnalysis>(F);
+  auto &AC = AM->getResult<AssumptionAnalysis>(F);
+
+  EarlyCSE CSE(F, TLI, TTI, DT, AC);
+
+  if (!CSE.run())
+    return PreservedAnalyses::all();
+
+  // CSE preserves the dominator tree because it doesn't mutate the CFG.
+  // FIXME: Bundle this with other CFG-preservation.
+  PreservedAnalyses PA;
+  PA.preserve<DominatorTreeAnalysis>();
+  return PA;
+}
+
 namespace {
 /// \brief A simple and fast domtree-based CSE pass.
 ///
@@ -709,14 +746,12 @@ public:
     if (skipOptnoneFunction(F))
       return false;
 
-    DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
-    auto *DL = DLP ? &DLP->getDataLayout() : nullptr;
     auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-    auto &TTI = getAnalysis<TargetTransformInfo>();
+    auto &TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
     auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     auto &AC = getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F);
 
-    EarlyCSE CSE(F, DL, TLI, TTI, DT, AC);
+    EarlyCSE CSE(F, TLI, TTI, DT, AC);
 
     return CSE.run();
   }
@@ -725,7 +760,7 @@ public:
     AU.addRequired<AssumptionCacheTracker>();
     AU.addRequired<DominatorTreeWrapperPass>();
     AU.addRequired<TargetLibraryInfoWrapperPass>();
-    AU.addRequired<TargetTransformInfo>();
+    AU.addRequired<TargetTransformInfoWrapperPass>();
     AU.setPreservesCFG();
   }
 };
@@ -737,7 +772,7 @@ FunctionPass *llvm::createEarlyCSEPass() { return new EarlyCSELegacyPass(); }
 
 INITIALIZE_PASS_BEGIN(EarlyCSELegacyPass, "early-cse", "Early CSE", false,
                       false)
-INITIALIZE_AG_DEPENDENCY(TargetTransformInfo)
+INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(AssumptionCacheTracker)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)

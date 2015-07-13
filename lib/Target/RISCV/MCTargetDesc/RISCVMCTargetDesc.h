@@ -11,6 +11,7 @@
 #define RISCVMCTARGETDESC_H
 
 #include "llvm/Support/DataTypes.h"
+#include "llvm/Support/TargetRegistry.h"
 
 namespace llvm {
 
@@ -28,6 +29,16 @@ class raw_ostream;
 extern Target TheRISCVTarget;
 extern Target TheRISCV64Target;
 
+MCCodeEmitter *createRISCVMCCodeEmitter(const MCInstrInfo &MCII,
+                                          const MCRegisterInfo &MRI,
+                                          MCContext &Ctx);
+
+MCAsmBackend *createRISCVMCAsmBackend(const Target &T,
+                                      const MCRegisterInfo &MRI, const Triple &TT,
+                                      StringRef CPU);
+
+MCObjectWriter *createRISCVObjectWriter(raw_pwrite_stream &OS, uint8_t OSABI);
+
 namespace RISCVMC {
   // How many bytes are in the ABI-defined, caller-allocated part of
   // a stack frame.
@@ -36,17 +47,6 @@ namespace RISCVMC {
   // The offset of the DWARF CFA from the incoming stack pointer.
   const int64_t CFAOffsetFromInitialSP = CallFrameSize;
 }
-
-MCCodeEmitter *createRISCVMCCodeEmitter(const MCInstrInfo &MCII,
-                                          const MCRegisterInfo &MRI,
-                                          const MCSubtargetInfo &STI,
-                                          MCContext &Ctx);
-
-MCAsmBackend *createRISCVMCAsmBackend(const Target &T,
-                                      const MCRegisterInfo &MRI, StringRef TT,
-                                      StringRef CPU);
-
-MCObjectWriter *createRISCVObjectWriter(raw_ostream &OS, uint8_t OSABI);
 } // end namespace llvm
 
 // Defines symbolic names for RISCV registers.

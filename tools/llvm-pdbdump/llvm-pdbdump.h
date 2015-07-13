@@ -1,4 +1,4 @@
-//===- llvm-pdbdump.h - Common includes for llvm-pdbdump --------*- C++ -*-===//
+//===- llvm-pdbdump.h ----------------------------------------- *- C++ --*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,27 +6,27 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// Common defines and header includes for all llvm-pdbdump.  The definitions
-// here configure the necessary #defines and include system headers in the
-// proper order for using DIA.
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_TOOLS_LLVMPDBDUMP_LLVMPDBDUMP_H
 #define LLVM_TOOLS_LLVMPDBDUMP_LLVMPDBDUMP_H
 
-#define NTDDI_VERSION NTDDI_VISTA
-#define _WIN32_WINNT _WIN32_WINNT_VISTA
-#define WINVER _WIN32_WINNT_VISTA
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/raw_ostream.h"
 
-// atlbase.h has to come before windows.h
-#include <atlbase.h>
-#include <windows.h>
+namespace opts {
+extern llvm::cl::opt<bool> Compilands;
+extern llvm::cl::opt<bool> Symbols;
+extern llvm::cl::opt<bool> Globals;
+extern llvm::cl::opt<bool> Types;
+extern llvm::cl::opt<bool> All;
 
-// DIA headers must come after windows headers.
-#include <cvconst.h>
-#include <dia2.h>
+extern llvm::cl::opt<bool> ExcludeCompilerGenerated;
+
+extern llvm::cl::opt<bool> NoClassDefs;
+extern llvm::cl::opt<bool> NoEnumDefs;
+extern llvm::cl::list<std::string> ExcludeTypes;
+extern llvm::cl::list<std::string> ExcludeSymbols;
+extern llvm::cl::list<std::string> ExcludeCompilands;
+}
 
 #endif

@@ -12,6 +12,7 @@
 #include "RISCVMCAsmInfo.h"
 #include "llvm/MC/MCCodeGenInfo.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -28,8 +29,8 @@
 using namespace llvm;
 
 static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
-                                       StringRef TT) {
-  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
+                                       const Triple &TT) {
+  MCAsmInfo *MAI = new RISCVMCAsmInfo();
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(
       nullptr, MRI.getDwarfRegNum(RISCV::sp, true),
       RISCVMC::CFAOffsetFromInitialSP);
@@ -49,7 +50,7 @@ static MCRegisterInfo *createRISCVMCRegisterInfo(StringRef TT) {
   return X;
 }
 
-static MCSubtargetInfo *createRISCVMCSubtargetInfo(StringRef TT,
+static MCSubtargetInfo *createRISCVMCSubtargetInfo(const Triple &TT,
                                                      StringRef CPU,
                                                      StringRef FS) {
   MCSubtargetInfo *X = new MCSubtargetInfo();
@@ -100,24 +101,22 @@ static MCCodeGenInfo *createRISCVMCCodeGenInfo(StringRef TT, Reloc::Model RM,
     CM = CodeModel::Small;
   else if (CM == CodeModel::JITDefault)
     CM = RM == Reloc::PIC_ ? CodeModel::Small : CodeModel::Medium;
-  X->InitMCCodeGenInfo(RM, CM, OL);
+  X->initMCCodeGenInfo(RM, CM, OL);
   return X;
 }
 
-static MCInstPrinter *createRISCVMCInstPrinter(const Target &T,
+static MCInstPrinter *createRISCVMCInstPrinter(const Triple &TT,
                                                  unsigned SyntaxVariant,
                                                  const MCAsmInfo &MAI,
                                                  const MCInstrInfo &MII,
-                                                 const MCRegisterInfo &MRI,
-                                                 const MCSubtargetInfo &STI) {
+                                                 const MCRegisterInfo &MRI) {
   return new RISCVInstPrinter(MAI, MII, MRI);
 }
 
 static MCStreamer *
-createRISCVMCObjectStreamer(const Target &T, StringRef TT, MCContext &Ctx,
-                            MCAsmBackend &MAB, raw_ostream &OS,
-                            MCCodeEmitter *Emitter, const MCSubtargetInfo &STI,
-                            bool RelaxAll) {
+createRISCVMCObjectStreamer(const Triple &TT, MCContext &Ctx,
+                            MCAsmBackend &MAB, raw_pwrite_stream &OS,
+                            MCCodeEmitter *Emitter, bool RelaxAll) {
   return createELFStreamer(Ctx, MAB, OS, Emitter, RelaxAll);
 }
 
@@ -171,8 +170,8 @@ extern "C" void LLVMInitializeRISCVTargetMC() {
                                         createRISCVMCInstPrinter);
 
   // Register the MCObjectStreamer;
-  TargetRegistry::RegisterMCObjectStreamer(TheRISCVTarget,
+  TargetRegistry::RegisterELFStreamer(TheRISCVTarget,
                                            createRISCVMCObjectStreamer);
-  TargetRegistry::RegisterMCObjectStreamer(TheRISCV64Target,
+  TargetRegistry::RegisterELFStreamer(TheRISCV64Target,
                                            createRISCVMCObjectStreamer);
 }

@@ -21,9 +21,9 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
@@ -184,8 +184,8 @@ void Calculate(DominatorTreeBase<typename GraphTraits<N>::NodeType> &DT,
 /// This class is a generic template over graph nodes. It is instantiated for
 /// various graphs in the LLVM IR or in the code generator.
 template <class NodeT> class DominatorTreeBase : public DominatorBase<NodeT> {
-  DominatorTreeBase(const DominatorTreeBase &) LLVM_DELETED_FUNCTION;
-  DominatorTreeBase &operator=(const DominatorTreeBase &) LLVM_DELETED_FUNCTION;
+  DominatorTreeBase(const DominatorTreeBase &) = delete;
+  DominatorTreeBase &operator=(const DominatorTreeBase &) = delete;
 
   bool dominatedBySlowTreeWalk(const DomTreeNodeBase<NodeT> *A,
                                const DomTreeNodeBase<NodeT> *B) const {
@@ -243,6 +243,8 @@ protected:
     this->Roots.clear();
     Vertex.clear();
     RootNode = nullptr;
+    DFSInfoValid = false;
+    SlowQueries = 0;
   }
 
   // NewBB is split and now it has one successor. Update dominator tree to
@@ -637,9 +639,38 @@ protected:
   friend void
   Calculate(DominatorTreeBase<typename GraphTraits<N>::NodeType> &DT, FuncT &F);
 
+
+  DomTreeNodeBase<NodeT> *getNodeForBlock(NodeT *BB) {
+    if (DomTreeNodeBase<NodeT> *Node = getNode(BB))
+      return Node;
+
+    // Haven't calculated this node yet?  Get or calculate the node for the
+    // immediate dominator.
+    NodeT *IDom = getIDom(BB);
+
+    assert(IDom || this->DomTreeNodes[nullptr]);
+    DomTreeNodeBase<NodeT> *IDomNode = getNodeForBlock(IDom);
+
+    // Add a new tree node for this NodeT, and link it as a child of
+    // IDomNode
+    return (this->DomTreeNodes[BB] = IDomNode->addChild(
+                llvm::make_unique<DomTreeNodeBase<NodeT>>(BB, IDomNode))).get();
+  }
+
+  NodeT *getIDom(NodeT *BB) const { return IDoms.lookup(BB); }
+
+  void addRoot(NodeT *BB) { this->Roots.push_back(BB); }
+
+public:
   /// updateDFSNumbers - Assign In and Out numbers to the nodes while walking
   /// dominator tree in dfs order.
   void updateDFSNumbers() const {
+
+    if (DFSInfoValid) {
+      SlowQueries = 0;
+      return;
+    }
+
     unsigned DFSNum = 0;
 
     SmallVector<std::pair<const DomTreeNodeBase<NodeT> *,
@@ -682,28 +713,6 @@ protected:
     DFSInfoValid = true;
   }
 
-  DomTreeNodeBase<NodeT> *getNodeForBlock(NodeT *BB) {
-    if (DomTreeNodeBase<NodeT> *Node = getNode(BB))
-      return Node;
-
-    // Haven't calculated this node yet?  Get or calculate the node for the
-    // immediate dominator.
-    NodeT *IDom = getIDom(BB);
-
-    assert(IDom || this->DomTreeNodes[nullptr]);
-    DomTreeNodeBase<NodeT> *IDomNode = getNodeForBlock(IDom);
-
-    // Add a new tree node for this NodeT, and link it as a child of
-    // IDomNode
-    return (this->DomTreeNodes[BB] = IDomNode->addChild(
-                llvm::make_unique<DomTreeNodeBase<NodeT>>(BB, IDomNode))).get();
-  }
-
-  NodeT *getIDom(NodeT *BB) const { return IDoms.lookup(BB); }
-
-  void addRoot(NodeT *BB) { this->Roots.push_back(BB); }
-
-public:
   /// recalculate - compute a dominator tree for the given function
   template <class FT> void recalculate(FT &F) {
     typedef GraphTraits<FT *> TraitsTy;

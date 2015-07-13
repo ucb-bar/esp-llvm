@@ -278,6 +278,28 @@
 ; CHECK-TLI-NOT: Running analysis: TargetLibraryAnalysis
 ; CHECK-TLI: Finished pass manager
 
+; RUN: opt -disable-output -disable-verify -debug-pass-manager %s 2>&1 \
+; RUN:     -passes='require<targetir>,invalidate<all>,require<targetir>' \
+; RUN:     | FileCheck %s --check-prefix=CHECK-TIRA
+; CHECK-TIRA: Starting pass manager
+; CHECK-TIRA: Running pass: RequireAnalysisPass
+; CHECK-TIRA: Running analysis: TargetIRAnalysis
+; CHECK-TIRA: Running pass: InvalidateAllAnalysesPass
+; CHECK-TIRA-NOT: Invalidating analysis: TargetIRAnalysis
+; CHECK-TIRA: Running pass: RequireAnalysisPass
+; CHECK-TIRA-NOT: Running analysis: TargetIRAnalysis
+; CHECK-TIRA: Finished pass manager
+
+; RUN: opt -disable-output -disable-verify -debug-pass-manager %s 2>&1 \
+; RUN:     -passes='require<domtree>' \
+; RUN:     | FileCheck %s --check-prefix=CHECK-DT
+; CHECK-DT: Starting pass manager
+; CHECK-DT: Running pass: RequireAnalysisPass
+; CHECK-DT: Running analysis: DominatorTreeAnalysis
+; CHECK-DT: Finished pass manager
+
 define void @foo() {
   ret void
 }
+
+declare void @bar()

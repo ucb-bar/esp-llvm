@@ -131,6 +131,17 @@ class LOAD_STORE_SP_FM_MM16<bits<6> op> {
   let Inst{4-0}   = offset;
 }
 
+class LOAD_GP_FM_MM16<bits<6> op> {
+  bits<3> rt;
+  bits<7> offset;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = op;
+  let Inst{9-7} = rt;
+  let Inst{6-0} = offset;
+}
+
 class ADDIUS5_FM_MM16 {
   bits<5> rd;
   bits<4> imm;
@@ -245,6 +256,20 @@ class B16_FM {
 
   let Inst{15-10} = 0x33;
   let Inst{9-0}   = offset;
+}
+
+class MOVEP_FM_MM16 {
+  bits<3> dst_regs;
+  bits<3> rt;
+  bits<3> rs;
+
+  bits<16> Inst;
+
+  let Inst{15-10} = 0x21;
+  let Inst{9-7}   = dst_regs;
+  let Inst{6-4}   = rt;
+  let Inst{3-1}   = rs;
+  let Inst{0}     = 0;
 }
 
 //===----------------------------------------------------------------------===//

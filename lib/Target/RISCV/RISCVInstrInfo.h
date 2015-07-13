@@ -73,15 +73,15 @@ public:
   unsigned RemoveBranch(MachineBasicBlock &MBB) const override;
   unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                         MachineBasicBlock *FBB,
-                        const SmallVectorImpl<MachineOperand> &Cond,
+                        ArrayRef<MachineOperand> Cond,
                         DebugLoc DL) const override;
   unsigned InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
                               MachineBasicBlock *TBB,
-                              const SmallVectorImpl<MachineOperand> &Cond,
+                              ArrayRef<MachineOperand> Cond,
                               DebugLoc DL) const;
   unsigned InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
                                    int64_t offset,
-                                   const SmallVectorImpl<MachineOperand> &Cond,
+                                   ArrayRef<MachineOperand> Cond,
                                    DebugLoc DL) const;
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                    DebugLoc DL, unsigned DestReg, unsigned SrcReg,

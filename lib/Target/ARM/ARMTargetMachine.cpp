@@ -14,10 +14,11 @@
 #include "ARMFrameLowering.h"
 #include "ARMTargetMachine.h"
 #include "ARMTargetObjectFile.h"
+#include "ARMTargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/MC/MCAsmInfo.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -35,6 +36,16 @@ EnableAtomicTidy("arm-atomic-cfg-tidy", cl::Hidden,
                  cl::desc("Run SimplifyCFG after expanding atomic operations"
                           " to make use of cmpxchg flow-based information"),
                  cl::init(true));
+
+static cl::opt<bool>
+EnableARMLoadStoreOpt("arm-load-store-opt", cl::Hidden,
+                      cl::desc("Enable ARM load/store optimization pass"),
+                      cl::init(true));
+
+// FIXME: Unify control over GlobalMerge.
+static cl::opt<cl::boolOrDefault>
+EnableGlobalMerge("arm-global-merge", cl::Hidden,
+                  cl::desc("Enable the global merge pass"));
 
 extern "C" void LLVMInitializeARMTarget() {
   // Register the target.
@@ -104,9 +115,10 @@ computeTargetABI(const Triple &TT, StringRef CPU,
   return TargetABI;
 }
 
-static std::string computeDataLayout(const Triple &TT,
-                                     ARMBaseTargetMachine::ARMABI ABI,
+static std::string computeDataLayout(const Triple &TT, StringRef CPU,
+                                     const TargetOptions &Options,
                                      bool isLittle) {
+  auto ABI = computeTargetABI(TT, CPU, Options);
   std::string Ret = "";
 
   if (isLittle)
@@ -158,15 +170,15 @@ static std::string computeDataLayout(const Triple &TT,
 
 /// TargetMachine ctor - Create an ARM architecture model.
 ///
-ARMBaseTargetMachine::ARMBaseTargetMachine(const Target &T, StringRef TT,
+ARMBaseTargetMachine::ARMBaseTargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            Reloc::Model RM, CodeModel::Model CM,
                                            CodeGenOpt::Level OL, bool isLittle)
-    : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
-      TargetABI(computeTargetABI(Triple(TT), CPU, Options)),
-      DL(computeDataLayout(Triple(TT), TargetABI, isLittle)),
-      TLOF(createTLOF(Triple(getTargetTriple()))),
+    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, isLittle), TT,
+                        CPU, FS, Options, RM, CM, OL),
+      TargetABI(computeTargetABI(TT, CPU, Options)),
+      TLOF(createTLOF(getTargetTriple())),
       Subtarget(TT, CPU, FS, *this, isLittle), isLittle(isLittle) {
 
   // Default to triple-appropriate float ABI
@@ -179,11 +191,8 @@ ARMBaseTargetMachine::~ARMBaseTargetMachine() {}
 
 const ARMSubtarget *
 ARMBaseTargetMachine::getSubtargetImpl(const Function &F) const {
-  AttributeSet FnAttrs = F.getAttributes();
-  Attribute CPUAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "target-cpu");
-  Attribute FSAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "target-features");
+  Attribute CPUAttr = F.getFnAttribute("target-cpu");
+  Attribute FSAttr = F.getFnAttribute("target-features");
 
   std::string CPU = !CPUAttr.hasAttribute(Attribute::None)
                         ? CPUAttr.getValueAsString().str()
@@ -197,14 +206,15 @@ ARMBaseTargetMachine::getSubtargetImpl(const Function &F) const {
   // function before we can generate a subtarget. We also need to use
   // it as a key for the subtarget since that can be the only difference
   // between two functions.
-  Attribute SFAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "use-soft-float");
-  bool SoftFloat = !SFAttr.hasAttribute(Attribute::None)
-                       ? SFAttr.getValueAsString() == "true"
-                       : Options.UseSoftFloat;
+  bool SoftFloat =
+      F.hasFnAttribute("use-soft-float") &&
+      F.getFnAttribute("use-soft-float").getValueAsString() == "true";
+  // If the soft float attribute is set on the function turn on the soft float
+  // subtarget feature.
+  if (SoftFloat)
+    FS += FS.empty() ? "+soft-float" : ",+soft-float";
 
-  auto &I = SubtargetMap[CPU + FS + (SoftFloat ? "use-soft-float=true"
-                                               : "use-soft-float=false")];
+  auto &I = SubtargetMap[CPU + FS];
   if (!I) {
     // This needs to be done before we create a new subtarget since any
     // creation will depend on the TM and the code generation flags on the
@@ -215,19 +225,17 @@ ARMBaseTargetMachine::getSubtargetImpl(const Function &F) const {
   return I.get();
 }
 
-void ARMBaseTargetMachine::addAnalysisPasses(PassManagerBase &PM) {
-  // Add first the target-independent BasicTTI pass, then our ARM pass. This
-  // allows the ARM pass to delegate to the target independent layer when
-  // appropriate.
-  PM.add(createBasicTargetTransformInfoPass(this));
-  PM.add(createARMTargetTransformInfoPass(this));
+TargetIRAnalysis ARMBaseTargetMachine::getTargetIRAnalysis() {
+  return TargetIRAnalysis(
+      [this](Function &F) { return TargetTransformInfo(ARMTTIImpl(this, F)); });
 }
 
 
 void ARMTargetMachine::anchor() { }
 
-ARMTargetMachine::ARMTargetMachine(const Target &T, StringRef TT, StringRef CPU,
-                                   StringRef FS, const TargetOptions &Options,
+ARMTargetMachine::ARMTargetMachine(const Target &T, const Triple &TT,
+                                   StringRef CPU, StringRef FS,
+                                   const TargetOptions &Options,
                                    Reloc::Model RM, CodeModel::Model CM,
                                    CodeGenOpt::Level OL, bool isLittle)
     : ARMBaseTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, isLittle) {
@@ -239,7 +247,7 @@ ARMTargetMachine::ARMTargetMachine(const Target &T, StringRef TT, StringRef CPU,
 
 void ARMLETargetMachine::anchor() { }
 
-ARMLETargetMachine::ARMLETargetMachine(const Target &T, StringRef TT,
+ARMLETargetMachine::ARMLETargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Reloc::Model RM, CodeModel::Model CM,
@@ -248,7 +256,7 @@ ARMLETargetMachine::ARMLETargetMachine(const Target &T, StringRef TT,
 
 void ARMBETargetMachine::anchor() { }
 
-ARMBETargetMachine::ARMBETargetMachine(const Target &T, StringRef TT,
+ARMBETargetMachine::ARMBETargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Reloc::Model RM, CodeModel::Model CM,
@@ -257,19 +265,18 @@ ARMBETargetMachine::ARMBETargetMachine(const Target &T, StringRef TT,
 
 void ThumbTargetMachine::anchor() { }
 
-ThumbTargetMachine::ThumbTargetMachine(const Target &T, StringRef TT,
+ThumbTargetMachine::ThumbTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        Reloc::Model RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL, bool isLittle)
-    : ARMBaseTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL,
-                           isLittle) {
+    : ARMBaseTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, isLittle) {
   initAsmInfo();
 }
 
 void ThumbLETargetMachine::anchor() { }
 
-ThumbLETargetMachine::ThumbLETargetMachine(const Target &T, StringRef TT,
+ThumbLETargetMachine::ThumbLETargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            Reloc::Model RM, CodeModel::Model CM,
@@ -278,7 +285,7 @@ ThumbLETargetMachine::ThumbLETargetMachine(const Target &T, StringRef TT,
 
 void ThumbBETargetMachine::anchor() { }
 
-ThumbBETargetMachine::ThumbBETargetMachine(const Target &T, StringRef TT,
+ThumbBETargetMachine::ThumbBETargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            Reloc::Model RM, CodeModel::Model CM,
@@ -294,10 +301,6 @@ public:
 
   ARMBaseTargetMachine &getARMTargetMachine() const {
     return getTM<ARMBaseTargetMachine>();
-  }
-
-  const ARMSubtarget &getARMSubtarget() const {
-    return *getARMTargetMachine().getSubtargetImpl();
   }
 
   void addIRPasses() override;
@@ -322,17 +325,32 @@ void ARMPassConfig::addIRPasses() {
   // Cmpxchg instructions are often used with a subsequent comparison to
   // determine whether it succeeded. We can exploit existing control-flow in
   // ldrex/strex loops to simplify this, but it needs tidying up.
-  const ARMSubtarget *Subtarget = &getARMSubtarget();
-  if (Subtarget->hasAnyDataBarrier() && !Subtarget->isThumb1Only())
-    if (TM->getOptLevel() != CodeGenOpt::None && EnableAtomicTidy)
-      addPass(createCFGSimplificationPass());
+  if (TM->getOptLevel() != CodeGenOpt::None && EnableAtomicTidy)
+    addPass(createCFGSimplificationPass(-1, [this](const Function &F) {
+      const auto &ST = this->TM->getSubtarget<ARMSubtarget>(F);
+      return ST.hasAnyDataBarrier() && !ST.isThumb1Only();
+    }));
 
   TargetPassConfig::addIRPasses();
+
+  // Match interleaved memory accesses to ldN/stN intrinsics.
+  if (TM->getOptLevel() != CodeGenOpt::None)
+    addPass(createInterleavedAccessPass(TM));
 }
 
 bool ARMPassConfig::addPreISel() {
-  if (TM->getOptLevel() != CodeGenOpt::None)
-    addPass(createGlobalMergePass(TM));
+  if ((TM->getOptLevel() != CodeGenOpt::None &&
+       EnableGlobalMerge == cl::BOU_UNSET) ||
+      EnableGlobalMerge == cl::BOU_TRUE) {
+    // FIXME: This is using the thumb1 only constant value for
+    // maximal global offset for merging globals. We may want
+    // to look into using the old value for non-thumb1 code of
+    // 4095 based on the TargetMachine, but this starts to become
+    // tricky when doing code gen per function.
+    bool OnlyOptimizeForSize = (TM->getOptLevel() < CodeGenOpt::Aggressive) &&
+                               (EnableGlobalMerge == cl::BOU_UNSET);
+    addPass(createGlobalMergePass(TM, 127, OnlyOptimizeForSize));
+  }
 
   return false;
 }
@@ -340,32 +358,29 @@ bool ARMPassConfig::addPreISel() {
 bool ARMPassConfig::addInstSelector() {
   addPass(createARMISelDag(getARMTargetMachine(), getOptLevel()));
 
-  const ARMSubtarget *Subtarget = &getARMSubtarget();
-  if (Subtarget->isTargetELF() && !Subtarget->isThumb1Only() &&
-      TM->Options.EnableFastISel)
+  if (TM->getTargetTriple().isOSBinFormatELF() && TM->Options.EnableFastISel)
     addPass(createARMGlobalBaseRegPass());
   return false;
 }
 
 void ARMPassConfig::addPreRegAlloc() {
-  if (getOptLevel() != CodeGenOpt::None)
-    addPass(createARMLoadStoreOptimizationPass(true));
-  if (getOptLevel() != CodeGenOpt::None && getARMSubtarget().isCortexA9())
+  if (getOptLevel() != CodeGenOpt::None) {
     addPass(createMLxExpansionPass());
-  // Since the A15SDOptimizer pass can insert VDUP instructions, it can only be
-  // enabled when NEON is available.
-  if (getOptLevel() != CodeGenOpt::None && getARMSubtarget().isCortexA15() &&
-    getARMSubtarget().hasNEON() && !DisableA15SDOptimization) {
-    addPass(createA15SDOptimizerPass());
+
+    if (EnableARMLoadStoreOpt)
+      addPass(createARMLoadStoreOptimizationPass(/* pre-register alloc */ true));
+
+    if (!DisableA15SDOptimization)
+      addPass(createA15SDOptimizerPass());
   }
 }
 
 void ARMPassConfig::addPreSched2() {
   if (getOptLevel() != CodeGenOpt::None) {
-    addPass(createARMLoadStoreOptimizationPass());
+    if (EnableARMLoadStoreOpt)
+      addPass(createARMLoadStoreOptimizationPass());
 
-    if (getARMSubtarget().hasNEON())
-      addPass(createExecutionDependencyFixPass(&ARM::DPRRegClass));
+    addPass(createExecutionDependencyFixPass(&ARM::DPRRegClass));
   }
 
   // Expand some pseudo instructions into multiple instructions to allow
@@ -373,27 +388,29 @@ void ARMPassConfig::addPreSched2() {
   addPass(createARMExpandPseudoPass());
 
   if (getOptLevel() != CodeGenOpt::None) {
-    if (!getARMSubtarget().isThumb1Only()) {
-      // in v8, IfConversion depends on Thumb instruction widths
-      if (getARMSubtarget().restrictIT() &&
-          !getARMSubtarget().prefers32BitThumb())
-        addPass(createThumb2SizeReductionPass());
-      addPass(&IfConverterID);
-    }
+    // in v8, IfConversion depends on Thumb instruction widths
+    addPass(createThumb2SizeReductionPass([this](const Function &F) {
+      return this->TM->getSubtarget<ARMSubtarget>(F).restrictIT();
+    }));
+
+    addPass(createIfConverter([this](const Function &F) {
+      return !this->TM->getSubtarget<ARMSubtarget>(F).isThumb1Only();
+    }));
   }
-  if (getARMSubtarget().isThumb2())
-    addPass(createThumb2ITBlockPass());
+  addPass(createThumb2ITBlockPass());
 }
 
 void ARMPassConfig::addPreEmitPass() {
-  if (getARMSubtarget().isThumb2()) {
-    if (!getARMSubtarget().prefers32BitThumb())
-      addPass(createThumb2SizeReductionPass());
+  addPass(createThumb2SizeReductionPass());
 
-    // Constant island pass work on unbundled instructions.
-    addPass(&UnpackMachineBundlesID);
-  }
+  // Constant island pass work on unbundled instructions.
+  addPass(createUnpackMachineBundles([this](const Function &F) {
+    return this->TM->getSubtarget<ARMSubtarget>(F).isThumb2();
+  }));
 
-  addPass(createARMOptimizeBarriersPass());
+  // Don't optimize barriers at -O0.
+  if (getOptLevel() != CodeGenOpt::None)
+    addPass(createARMOptimizeBarriersPass());
+
   addPass(createARMConstantIslandPass());
 }

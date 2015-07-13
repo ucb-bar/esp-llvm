@@ -27,9 +27,7 @@ private:
 
 public:
   RISCVAsmPrinter(TargetMachine &TM, std::unique_ptr<MCStreamer> Streamer)
-    : AsmPrinter(TM, std::move(Streamer)) {
-    Subtarget = &TM.getSubtarget<RISCVSubtarget>();
-  }
+    : AsmPrinter(TM, std::move(Streamer)) {}
 
   // Override AsmPrinter.
   const char *getPassName() const override {
@@ -46,6 +44,7 @@ public:
                              raw_ostream &OS) override;
   void printMemOperand(const MachineInstr *MI, int opNum, raw_ostream &OS);
   void EmitEndOfAsmFile(Module &M) override;
+  bool runOnMachineFunction(MachineFunction &MF) override;
 };
 } // end namespace llvm
 

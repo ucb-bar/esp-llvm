@@ -18,10 +18,8 @@ class StringRef;
 
 class RISCVMCAsmInfo : public MCAsmInfo {
 public:
-  explicit RISCVMCAsmInfo(StringRef TT);
+  explicit RISCVMCAsmInfo();
 
-  // Override MCAsmInfo;
-  const MCSection *getNonexecutableStackSection(MCContext &Ctx) const override;
 };
 
 } // namespace llvm

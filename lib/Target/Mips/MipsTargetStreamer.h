@@ -35,6 +35,7 @@ public:
   virtual void emitDirectiveSetMsa();
   virtual void emitDirectiveSetNoMsa();
   virtual void emitDirectiveSetAt();
+  virtual void emitDirectiveSetAtWithArg(unsigned RegNo);
   virtual void emitDirectiveSetNoAt();
   virtual void emitDirectiveEnd(StringRef Name);
 
@@ -44,6 +45,7 @@ public:
   virtual void emitDirectiveNaNLegacy();
   virtual void emitDirectiveOptionPic0();
   virtual void emitDirectiveOptionPic2();
+  virtual void emitDirectiveInsn();
   virtual void emitFrame(unsigned StackReg, unsigned StackSize,
                          unsigned ReturnReg);
   virtual void emitMask(unsigned CPUBitmask, int CPUTopSavedRegOff);
@@ -58,38 +60,33 @@ public:
   virtual void emitDirectiveSetMips5();
   virtual void emitDirectiveSetMips32();
   virtual void emitDirectiveSetMips32R2();
+  virtual void emitDirectiveSetMips32R3();
+  virtual void emitDirectiveSetMips32R5();
   virtual void emitDirectiveSetMips32R6();
   virtual void emitDirectiveSetMips64();
   virtual void emitDirectiveSetMips64R2();
+  virtual void emitDirectiveSetMips64R3();
+  virtual void emitDirectiveSetMips64R5();
   virtual void emitDirectiveSetMips64R6();
   virtual void emitDirectiveSetDsp();
   virtual void emitDirectiveSetNoDsp();
   virtual void emitDirectiveSetPop();
   virtual void emitDirectiveSetPush();
+  virtual void emitDirectiveSetSoftFloat();
+  virtual void emitDirectiveSetHardFloat();
 
   // PIC support
   virtual void emitDirectiveCpLoad(unsigned RegNo);
   virtual void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                                     const MCSymbol &Sym, bool IsReg);
 
-  /// Emit a '.module fp=value' directive using the given values.
-  /// Updates the .MIPS.abiflags section
-  virtual void emitDirectiveModuleFP(MipsABIFlagsSection::FpABIKind Value,
-                                     bool Is32BitABI) {
-    ABIFlagsSection.setFpABI(Value, Is32BitABI);
-  }
+  // FP abiflags directives
+  virtual void emitDirectiveModuleFP();
+  virtual void emitDirectiveModuleOddSPReg();
+  virtual void emitDirectiveSetFp(MipsABIFlagsSection::FpABIKind Value);
 
-  /// Emit a '.module fp=value' directive using the current values of the
-  /// .MIPS.abiflags section.
-  void emitDirectiveModuleFP() {
-    emitDirectiveModuleFP(ABIFlagsSection.getFpABI(),
-                          ABIFlagsSection.Is32BitABI);
-  }
-
-  virtual void emitDirectiveModuleOddSPReg(bool Enabled, bool IsO32ABI);
-  virtual void emitDirectiveSetFp(MipsABIFlagsSection::FpABIKind Value){};
-  virtual void emitMipsAbiFlags(){};
   void forbidModuleDirective() { ModuleDirectiveAllowed = false; }
+  void reallowModuleDirective() { ModuleDirectiveAllowed = true; }
   bool isModuleDirectiveAllowed() { return ModuleDirectiveAllowed; }
 
   // This method enables template classes to set internal abi flags
@@ -145,6 +142,7 @@ public:
   void emitDirectiveSetMsa() override;
   void emitDirectiveSetNoMsa() override;
   void emitDirectiveSetAt() override;
+  void emitDirectiveSetAtWithArg(unsigned RegNo) override;
   void emitDirectiveSetNoAt() override;
   void emitDirectiveEnd(StringRef Name) override;
 
@@ -154,6 +152,7 @@ public:
   void emitDirectiveNaNLegacy() override;
   void emitDirectiveOptionPic0() override;
   void emitDirectiveOptionPic2() override;
+  void emitDirectiveInsn() override;
   void emitFrame(unsigned StackReg, unsigned StackSize,
                  unsigned ReturnReg) override;
   void emitMask(unsigned CPUBitmask, int CPUTopSavedRegOff) override;
@@ -168,26 +167,30 @@ public:
   void emitDirectiveSetMips5() override;
   void emitDirectiveSetMips32() override;
   void emitDirectiveSetMips32R2() override;
+  void emitDirectiveSetMips32R3() override;
+  void emitDirectiveSetMips32R5() override;
   void emitDirectiveSetMips32R6() override;
   void emitDirectiveSetMips64() override;
   void emitDirectiveSetMips64R2() override;
+  void emitDirectiveSetMips64R3() override;
+  void emitDirectiveSetMips64R5() override;
   void emitDirectiveSetMips64R6() override;
   void emitDirectiveSetDsp() override;
   void emitDirectiveSetNoDsp() override;
   void emitDirectiveSetPop() override;
   void emitDirectiveSetPush() override;
+  void emitDirectiveSetSoftFloat() override;
+  void emitDirectiveSetHardFloat() override;
 
   // PIC support
   void emitDirectiveCpLoad(unsigned RegNo) override;
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 
-  // ABI Flags
-  void emitDirectiveModuleFP(MipsABIFlagsSection::FpABIKind Value,
-                             bool Is32BitABI) override;
-  void emitDirectiveModuleOddSPReg(bool Enabled, bool IsO32ABI) override;
+  // FP abiflags directives
+  void emitDirectiveModuleFP() override;
+  void emitDirectiveModuleOddSPReg() override;
   void emitDirectiveSetFp(MipsABIFlagsSection::FpABIKind Value) override;
-  void emitMipsAbiFlags() override;
 };
 
 // This part is for ELF object output
@@ -218,6 +221,7 @@ public:
   void emitDirectiveNaNLegacy() override;
   void emitDirectiveOptionPic0() override;
   void emitDirectiveOptionPic2() override;
+  void emitDirectiveInsn() override;
   void emitFrame(unsigned StackReg, unsigned StackSize,
                  unsigned ReturnReg) override;
   void emitMask(unsigned CPUBitmask, int CPUTopSavedRegOff) override;
@@ -228,9 +232,7 @@ public:
   void emitDirectiveCpsetup(unsigned RegNo, int RegOrOffset,
                             const MCSymbol &Sym, bool IsReg) override;
 
-  // ABI Flags
-  void emitDirectiveModuleOddSPReg(bool Enabled, bool IsO32ABI) override;
-  void emitMipsAbiFlags() override;
+  void emitMipsAbiFlags();
 };
 }
 #endif

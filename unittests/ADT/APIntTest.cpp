@@ -10,6 +10,7 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallString.h"
 #include "gtest/gtest.h"
+#include <array>
 #include <ostream>
 
 using namespace llvm;
@@ -134,6 +135,12 @@ TEST(APIntTest, i1) {
   EXPECT_EQ(one, neg_one);
   EXPECT_EQ(two, neg_two);
 
+  // Min/max signed values.
+  EXPECT_TRUE(zero.isMaxSignedValue());
+  EXPECT_FALSE(one.isMaxSignedValue());
+  EXPECT_FALSE(zero.isMinSignedValue());
+  EXPECT_TRUE(one.isMinSignedValue());
+
   // Additions.
   EXPECT_EQ(two, one + one);
   EXPECT_EQ(zero, neg_one + one);
@@ -207,6 +214,141 @@ TEST(APIntTest, i1) {
   EXPECT_EQ(four, q);
   EXPECT_EQ(-one, r);
   }
+}
+
+TEST(APIntTest, compare) {
+  std::array<APInt, 5> testVals{{
+    APInt{16, 2},
+    APInt{16, 1},
+    APInt{16, 0},
+    APInt{16, (uint64_t)-1, true},
+    APInt{16, (uint64_t)-2, true},
+  }};
+
+  for (auto &arg1 : testVals)
+    for (auto &arg2 : testVals) {
+      auto uv1 = arg1.getZExtValue();
+      auto uv2 = arg2.getZExtValue();
+      auto sv1 = arg1.getSExtValue();
+      auto sv2 = arg2.getSExtValue();
+
+      EXPECT_EQ(uv1 <  uv2, arg1.ult(arg2));
+      EXPECT_EQ(uv1 <= uv2, arg1.ule(arg2));
+      EXPECT_EQ(uv1 >  uv2, arg1.ugt(arg2));
+      EXPECT_EQ(uv1 >= uv2, arg1.uge(arg2));
+
+      EXPECT_EQ(sv1 <  sv2, arg1.slt(arg2));
+      EXPECT_EQ(sv1 <= sv2, arg1.sle(arg2));
+      EXPECT_EQ(sv1 >  sv2, arg1.sgt(arg2));
+      EXPECT_EQ(sv1 >= sv2, arg1.sge(arg2));
+
+      EXPECT_EQ(uv1 <  uv2, arg1.ult(uv2));
+      EXPECT_EQ(uv1 <= uv2, arg1.ule(uv2));
+      EXPECT_EQ(uv1 >  uv2, arg1.ugt(uv2));
+      EXPECT_EQ(uv1 >= uv2, arg1.uge(uv2));
+
+      EXPECT_EQ(sv1 <  sv2, arg1.slt(sv2));
+      EXPECT_EQ(sv1 <= sv2, arg1.sle(sv2));
+      EXPECT_EQ(sv1 >  sv2, arg1.sgt(sv2));
+      EXPECT_EQ(sv1 >= sv2, arg1.sge(sv2));
+    }
+}
+
+
+// Tests different div/rem varaints using scheme (a * b + c) / a
+void testDiv(APInt a, APInt b, APInt c) {
+  ASSERT_TRUE(a.uge(b)); // Must: a >= b
+  ASSERT_TRUE(a.ugt(c)); // Must: a > c
+
+  auto p = a * b + c;
+
+  auto q = p.udiv(a);
+  auto r = p.urem(a);
+  EXPECT_EQ(b, q);
+  EXPECT_EQ(c, r);
+  APInt::udivrem(p, a, q, r);
+  EXPECT_EQ(b, q);
+  EXPECT_EQ(c, r);
+  q = p.sdiv(a);
+  r = p.srem(a);
+  EXPECT_EQ(b, q);
+  EXPECT_EQ(c, r);
+  APInt::sdivrem(p, a, q, r);
+  EXPECT_EQ(b, q);
+  EXPECT_EQ(c, r);
+
+  if (b.ugt(c)) { // Test also symmetric case
+    q = p.udiv(b);
+    r = p.urem(b);
+    EXPECT_EQ(a, q);
+    EXPECT_EQ(c, r);
+    APInt::udivrem(p, b, q, r);
+    EXPECT_EQ(a, q);
+    EXPECT_EQ(c, r);
+    q = p.sdiv(b);
+    r = p.srem(b);
+    EXPECT_EQ(a, q);
+    EXPECT_EQ(c, r);
+    APInt::sdivrem(p, b, q, r);
+    EXPECT_EQ(a, q);
+    EXPECT_EQ(c, r);
+  }
+}
+
+TEST(APIntTest, divrem_big1) {
+  // Tests KnuthDiv rare step D6
+  testDiv({256, "1ffffffffffffffff", 16},
+          {256, "1ffffffffffffffff", 16},
+          {256, 0});
+}
+
+TEST(APIntTest, divrem_big2) {
+  // Tests KnuthDiv rare step D6
+  testDiv({1024,                       "112233ceff"
+                 "cecece000000ffffffffffffffffffff"
+                 "ffffffffffffffffffffffffffffffff"
+                 "ffffffffffffffffffffffffffffffff"
+                 "ffffffffffffffffffffffffffffff33", 16},
+          {1024,           "111111ffffffffffffffff"
+                 "ffffffffffffffffffffffffffffffff"
+                 "fffffffffffffffffffffffffffffccf"
+                 "ffffffffffffffffffffffffffffff00", 16},
+          {1024, 7919});
+}
+
+TEST(APIntTest, divrem_big3) {
+  // Tests KnuthDiv case without shift
+  testDiv({256, "80000001ffffffffffffffff", 16},
+          {256, "ffffffffffffff0000000", 16},
+          {256, 4219});
+}
+
+TEST(APIntTest, divrem_big4) {
+  // Tests heap allocation in divide() enfoced by huge numbers
+  testDiv(APInt{4096, 5}.shl(2001),
+          APInt{4096, 1}.shl(2000),
+          APInt{4096, 4219*13});
+}
+
+TEST(APIntTest, divrem_big5) {
+  // Tests one word divisor case of divide()
+  testDiv(APInt{1024, 19}.shl(811),
+          APInt{1024, 4356013}, // one word
+          APInt{1024, 1});
+}
+
+TEST(APIntTest, divrem_big6) {
+  // Tests some rare "borrow" cases in D4 step
+  testDiv(APInt{512, "ffffffffffffffff00000000000000000000000001", 16},
+          APInt{512, "10000000000000001000000000000001", 16},
+          APInt{512, "10000000000000000000000000000000", 16});
+}
+
+TEST(APIntTest, divrem_big7) {
+  // Yet another test for KnuthDiv rare step D6.
+  testDiv({224, "800000008000000200000005", 16},
+          {224, "fffffffd", 16},
+          {224, "80000000800000010000000f", 16});
 }
 
 TEST(APIntTest, fromString) {
@@ -676,6 +818,46 @@ TEST(APIntTest, nearestLogBase2) {
   // that the bit width is larger than UINT32_MAX-1.
   APInt A9(UINT32_MAX, 0);
   EXPECT_EQ(A9.nearestLogBase2(), UINT32_MAX);
+}
+
+TEST(APIntTest, IsSplat) {
+  APInt A(32, 0x01010101);
+  EXPECT_FALSE(A.isSplat(1));
+  EXPECT_FALSE(A.isSplat(2));
+  EXPECT_FALSE(A.isSplat(4));
+  EXPECT_TRUE(A.isSplat(8));
+  EXPECT_TRUE(A.isSplat(16));
+  EXPECT_TRUE(A.isSplat(32));
+
+  APInt B(24, 0xAAAAAA);
+  EXPECT_FALSE(B.isSplat(1));
+  EXPECT_TRUE(B.isSplat(2));
+  EXPECT_TRUE(B.isSplat(4));
+  EXPECT_TRUE(B.isSplat(8));
+  EXPECT_TRUE(B.isSplat(24));
+
+  APInt C(24, 0xABAAAB);
+  EXPECT_FALSE(C.isSplat(1));
+  EXPECT_FALSE(C.isSplat(2));
+  EXPECT_FALSE(C.isSplat(4));
+  EXPECT_FALSE(C.isSplat(8));
+  EXPECT_TRUE(C.isSplat(24));
+
+  APInt D(32, 0xABBAABBA);
+  EXPECT_FALSE(D.isSplat(1));
+  EXPECT_FALSE(D.isSplat(2));
+  EXPECT_FALSE(D.isSplat(4));
+  EXPECT_FALSE(D.isSplat(8));
+  EXPECT_TRUE(D.isSplat(16));
+  EXPECT_TRUE(D.isSplat(32));
+
+  APInt E(32, 0);
+  EXPECT_TRUE(E.isSplat(1));
+  EXPECT_TRUE(E.isSplat(2));
+  EXPECT_TRUE(E.isSplat(4));
+  EXPECT_TRUE(E.isSplat(8));
+  EXPECT_TRUE(E.isSplat(16));
+  EXPECT_TRUE(E.isSplat(32));
 }
 
 #if defined(__clang__)

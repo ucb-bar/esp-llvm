@@ -416,7 +416,7 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
 
     // We never speculate stores, so an AA pointer isn't necessary.
     bool DontMoveAcrossStore = true;
-    if (!I.isSafeToMove(TII, nullptr, DontMoveAcrossStore)) {
+    if (!I.isSafeToMove(nullptr, DontMoveAcrossStore)) {
       DEBUG(dbgs() << "Can't speculate: " << I);
       return false;
     }
@@ -899,8 +899,7 @@ bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
   Loops = getAnalysisIfAvailable<MachineLoopInfo>();
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
-  MinSize = MF.getFunction()->getAttributes().hasAttribute(
-      AttributeSet::FunctionIndex, Attribute::MinSize);
+  MinSize = MF.getFunction()->hasFnAttribute(Attribute::MinSize);
 
   bool Changed = false;
   CmpConv.runOnMachineFunction(MF);

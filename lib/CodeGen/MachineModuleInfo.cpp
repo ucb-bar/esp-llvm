@@ -9,10 +9,12 @@
 
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/ADT/PointerUnion.h"
+#include "llvm/Analysis/LibCallSemantics.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -112,11 +114,11 @@ MCSymbol *MMIAddrLabelMap::getAddrLabelSymbol(BasicBlock *BB) {
 
   // Otherwise, this is a new entry, create a new symbol for it and add an
   // entry to BBCallbacks so we can be notified if the BB is deleted or RAUWd.
-  BBCallbacks.push_back(BB);
+  BBCallbacks.emplace_back(BB);
   BBCallbacks.back().setMap(this);
   Entry.Index = BBCallbacks.size()-1;
   Entry.Fn = BB->getParent();
-  MCSymbol *Result = Context.CreateTempSymbol();
+  MCSymbol *Result = Context.createTempSymbol();
   Entry.Symbols = Result;
   return Result;
 }
@@ -276,7 +278,7 @@ bool MachineModuleInfo::doInitialization(Module &M) {
   DbgInfoAvailable = UsesVAFloatArgument = UsesMorestackAddr = false;
   // Always emit some info, by default "no personality" info.
   Personalities.push_back(nullptr);
-  PersonalityTypeCache = EHPersonality::None;
+  PersonalityTypeCache = EHPersonality::Unknown;
   AddrLabelSymbols = nullptr;
   TheModule = nullptr;
 
@@ -306,6 +308,7 @@ void MachineModuleInfo::EndFunction() {
 
   // Clean up exception info.
   LandingPads.clear();
+  PersonalityTypeCache = EHPersonality::Unknown;
   CallSiteMap.clear();
   TypeInfos.clear();
   FilterIds.clear();
@@ -313,23 +316,6 @@ void MachineModuleInfo::EndFunction() {
   CallsEHReturn = 0;
   CallsUnwindInit = 0;
   VariableDbgInfos.clear();
-}
-
-/// AnalyzeModule - Scan the module for global debug information.
-///
-void MachineModuleInfo::AnalyzeModule(const Module &M) {
-  // Insert functions in the llvm.used array (but not llvm.compiler.used) into
-  // UsedFunctions.
-  const GlobalVariable *GV = M.getGlobalVariable("llvm.used");
-  if (!GV || !GV->hasInitializer()) return;
-
-  // Should be an array of 'i8*'.
-  const ConstantArray *InitList = cast<ConstantArray>(GV->getInitializer());
-
-  for (unsigned i = 0, e = InitList->getNumOperands(); i != e; ++i)
-    if (const Function *F =
-          dyn_cast<Function>(InitList->getOperand(i)->stripPointerCasts()))
-      UsedFunctions.insert(F);
 }
 
 //===- Address of Block Management ----------------------------------------===//
@@ -399,7 +385,7 @@ void MachineModuleInfo::addInvoke(MachineBasicBlock *LandingPad,
 /// addLandingPad - Provide the label of a try LandingPad block.
 ///
 MCSymbol *MachineModuleInfo::addLandingPad(MachineBasicBlock *LandingPad) {
-  MCSymbol *LandingPadLabel = Context.CreateTempSymbol();
+  MCSymbol *LandingPadLabel = Context.createTempSymbol();
   LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
   LP.LandingPadLabel = LandingPadLabel;
   return LandingPadLabel;
@@ -422,6 +408,12 @@ void MachineModuleInfo::addPersonality(MachineBasicBlock *LandingPad,
     Personalities[0] = Personality;
   else
     Personalities.push_back(Personality);
+}
+
+void MachineModuleInfo::addWinEHState(MachineBasicBlock *LandingPad,
+                                      int State) {
+  LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
+  LP.WinEHState = State;
 }
 
 /// addCatchTypeInfo - Provide the catch typeinfo for a landing pad.
@@ -453,12 +445,23 @@ void MachineModuleInfo::addCleanup(MachineBasicBlock *LandingPad) {
   LP.TypeIds.push_back(0);
 }
 
-MCSymbol *
-MachineModuleInfo::addClauseForLandingPad(MachineBasicBlock *LandingPad) {
-  MCSymbol *ClauseLabel = Context.CreateTempSymbol();
+void MachineModuleInfo::addSEHCatchHandler(MachineBasicBlock *LandingPad,
+                                           const Function *Filter,
+                                           const BlockAddress *RecoverBA) {
   LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
-  LP.ClauseLabels.push_back(ClauseLabel);
-  return ClauseLabel;
+  SEHHandler Handler;
+  Handler.FilterOrFinally = Filter;
+  Handler.RecoverBA = RecoverBA;
+  LP.SEHHandlers.push_back(Handler);
+}
+
+void MachineModuleInfo::addSEHCleanupHandler(MachineBasicBlock *LandingPad,
+                                             const Function *Cleanup) {
+  LandingPadInfo &LP = getOrCreateLandingPadInfo(LandingPad);
+  SEHHandler Handler;
+  Handler.FilterOrFinally = Cleanup;
+  Handler.RecoverBA = nullptr;
+  LP.SEHHandlers.push_back(Handler);
 }
 
 /// TidyLandingPads - Remap landing pad labels and remove any deleted landing
@@ -561,14 +564,11 @@ const Function *MachineModuleInfo::getPersonality() const {
   return nullptr;
 }
 
-EHPersonality MachineModuleInfo::getPersonalityTypeSlow() {
-  const Function *Per = getPersonality();
-  if (!Per)
-    PersonalityTypeCache = EHPersonality::None;
-  else if (Per->getName() == "__C_specific_handler")
-    PersonalityTypeCache = EHPersonality::Win64SEH;
-  else // Assume everything else is Itanium.
-    PersonalityTypeCache = EHPersonality::Itanium;
+EHPersonality MachineModuleInfo::getPersonalityType() {
+  if (PersonalityTypeCache == EHPersonality::Unknown) {
+    if (const Function *F = getPersonality())
+      PersonalityTypeCache = classifyEHPersonality(F);
+  }
   return PersonalityTypeCache;
 }
 
@@ -592,4 +592,19 @@ unsigned MachineModuleInfo::getPersonalityIndex() const {
   // This will happen if the current personality function is
   // in the zero index.
   return 0;
+}
+
+const Function *MachineModuleInfo::getWinEHParent(const Function *F) const {
+  StringRef WinEHParentName =
+      F->getFnAttribute("wineh-parent").getValueAsString();
+  if (WinEHParentName.empty() || WinEHParentName == F->getName())
+    return F;
+  return F->getParent()->getFunction(WinEHParentName);
+}
+
+WinEHFuncInfo &MachineModuleInfo::getWinEHFuncInfo(const Function *F) {
+  auto &Ptr = FuncInfoMap[getWinEHParent(F)];
+  if (!Ptr)
+    Ptr.reset(new WinEHFuncInfo);
+  return *Ptr;
 }

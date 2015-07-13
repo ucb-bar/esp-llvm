@@ -77,8 +77,8 @@ unsigned RISCVFrameLowering::ehDataReg(unsigned I) const {
   return EhDataReg[I];
 }
 
-void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
-  MachineBasicBlock &MBB   = MF.front();
+void RISCVFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const {
+  assert(&MBB == &MF.front() && "Shrink-wrapping not yet implemented");
   MachineFrameInfo *MFI    = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
   const RISCVRegisterInfo *RegInfo =
@@ -87,7 +87,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF) const {
     *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
   MachineBasicBlock::iterator MBBI = MBB.begin();
   DebugLoc dl = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
-  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   unsigned SP = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
@@ -183,7 +183,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   const RISCVInstrInfo &TII =
     *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
   DebugLoc dl = MBBI->getDebugLoc();
-  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   unsigned SP   = STI.isRV64() ? RISCV::sp_64 : RISCV::sp;
   unsigned FP   = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
@@ -275,7 +275,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
   const RISCVInstrInfo &TII =
     *static_cast<const RISCVInstrInfo*>(MF.getSubtarget().getInstrInfo());
-  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
 
   if (!hasReservedCallFrame(MF)) {
     int64_t Amount = I->getOperand(0).getImm();
@@ -296,7 +296,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
   MachineRegisterInfo &MRI = MF.getRegInfo();
   MachineFrameInfo *MFI = MF.getFrameInfo();
   RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  const RISCVSubtarget &STI = MF.getTarget().getSubtarget<RISCVSubtarget>();
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
 
   // Mark $fp as used if function has dedicated frame pointer.

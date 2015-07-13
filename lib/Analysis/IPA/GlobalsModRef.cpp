@@ -96,7 +96,7 @@ namespace {
     }
 
     bool runOnModule(Module &M) override {
-      InitializeAliasAnalysis(this);
+      InitializeAliasAnalysis(this, &M.getDataLayout());
 
       // Find non-addr taken globals.
       AnalyzeGlobals(M);
@@ -115,9 +115,10 @@ namespace {
     //------------------------------------------------
     // Implement the AliasAnalysis API
     //
-    AliasResult alias(const Location &LocA, const Location &LocB) override;
+    AliasResult alias(const MemoryLocation &LocA,
+                      const MemoryLocation &LocB) override;
     ModRefResult getModRefInfo(ImmutableCallSite CS,
-                               const Location &Loc) override;
+                               const MemoryLocation &Loc) override;
     ModRefResult getModRefInfo(ImmutableCallSite CS1,
                                ImmutableCallSite CS2) override {
       return AliasAnalysis::getModRefInfo(CS1, CS2);
@@ -269,7 +270,7 @@ bool GlobalsModRef::AnalyzeUsesOfPointer(Value *V,
     } else if (Operator::getOpcode(I) == Instruction::BitCast) {
       if (AnalyzeUsesOfPointer(I, Readers, Writers, OkayStoreDest))
         return true;
-    } else if (CallSite CS = I) {
+    } else if (auto CS = CallSite(I)) {
       // Make sure that this is just the function being called, not that it is
       // passing into the function.
       if (!CS.isCallee(&U)) {
@@ -322,7 +323,8 @@ bool GlobalsModRef::AnalyzeIndirectGlobalMemory(GlobalValue *GV) {
         continue;
 
       // Check the value being stored.
-      Value *Ptr = GetUnderlyingObject(SI->getOperand(0));
+      Value *Ptr = GetUnderlyingObject(SI->getOperand(0),
+                                       GV->getParent()->getDataLayout());
 
       if (!isAllocLikeFn(Ptr, TLI))
         return false;  // Too hard to analyze.
@@ -477,12 +479,11 @@ void GlobalsModRef::AnalyzeCallGraph(CallGraph &CG, Module &M) {
 /// alias - If one of the pointers is to a global that we are tracking, and the
 /// other is some random pointer, we know there cannot be an alias, because the
 /// address of the global isn't taken.
-AliasAnalysis::AliasResult
-GlobalsModRef::alias(const Location &LocA,
-                     const Location &LocB) {
+AliasResult GlobalsModRef::alias(const MemoryLocation &LocA,
+                                 const MemoryLocation &LocB) {
   // Get the base object these pointers point to.
-  const Value *UV1 = GetUnderlyingObject(LocA.Ptr);
-  const Value *UV2 = GetUnderlyingObject(LocB.Ptr);
+  const Value *UV1 = GetUnderlyingObject(LocA.Ptr, *DL);
+  const Value *UV2 = GetUnderlyingObject(LocB.Ptr, *DL);
 
   // If either of the underlying values is a global, they may be non-addr-taken
   // globals, which we can answer queries about.
@@ -534,14 +535,14 @@ GlobalsModRef::alias(const Location &LocA,
 }
 
 AliasAnalysis::ModRefResult
-GlobalsModRef::getModRefInfo(ImmutableCallSite CS,
-                             const Location &Loc) {
+GlobalsModRef::getModRefInfo(ImmutableCallSite CS, const MemoryLocation &Loc) {
   unsigned Known = ModRef;
 
   // If we are asking for mod/ref info of a direct call with a pointer to a
   // global we are tracking, return information if we have it.
+  const DataLayout &DL = CS.getCaller()->getParent()->getDataLayout();
   if (const GlobalValue *GV =
-        dyn_cast<GlobalValue>(GetUnderlyingObject(Loc.Ptr)))
+          dyn_cast<GlobalValue>(GetUnderlyingObject(Loc.Ptr, DL)))
     if (GV->hasLocalLinkage())
       if (const Function *F = CS.getCalledFunction())
         if (NonAddressTakenGlobals.count(GV))

@@ -66,7 +66,7 @@ public:
                             const MCAsmLayout &Layout) const override;
   void relaxInstruction(const MCInst &Inst, MCInst &Res) const override;
   bool writeNopData(uint64_t Count, MCObjectWriter *OW) const override;
-  MCObjectWriter *createObjectWriter(raw_ostream &OS) const override {
+  MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
     return createRISCVObjectWriter(OS, OSABI);
   }
 };
@@ -133,13 +133,13 @@ void RISCVMCAsmBackend::relaxInstruction(const MCInst &Inst,
 bool RISCVMCAsmBackend::writeNopData(uint64_t Count,
                                        MCObjectWriter *OW) const {
   for (uint64_t I = 0; I != Count; ++I)
-    OW->Write8(7);
+    OW->write8(7);
   return true;
 }
 
 MCAsmBackend *llvm::createRISCVMCAsmBackend(const Target &T,
                                             const MCRegisterInfo &MRI,
-                                            StringRef TT, StringRef CPU) {
-  uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(Triple(TT).getOS());
+                                            const Triple &TT, StringRef CPU) {
+  uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
   return new RISCVMCAsmBackend(OSABI);
 }

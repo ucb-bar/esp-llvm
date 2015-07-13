@@ -25,30 +25,32 @@ class TargetFrameLowering;
 class RISCVTargetMachine : public LLVMTargetMachine {
 
 public:
-  RISCVTargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  RISCVTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
                        Reloc::Model RM, CodeModel::Model CM,
                        CodeGenOpt::Level OL);
 
   // Override TargetMachine.
-  const RISCVSubtarget *getSubtargetImpl() const override { return &Subtarget; }
+  const RISCVSubtarget *getSubtargetImpl() const { return &Subtarget; }
+  const RISCVSubtarget *getSubtargetImpl(const Function &F) const override;
   // Override LLVMTargetMachine
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
   TargetLoweringObjectFile *getObjFileLowering() const override {
     return TLOF.get();
   }
-  const DataLayout *getDataLayout() const override { return &DL; }
 
 protected:
-  const DataLayout DL;
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
   RISCVSubtarget Subtarget;
+
+private:
+  mutable StringMap<std::unique_ptr<RISCVSubtarget>> SubtargetMap;
 };
 
 class RISCV64TargetMachine : public RISCVTargetMachine {
 
 public:
-  RISCV64TargetMachine(const Target &T, StringRef TT, StringRef CPU,
+  RISCV64TargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                        StringRef FS, const TargetOptions &Options,
                        Reloc::Model RM, CodeModel::Model CM,
                        CodeGenOpt::Level OL);

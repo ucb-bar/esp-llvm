@@ -3,9 +3,9 @@
 define i32 @main(i32 %argc, i8** %argv) {
 ; CHECK-LABEL: @main(
     %c_19 = alloca i8*
-    %malloc_206 = tail call i8* @malloc(i32 mul (i32 ptrtoint (i8* getelementptr (i8* null, i32 1) to i32), i32 10))
+    %malloc_206 = tail call i8* @malloc(i32 mul (i32 ptrtoint (i8* getelementptr (i8, i8* null, i32 1) to i32), i32 10))
     store i8* %malloc_206, i8** %c_19
-    %tmp_207 = load i8** %c_19
+    %tmp_207 = load i8*, i8** %c_19
     tail call void @free(i8* %tmp_207)
     ret i32 0
 ; CHECK-NEXT: ret i32 0
@@ -127,7 +127,7 @@ declare i32 @__gxx_personality_v0(...)
 declare void @_ZN1AC2Ev(i8* %this)
 
 ; CHECK-LABEL: @test7(
-define void @test7() {
+define void @test7() personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
 entry:
   %nt = alloca i8
   ; CHECK-NOT: call {{.*}}@_ZnwmRKSt9nothrow_t(
@@ -139,7 +139,7 @@ entry:
   unreachable
 
 lpad.i:                                           ; preds = %entry
-  %0 = landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) cleanup
+  %0 = landingpad { i8*, i32 } cleanup
   ; CHECK-NOT: call {{.*}}@_ZdlPvRKSt9nothrow_t(
   call void @_ZdlPvRKSt9nothrow_t(i8* %call.i, i8* %nt) builtin nounwind
   resume { i8*, i32 } %0

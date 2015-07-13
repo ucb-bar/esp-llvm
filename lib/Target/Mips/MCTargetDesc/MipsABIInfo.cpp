@@ -47,7 +47,7 @@ unsigned MipsABIInfo::GetCalleeAllocdArgSizeInBytes(CallingConv::ID CC) const {
   llvm_unreachable("Unhandled ABI");
 }
 
-MipsABIInfo MipsABIInfo::computeTargetABI(Triple TT, StringRef CPU,
+MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
                                           const MCTargetOptions &Options) {
   if (Options.getABIName().startswith("o32"))
     return MipsABIInfo::O32();
@@ -75,6 +75,8 @@ MipsABIInfo MipsABIInfo::computeTargetABI(Triple TT, StringRef CPU,
       .Case("mips2", MipsABIInfo::O32())
       .Case("mips32", MipsABIInfo::O32())
       .Case("mips32r2", MipsABIInfo::O32())
+      .Case("mips32r3", MipsABIInfo::O32())
+      .Case("mips32r5", MipsABIInfo::O32())
       .Case("mips32r6", MipsABIInfo::O32())
       .Case("mips16", MipsABIInfo::O32())
       .Case("mips3", MipsABIInfo::N64())
@@ -82,7 +84,45 @@ MipsABIInfo MipsABIInfo::computeTargetABI(Triple TT, StringRef CPU,
       .Case("mips5", MipsABIInfo::N64())
       .Case("mips64", MipsABIInfo::N64())
       .Case("mips64r2", MipsABIInfo::N64())
+      .Case("mips64r3", MipsABIInfo::N64())
+      .Case("mips64r5", MipsABIInfo::N64())
       .Case("mips64r6", MipsABIInfo::N64())
       .Case("octeon", MipsABIInfo::N64())
       .Default(MipsABIInfo::Unknown());
 }
+
+unsigned MipsABIInfo::GetStackPtr() const {
+  return ArePtrs64bit() ? Mips::SP_64 : Mips::SP;
+}
+
+unsigned MipsABIInfo::GetFramePtr() const {
+  return ArePtrs64bit() ? Mips::FP_64 : Mips::FP;
+}
+
+unsigned MipsABIInfo::GetBasePtr() const {
+  return ArePtrs64bit() ? Mips::S7_64 : Mips::S7;
+}
+
+unsigned MipsABIInfo::GetNullPtr() const {
+  return ArePtrs64bit() ? Mips::ZERO_64 : Mips::ZERO;
+}
+
+unsigned MipsABIInfo::GetPtrAdduOp() const {
+  return ArePtrs64bit() ? Mips::DADDu : Mips::ADDu;
+}
+
+unsigned MipsABIInfo::GetPtrAddiuOp() const {
+  return ArePtrs64bit() ? Mips::DADDiu : Mips::ADDiu;
+}
+
+unsigned MipsABIInfo::GetEhDataReg(unsigned I) const {
+  static const unsigned EhDataReg[] = {
+    Mips::A0, Mips::A1, Mips::A2, Mips::A3
+  };
+  static const unsigned EhDataReg64[] = {
+    Mips::A0_64, Mips::A1_64, Mips::A2_64, Mips::A3_64
+  };
+
+  return IsN64() ? EhDataReg64[I] : EhDataReg[I];
+}
+

@@ -10,6 +10,7 @@
 #include "RISCVMCInstLower.h"
 #include "RISCVAsmPrinter.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCStreamer.h"
 
 using namespace llvm;
@@ -49,12 +50,12 @@ MCOperand RISCVMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
     case RISCVII::MO_TPREL_HI:    Kind = MCSymbolRefExpr::VK_Mips_TPREL_HI; break;
     case RISCVII::MO_TPREL_LO:    Kind = MCSymbolRefExpr::VK_Mips_TPREL_LO; break;
   }
-  const MCExpr *Expr = MCSymbolRefExpr::Create(Symbol, Kind, Ctx);
+  const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind, Ctx);
   if (Offset) {
-    const MCExpr *OffsetExpr = MCConstantExpr::Create(Offset, Ctx);
-    Expr = MCBinaryExpr::CreateAdd(Expr, OffsetExpr, Ctx);
+    const MCExpr *OffsetExpr = MCConstantExpr::create(Offset, Ctx);
+    Expr = MCBinaryExpr::createAdd(Expr, OffsetExpr, Ctx);
   }
-  return MCOperand::CreateExpr(Expr);
+  return MCOperand::createExpr(Expr);
 }
 
 MCOperand RISCVMCInstLower::lowerOperand(const MachineOperand &MO) const {
@@ -66,10 +67,10 @@ MCOperand RISCVMCInstLower::lowerOperand(const MachineOperand &MO) const {
     // Ignore all implicit register operands.
     if (MO.isImplicit())
       return MCOperand();
-    return MCOperand::CreateReg(MO.getReg());
+    return MCOperand::createReg(MO.getReg());
 
   case MachineOperand::MO_Immediate:
-    return MCOperand::CreateImm(MO.getImm());
+    return MCOperand::createImm(MO.getImm());
 
   case MachineOperand::MO_MachineBasicBlock:
     return lowerSymbolOperand(MO, MO.getMBB()->getSymbol(),
@@ -105,7 +106,7 @@ void RISCVMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
   unsigned Opcode = MI->getOpcode();
   // When emitting binary code, start with the shortest form of an instruction
   // and then relax it where necessary.
-  if (!AsmPrinter.OutStreamer.hasRawTextSupport())
+  if (!AsmPrinter.OutStreamer->hasRawTextSupport())
     Opcode = getShortenedInstr(Opcode);
   OutMI.setOpcode(Opcode);
   for (unsigned I = 0, E = MI->getNumOperands(); I != E; ++I) {

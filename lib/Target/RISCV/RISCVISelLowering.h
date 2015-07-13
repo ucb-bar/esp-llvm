@@ -94,7 +94,7 @@ class RISCVSubtarget;
 
 class RISCVTargetLowering : public TargetLowering {
 public:
-  explicit RISCVTargetLowering(const TargetMachine &TM);
+  explicit RISCVTargetLowering(const TargetMachine &TM, const RISCVSubtarget &STI);
 
   // Override TargetLowering.
   MVT getScalarShiftAmountTy(EVT LHSTy) const override {
@@ -110,7 +110,8 @@ public:
   bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
   const char *getTargetNodeName(unsigned Opcode) const override;
   std::pair<unsigned, const TargetRegisterClass *>
-  getRegForInlineAsmConstraint(const std::string &Constraint,
+  getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                               const std::string &Constraint,
                                MVT VT) const override;
   TargetLowering::ConstraintType
   getConstraintType(const std::string &Constraint) const override;

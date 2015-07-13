@@ -33,10 +33,10 @@
 ; CHECK: call void @_Z2f1v(), !dbg [[fcs2_f4_f3cs1_f2:![0-9]+]]
 ; CHECK: call void @_Z2f1v(), !dbg [[fcs2_f4_f3cs2_f2:![0-9]+]]
 
-; CHECK-DAG: [[F:![0-9]+]] = {{.*}} ; [ DW_TAG_subprogram ] {{.*}} [f]
-; CHECK-DAG: [[F2:![0-9]+]] = {{.*}} ; [ DW_TAG_subprogram ] {{.*}} [f2]
-; CHECK-DAG: [[F3:![0-9]+]] = {{.*}} ; [ DW_TAG_subprogram ] {{.*}} [f3]
-; CHECK-DAG: [[F4:![0-9]+]] = {{.*}} ; [ DW_TAG_subprogram ] {{.*}} [f4]
+; CHECK-DAG: [[F:![0-9]+]]  = !DISubprogram(name: "f"
+; CHECK-DAG: [[F2:![0-9]+]] = !DISubprogram(name: "f2"
+; CHECK-DAG: [[F3:![0-9]+]] = !DISubprogram(name: "f3"
+; CHECK-DAG: [[F4:![0-9]+]] = !DISubprogram(name: "f4"
 
 ; CHECK: [[fcs1_f4_f3cs1_f2]] = {{.*}}, scope: [[F2]], inlinedAt: [[fcs1_f4_f3cs1:![0-9]+]])
 ; CHECK: [[fcs1_f4_f3cs1]] = {{.*}}, scope: [[F3]], inlinedAt: [[fcs1_f4:![0-9]+]])
@@ -98,24 +98,24 @@ attributes #2 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "n
 !llvm.module.flags = !{!10, !11}
 !llvm.ident = !{!12}
 
-!0 = !{!"0x11\004\00clang version 3.7.0 (trunk 226474) (llvm/trunk 226478)\000\00\000\00\002", !1, !2, !2, !3, !2, !2} ; [ DW_TAG_compile_unit ] [/tmp/dbginfo/debug-info-duplicate-calls.cpp] [DW_LANG_C_plus_plus]
-!1 = !{!"debug-info-duplicate-calls.cpp", !"/tmp/dbginfo"}
+!0 = !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.7.0 (trunk 226474) (llvm/trunk 226478)", isOptimized: false, emissionKind: 2, file: !1, enums: !2, retainedTypes: !2, subprograms: !3, globals: !2, imports: !2)
+!1 = !DIFile(filename: "debug-info-duplicate-calls.cpp", directory: "/tmp/dbginfo")
 !2 = !{}
 !3 = !{!4, !7, !8, !9}
-!4 = !{!"0x2e\00f\00f\00\0013\000\001\000\000\00256\000\0013", !1, !5, !6, null, void ()* @_Z1fv, null, null, !2} ; [ DW_TAG_subprogram ] [line 13] [def] [f]
-!5 = !{!"0x29", !1}                               ; [ DW_TAG_file_type ] [/tmp/dbginfo/debug-info-duplicate-calls.cpp]
-!6 = !{!"0x15\00\000\000\000\000\000\000", null, null, null, !2, null, null, null} ; [ DW_TAG_subroutine_type ] [line 0, size 0, align 0, offset 0] [from ]
-!7 = !{!"0x2e\00f4\00f4\00\0010\000\001\000\000\00256\000\0010", !1, !5, !6, null, void ()* @_Z2f4v, null, null, !2} ; [ DW_TAG_subprogram ] [line 10] [def] [f4]
-!8 = !{!"0x2e\00f3\00f3\00\007\000\001\000\000\00256\000\007", !1, !5, !6, null, void ()* @_Z2f3v, null, null, !2} ; [ DW_TAG_subprogram ] [line 7] [def] [f3]
-!9 = !{!"0x2e\00f2\00f2\00\004\000\001\000\000\00256\000\004", !1, !5, !6, null, void ()* @_Z2f2v, null, null, !2} ; [ DW_TAG_subprogram ] [line 4] [def] [f2]
+!4 = !DISubprogram(name: "f", line: 13, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 13, file: !1, scope: !5, type: !6, function: void ()* @_Z1fv, variables: !2)
+!5 = !DIFile(filename: "debug-info-duplicate-calls.cpp", directory: "/tmp/dbginfo")
+!6 = !DISubroutineType(types: !2)
+!7 = !DISubprogram(name: "f4", line: 10, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 10, file: !1, scope: !5, type: !6, function: void ()* @_Z2f4v, variables: !2)
+!8 = !DISubprogram(name: "f3", line: 7, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 7, file: !1, scope: !5, type: !6, function: void ()* @_Z2f3v, variables: !2)
+!9 = !DISubprogram(name: "f2", line: 4, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 4, file: !1, scope: !5, type: !6, function: void ()* @_Z2f2v, variables: !2)
 !10 = !{i32 2, !"Dwarf Version", i32 4}
-!11 = !{i32 2, !"Debug Info Version", i32 2}
+!11 = !{i32 2, !"Debug Info Version", i32 3}
 !12 = !{!"clang version 3.7.0 (trunk 226474) (llvm/trunk 226478)"}
-!13 = !MDLocation(line: 14, column: 3, scope: !4)
-!14 = !MDLocation(line: 15, column: 1, scope: !4)
-!15 = !MDLocation(line: 11, column: 3, scope: !7)
-!16 = !MDLocation(line: 12, column: 1, scope: !7)
-!17 = !MDLocation(line: 8, column: 3, scope: !8)
-!18 = !MDLocation(line: 9, column: 1, scope: !8)
-!19 = !MDLocation(line: 5, column: 3, scope: !9)
-!20 = !MDLocation(line: 6, column: 1, scope: !9)
+!13 = !DILocation(line: 14, column: 3, scope: !4)
+!14 = !DILocation(line: 15, column: 1, scope: !4)
+!15 = !DILocation(line: 11, column: 3, scope: !7)
+!16 = !DILocation(line: 12, column: 1, scope: !7)
+!17 = !DILocation(line: 8, column: 3, scope: !8)
+!18 = !DILocation(line: 9, column: 1, scope: !8)
+!19 = !DILocation(line: 5, column: 3, scope: !9)
+!20 = !DILocation(line: 6, column: 1, scope: !9)

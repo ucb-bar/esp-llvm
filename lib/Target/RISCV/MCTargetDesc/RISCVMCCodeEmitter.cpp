@@ -17,7 +17,9 @@
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
 
 using namespace llvm;
 
@@ -34,7 +36,7 @@ public:
   ~RISCVMCCodeEmitter() {}
 
   // OVerride MCCodeEmitter.
-  void EncodeInstruction(const MCInst &MI, raw_ostream &OS,
+  void encodeInstruction(const MCInst &MI, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
 
@@ -126,12 +128,11 @@ private:
 
 MCCodeEmitter *llvm::createRISCVMCCodeEmitter(const MCInstrInfo &MCII,
                                                 const MCRegisterInfo &MRI,
-                                                const MCSubtargetInfo &MCSTI,
                                                 MCContext &Ctx) {
   return new RISCVMCCodeEmitter(MCII, Ctx);
 }
 
-void RISCVMCCodeEmitter::EncodeInstruction(const MCInst &MI, raw_ostream &OS,
+void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
   uint64_t Bits = getBinaryCodeForInstr(MI, Fixups, STI);
@@ -171,10 +172,10 @@ RISCVMCCodeEmitter::getPCRelEncoding(const MCInst &MI, unsigned int OpNum,
     // is relative to the operand field itself, which is Offset bytes
     // into MI.  Add Offset to the relocation value to cancel out
     // this difference.
-    const MCExpr *OffsetExpr = MCConstantExpr::Create(Offset, Ctx);
-    Expr = MCBinaryExpr::CreateAdd(Expr, OffsetExpr, Ctx);
+    const MCExpr *OffsetExpr = MCConstantExpr::create(Offset, Ctx);
+    Expr = MCBinaryExpr::createAdd(Expr, OffsetExpr, Ctx);
   }
-  Fixups.push_back(MCFixup::Create(Offset, Expr, (MCFixupKind)Kind));
+  Fixups.push_back(MCFixup::create(Offset, Expr, (MCFixupKind)Kind));
   return 0;
 }
 

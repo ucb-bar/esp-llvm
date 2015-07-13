@@ -47,13 +47,13 @@ void llvm::linkErlangGCPrinter() {}
 
 void ErlangGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info,
                                      AsmPrinter &AP) {
-  MCStreamer &OS = AP.OutStreamer;
+  MCStreamer &OS = *AP.OutStreamer;
   unsigned IntPtrSize = AP.TM.getDataLayout()->getPointerSize();
 
   // Put this in a custom .note section.
-  AP.OutStreamer.SwitchSection(
-      AP.getObjFileLowering().getContext().getELFSection(
-          ".note.gc", ELF::SHT_PROGBITS, 0, SectionKind::getDataRel()));
+  OS.SwitchSection(
+      AP.getObjFileLowering().getContext().getELFSection(".note.gc",
+                                                         ELF::SHT_PROGBITS, 0));
 
   // For each function...
   for (GCModuleInfo::FuncInfoVec::iterator FI = Info.funcinfo_begin(),

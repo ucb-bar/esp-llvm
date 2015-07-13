@@ -16,8 +16,8 @@ define void @test(i8* %l) nounwind {
 entry:
   %l.addr = alloca i8*, align 8                   ; <i8**> [#uses=2]
   store i8* %l, i8** %l.addr
-  %tmp = load i8** %l.addr                        ; <i8*> [#uses=1]
-  %tmp1 = load i8* %tmp                           ; <i8> [#uses=1]
+  %tmp = load i8*, i8** %l.addr                        ; <i8*> [#uses=1]
+  %tmp1 = load i8, i8* %tmp                           ; <i8> [#uses=1]
   %conv = sext i8 %tmp1 to i32                    ; <i32> [#uses=1]
   switch i32 %conv, label %sw.default [
     i32 62, label %sw.bb
@@ -140,19 +140,17 @@ sw.epilog:
 
 ; The balanced binary switch here would start with a comparison against 39, but
 ; it is currently starting with 29 because of the density-sum heuristic.
-; CHECK: cmpl $29
+; CHECK: cmpl $39
 ; CHECK: jg
 ; CHECK: cmpl $10
-; CHECK: jne
-; CHECK: cmpl $49
-; CHECK: jg
-; CHECK: cmpl $30
-; CHECK: jne
+; CHECK: je
 ; CHECK: cmpl $20
 ; CHECK: jne
+; CHECK: cmpl $40
+; CHECK: je
 ; CHECK: cmpl $50
 ; CHECK: jne
-; CHECK: cmpl $40
+; CHECK: cmpl $30
 ; CHECK: jne
 ; CHECK: cmpl $60
 ; CHECK: jne

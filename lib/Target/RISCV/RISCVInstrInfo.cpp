@@ -199,7 +199,7 @@ unsigned RISCVInstrInfo::RemoveBranch(MachineBasicBlock &MBB) const {
 unsigned
 RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                MachineBasicBlock *FBB,
-                               const SmallVectorImpl<MachineOperand> &Cond,
+                               ArrayRef<MachineOperand> Cond,
                                DebugLoc DL) const {
   //RISCV doesn't have any two way branches, can only have FBB if it is a fall through
   if (FBB && !MBB.isLayoutSuccessor(FBB)) {
@@ -213,63 +213,10 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
   }
   //This function inserts the branch at the end of the MBB
   return InsertBranchAtInst(MBB, MBB.end(), TBB, Cond, DL);
-
-  /*
-  // Shouldn't be a fall through.
-  assert(TBB && "InsertBranch must not be told to insert a fallthrough");
-  assert(Cond.size() <= 4 &&
-         "RISCV branch conditions have less than four components!");
-
-  if (Cond.empty()) {
-    // Unconditional branch
-    assert(!FBB && "Unconditional branch with multiple successors!");
-    BuildMI(&MBB, DL, get(RISCV::J)).addMBB(TBB);
-    return 1;
-  }
-
-  // Conditional branch.
-  unsigned Count = 0;
-  unsigned CC = Cond[0].getImm();
-  switch(CC) {
-    case RISCV::CCMASK_CMP_EQ:
-      BuildMI(&MBB, DL, get(RISCV::BEQ)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    case RISCV::CCMASK_CMP_NE:
-      BuildMI(&MBB, DL, get(RISCV::BNE)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    case RISCV::CCMASK_CMP_LT:
-      BuildMI(&MBB, DL, get(RISCV::BLT)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    case (RISCV::CCMASK_CMP_LT | RISCV::CCMASK_CMP_UO):
-      BuildMI(&MBB, DL, get(RISCV::BLTU)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    case RISCV::CCMASK_CMP_GE:
-      BuildMI(&MBB, DL, get(RISCV::BGE)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    case (RISCV::CCMASK_CMP_GE | RISCV::CCMASK_CMP_UO):
-      BuildMI(&MBB, DL, get(RISCV::BGEU)).addMBB(TBB).addReg(Cond[1].getReg())
-          .addReg(Cond[2].getReg());
-      break;
-    default:
-      llvm_unreachable("Invalid branch condition code!");
-  }
-  ++Count;
-
-  //RISCV doesn't have any two way branches
-  if (FBB) {
-    ++Count;
-    llvm_unreachable("Can not insert two-way branch!");
-  }
-  return Count;*/
 }
 unsigned
 RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, int64_t offset,
-                               const SmallVectorImpl<MachineOperand> &Cond,
+                               ArrayRef<MachineOperand> Cond,
                                DebugLoc DL) const {
   // Shouldn't be a fall through.
   assert(&MBB && "InsertBranch must not be told to insert a fallthrough");
@@ -335,8 +282,8 @@ RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
 }
 
 unsigned
-RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, MachineBasicBlock *TBB,
-                               const SmallVectorImpl<MachineOperand> &Cond,
+RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
+                               MachineBasicBlock *TBB, ArrayRef<MachineOperand> Cond,
                                DebugLoc DL) const {
   // Shouldn't be a fall through.
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");

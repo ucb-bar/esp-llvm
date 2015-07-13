@@ -47,13 +47,6 @@ namespace llvm {
 template <typename IRUnitT> class AnalysisManager;
 class PreservedAnalyses;
 
-template<typename T>
-inline void RemoveFromVector(std::vector<T*> &V, T *N) {
-  typename std::vector<T*>::iterator I = std::find(V.begin(), V.end(), N);
-  assert(I != V.end() && "N is not in this list!");
-  V.erase(I);
-}
-
 class DominatorTree;
 class LoopInfo;
 class Loop;
@@ -79,9 +72,9 @@ class LoopBase {
 
   SmallPtrSet<const BlockT*, 8> DenseBlockSet;
 
-  LoopBase(const LoopBase<BlockT, LoopT> &) LLVM_DELETED_FUNCTION;
+  LoopBase(const LoopBase<BlockT, LoopT> &) = delete;
   const LoopBase<BlockT, LoopT>&
-    operator=(const LoopBase<BlockT, LoopT> &) LLVM_DELETED_FUNCTION;
+    operator=(const LoopBase<BlockT, LoopT> &) = delete;
 public:
   /// Loop ctor - This creates an empty loop.
   LoopBase() : ParentLoop(nullptr) {}
@@ -324,7 +317,10 @@ public:
   /// current loop, updating the Blocks as appropriate.  This does not update
   /// the mapping in the LoopInfo class.
   void removeBlockFromLoop(BlockT *BB) {
-    RemoveFromVector(Blocks, BB);
+    auto I = std::find(Blocks.begin(), Blocks.end(), BB);
+    assert(I != Blocks.end() && "N is not in this list!");
+    Blocks.erase(I);
+
     DenseBlockSet.erase(BB);
   }
 
@@ -361,11 +357,11 @@ public:
 
   /// isLoopInvariant - Return true if the specified value is loop invariant
   ///
-  bool isLoopInvariant(Value *V) const;
+  bool isLoopInvariant(const Value *V) const;
 
   /// hasLoopInvariantOperands - Return true if all the operands of the
   /// specified instruction are loop invariant.
-  bool hasLoopInvariantOperands(Instruction *I) const;
+  bool hasLoopInvariantOperands(const Instruction *I) const;
 
   /// makeLoopInvariant - If the given value is an instruction inside of the
   /// loop and it can be hoisted, do so to make it trivially loop-invariant.
@@ -464,23 +460,20 @@ public:
   /// cannot find a terminating instruction with location information,
   /// it returns an unknown location.
   DebugLoc getStartLoc() const {
-    DebugLoc StartLoc;
     BasicBlock *HeadBB;
 
     // Try the pre-header first.
-    if ((HeadBB = getLoopPreheader()) != nullptr) {
-      StartLoc = HeadBB->getTerminator()->getDebugLoc();
-      if (!StartLoc.isUnknown())
-        return StartLoc;
-    }
+    if ((HeadBB = getLoopPreheader()) != nullptr)
+      if (DebugLoc DL = HeadBB->getTerminator()->getDebugLoc())
+        return DL;
 
     // If we have no pre-header or there are no instructions with debug
     // info in it, try the header.
     HeadBB = getHeader();
     if (HeadBB)
-      StartLoc = HeadBB->getTerminator()->getDebugLoc();
+      return HeadBB->getTerminator()->getDebugLoc();
 
-    return StartLoc;
+    return DebugLoc();
   }
 
 private:
@@ -496,13 +489,13 @@ private:
 template<class BlockT, class LoopT>
 class LoopInfoBase {
   // BBMap - Mapping of basic blocks to the inner most loop they occur in
-  DenseMap<BlockT *, LoopT *> BBMap;
+  DenseMap<const BlockT *, LoopT *> BBMap;
   std::vector<LoopT *> TopLevelLoops;
   friend class LoopBase<BlockT, LoopT>;
   friend class LoopInfo;
 
-  void operator=(const LoopInfoBase &) LLVM_DELETED_FUNCTION;
-  LoopInfoBase(const LoopInfoBase &) LLVM_DELETED_FUNCTION;
+  void operator=(const LoopInfoBase &) = delete;
+  LoopInfoBase(const LoopInfoBase &) = delete;
 public:
   LoopInfoBase() { }
   ~LoopInfoBase() { releaseMemory(); }
@@ -546,9 +539,7 @@ public:
   /// getLoopFor - Return the inner most loop that BB lives in.  If a basic
   /// block is in no loop (for example the entry node), null is returned.
   ///
-  LoopT *getLoopFor(const BlockT *BB) const {
-    return BBMap.lookup(const_cast<BlockT*>(BB));
-  }
+  LoopT *getLoopFor(const BlockT *BB) const { return BBMap.lookup(BB); }
 
   /// operator[] - same as getLoopFor...
   ///
@@ -565,7 +556,7 @@ public:
   }
 
   // isLoopHeader - True if the block is a loop header node
-  bool isLoopHeader(BlockT *BB) const {
+  bool isLoopHeader(const BlockT *BB) const {
     const LoopT *L = getLoopFor(BB);
     return L && L->getHeader() == BB;
   }
@@ -651,8 +642,8 @@ class LoopInfo : public LoopInfoBase<BasicBlock, Loop> {
 
   friend class LoopBase<BasicBlock, Loop>;
 
-  void operator=(const LoopInfo &) LLVM_DELETED_FUNCTION;
-  LoopInfo(const LoopInfo &) LLVM_DELETED_FUNCTION;
+  void operator=(const LoopInfo &) = delete;
+  LoopInfo(const LoopInfo &) = delete;
 public:
   LoopInfo() {}
 
@@ -731,12 +722,6 @@ public:
 
   /// \brief Provide a name for the analysis for debugging and logging.
   static StringRef name() { return "LoopAnalysis"; }
-
-  LoopAnalysis() {}
-  LoopAnalysis(const LoopAnalysis &Arg) {}
-  LoopAnalysis(LoopAnalysis &&Arg) {}
-  LoopAnalysis &operator=(const LoopAnalysis &RHS) { return *this; }
-  LoopAnalysis &operator=(LoopAnalysis &&RHS) { return *this; }
 
   LoopInfo run(Function &F, AnalysisManager<Function> *AM);
 };

@@ -29,7 +29,7 @@ void RISCVAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   RISCVMCInstLower Lower(MF->getContext(), *this);
   MCInst LoweredMI;
   Lower.lower(MI, LoweredMI);
-  EmitToStreamer(OutStreamer, LoweredMI);
+  EmitToStreamer(*OutStreamer, LoweredMI);
 }
 
 // Convert a RISCV-specific constant pool modifier into the associated
@@ -44,16 +44,16 @@ getModifierVariantKind(RISCVCP::RISCVCPModifier Modifier) {
 
 void RISCVAsmPrinter::
 EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
-  RISCVConstantPoolValue *ZCPV =
+  RISCVConstantPoolValue *RVCPV =
     static_cast<RISCVConstantPoolValue*>(MCPV);
 
-  const MCExpr *Expr = MCSymbolRefExpr::Create(
-      getSymbol(ZCPV->getGlobalValue()),
-      getModifierVariantKind(ZCPV->getModifier()), OutContext);
+  const MCExpr *Expr = MCSymbolRefExpr::create(
+      getSymbol(RVCPV->getGlobalValue()),
+      getModifierVariantKind(RVCPV->getModifier()), OutContext);
   uint64_t Size =
-      TM.getDataLayout()->getTypeAllocSize(ZCPV->getType());
+      TM.getDataLayout()->getTypeAllocSize(RVCPV->getType());
 
-  OutStreamer.EmitValue(Expr, Size);
+  OutStreamer->EmitValue(Expr, Size);
 }
 
 void RISCVAsmPrinter::printOperand(const MachineInstr *MI, int OpNo, raw_ostream &O) {
@@ -130,17 +130,22 @@ void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
     // Output stubs for external and common global variables.
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
-      OutStreamer.SwitchSection(TLOFELF.getDataRelSection());
+      OutStreamer->SwitchSection(TLOFELF.getDataRelSection());
       const DataLayout *TD = TM.getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
-        OutStreamer.EmitLabel(Stubs[i].first);
-        OutStreamer.EmitSymbolValue(Stubs[i].second.getPointer(),
+        OutStreamer->EmitLabel(Stubs[i].first);
+        OutStreamer->EmitSymbolValue(Stubs[i].second.getPointer(),
                                     TD->getPointerSize(0), 0);
       }
       Stubs.clear();
     }
   }
+}
+
+bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
+  Subtarget = &MF.getSubtarget<RISCVSubtarget>();
+  return AsmPrinter::runOnMachineFunction(MF);
 }
 
 // Force static initialization.

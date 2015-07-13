@@ -23,17 +23,26 @@
 
 namespace llvm {
 namespace dsymutil {
+
+struct LinkOptions {
+  bool Verbose;  ///< Verbosity
+  bool NoOutput; ///< Skip emitting output
+
+  LinkOptions() : Verbose(false), NoOutput(false) {}
+};
+
 /// \brief Extract the DebugMap from the given file.
 /// The file has to be a MachO object file.
-llvm::ErrorOr<std::unique_ptr<DebugMap>>
-parseDebugMap(StringRef InputFile, StringRef PrependPath = "",
-              bool Verbose = false);
+llvm::ErrorOr<std::unique_ptr<DebugMap>> parseDebugMap(StringRef InputFile,
+                                                       StringRef PrependPath,
+                                                       bool Verbose,
+                                                       bool InputIsYAML);
 
 /// \brief Link the Dwarf debuginfo as directed by the passed DebugMap
 /// \p DM into a DwarfFile named \p OutputFilename.
 /// \returns false if the link failed.
 bool linkDwarf(StringRef OutputFilename, const DebugMap &DM,
-               bool Verbose = false);
+               const LinkOptions &Options);
 }
 }
 #endif // LLVM_TOOLS_DSYMUTIL_DSYMUTIL_H

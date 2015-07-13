@@ -31,6 +31,9 @@ def FeatureRV32 : SubtargetFeature<"rv32", "RISCVArchVersion", "RV32",
 def FeatureRV64 : SubtargetFeature<"rv64", "RISCVArchVersion", "RV64", 
                                    "RV64 ISA Support">;
 
+def FeatureSoftFloat : SubtargetFeature<"soft-float", "UseSoftFloat", "true",
+                                        "Use software floating point features.">;
+
 //===----------------------------------------------------------------------===//
 // RISCV supported processors
 //===----------------------------------------------------------------------===//

@@ -64,14 +64,16 @@ void ReplaceInstWithValue(BasicBlock::InstListType &BIL,
                           BasicBlock::iterator &BI, Value *V);
 
 // ReplaceInstWithInst - Replace the instruction specified by BI with the
-// instruction specified by I.  The original instruction is deleted and BI is
+// instruction specified by I. Copies DebugLoc from BI to I, if I doesn't
+// already have a DebugLoc. The original instruction is deleted and BI is
 // updated to point to the new instruction.
 //
 void ReplaceInstWithInst(BasicBlock::InstListType &BIL,
                          BasicBlock::iterator &BI, Instruction *I);
 
 // ReplaceInstWithInst - Replace the instruction specified by From with the
-// instruction specified by To.
+// instruction specified by To. Copies DebugLoc from BI to I, if I doesn't
+// already have a DebugLoc.
 //
 void ReplaceInstWithInst(Instruction *From, Instruction *To);
 
@@ -202,11 +204,15 @@ BasicBlock *SplitEdge(BasicBlock *From, BasicBlock *To,
 BasicBlock *SplitBlock(BasicBlock *Old, Instruction *SplitPt,
                        DominatorTree *DT = nullptr, LoopInfo *LI = nullptr);
 
-/// SplitBlockPredecessors - This method transforms BB by introducing a new
-/// basic block into the function, and moving some of the predecessors of BB to
-/// be predecessors of the new block.  The new predecessors are indicated by the
-/// Preds array, which has NumPreds elements in it.  The new block is given a
-/// suffix of 'Suffix'.  This function returns the new block.
+/// SplitBlockPredecessors - This method introduces at least one new basic block
+/// into the function and moves some of the predecessors of BB to be
+/// predecessors of the new block. The new predecessors are indicated by the
+/// Preds array. The new block is given a suffix of 'Suffix'. Returns new basic
+/// block to which predecessors from Preds are now pointing.
+///
+/// If BB is a landingpad block then additional basicblock might be introduced.
+/// It will have Suffix+".split_lp". See SplitLandingPadPredecessors for more
+/// details on this case.
 ///
 /// This currently updates the LLVM IR, AliasAnalysis, DominatorTree,
 /// DominanceFrontier, LoopInfo, and LCCSA but no other analyses.

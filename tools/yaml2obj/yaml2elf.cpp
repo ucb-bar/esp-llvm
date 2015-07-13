@@ -131,6 +131,11 @@ class ELFState {
   bool writeSectionContent(Elf_Shdr &SHeader,
                            const ELFYAML::RelocationSection &Section,
                            ContiguousBlobAccumulator &CBA);
+  bool writeSectionContent(Elf_Shdr &SHeader, const ELFYAML::Group &Group,
+                           ContiguousBlobAccumulator &CBA);
+  bool writeSectionContent(Elf_Shdr &SHeader,
+                           const ELFYAML::MipsABIFlags &Section,
+                           ContiguousBlobAccumulator &CBA);
 
   // - SHT_NULL entry (placed first, i.e. 0'th entry)
   // - symbol table (.symtab) (placed third to last)
@@ -221,6 +226,19 @@ bool ELFState<ELFT>::initSectionHeaders(std::vector<Elf_Shdr> &SHeaders,
       }
       SHeader.sh_info = Index;
 
+      if (!writeSectionContent(SHeader, *S, CBA))
+        return false;
+    } else if (auto S = dyn_cast<ELFYAML::Group>(Sec.get())) {
+      unsigned SymIdx;
+      if (SymN2I.lookup(S->Info, SymIdx)) {
+        errs() << "error: Unknown symbol referenced: '" << S->Info
+               << "' at YAML section '" << S->Name << "'.\n";
+        return false;
+      }
+      SHeader.sh_info = SymIdx;
+      if (!writeSectionContent(SHeader, *S, CBA))
+        return false;
+    } else if (auto S = dyn_cast<ELFYAML::MipsABIFlags>(Sec.get())) {
       if (!writeSectionContent(SHeader, *S, CBA))
         return false;
     } else
@@ -332,11 +350,9 @@ bool
 ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
                                     const ELFYAML::RelocationSection &Section,
                                     ContiguousBlobAccumulator &CBA) {
-  if (Section.Type != llvm::ELF::SHT_REL &&
-      Section.Type != llvm::ELF::SHT_RELA) {
-    errs() << "error: Invalid relocation section type.\n";
-    return false;
-  }
+  assert((Section.Type == llvm::ELF::SHT_REL ||
+          Section.Type == llvm::ELF::SHT_RELA) &&
+         "Section type is not SHT_REL nor SHT_RELA");
 
   bool IsRela = Section.Type == llvm::ELF::SHT_RELA;
   SHeader.sh_entsize = IsRela ? sizeof(Elf_Rela) : sizeof(Elf_Rel);
@@ -345,12 +361,11 @@ ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
   auto &OS = CBA.getOSAndAlignedOffset(SHeader.sh_offset);
 
   for (const auto &Rel : Section.Relocations) {
-    unsigned SymIdx;
-    if (SymN2I.lookup(Rel.Symbol, SymIdx)) {
-      errs() << "error: Unknown symbol referenced: '" << Rel.Symbol
-             << "' at YAML relocation.\n";
-      return false;
-    }
+    unsigned SymIdx = 0;
+    // Some special relocation, R_ARM_v4BX for instance, does not have
+    // an external reference.  So it ignores the return value of lookup()
+    // here.
+    SymN2I.lookup(Rel.Symbol, SymIdx);
 
     if (IsRela) {
       Elf_Rela REntry;
@@ -367,6 +382,65 @@ ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
       OS.write((const char *)&REntry, sizeof(REntry));
     }
   }
+  return true;
+}
+
+template <class ELFT>
+bool ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
+                                         const ELFYAML::Group &Section,
+                                         ContiguousBlobAccumulator &CBA) {
+  typedef typename object::ELFFile<ELFT>::Elf_Word Elf_Word;
+  assert(Section.Type == llvm::ELF::SHT_GROUP &&
+         "Section type is not SHT_GROUP");
+
+  SHeader.sh_entsize = sizeof(Elf_Word);
+  SHeader.sh_size = SHeader.sh_entsize * Section.Members.size();
+
+  auto &OS = CBA.getOSAndAlignedOffset(SHeader.sh_offset);
+
+  for (auto member : Section.Members) {
+    Elf_Word SIdx;
+    unsigned int sectionIndex = 0;
+    if (member.sectionNameOrType == "GRP_COMDAT")
+      sectionIndex = llvm::ELF::GRP_COMDAT;
+    else if (SN2I.lookup(member.sectionNameOrType, sectionIndex)) {
+      errs() << "error: Unknown section referenced: '"
+             << member.sectionNameOrType << "' at YAML section' "
+             << Section.Name << "\n";
+      return false;
+    }
+    SIdx = sectionIndex;
+    OS.write((const char *)&SIdx, sizeof(SIdx));
+  }
+  return true;
+}
+
+template <class ELFT>
+bool ELFState<ELFT>::writeSectionContent(Elf_Shdr &SHeader,
+                                         const ELFYAML::MipsABIFlags &Section,
+                                         ContiguousBlobAccumulator &CBA) {
+  assert(Section.Type == llvm::ELF::SHT_MIPS_ABIFLAGS &&
+         "Section type is not SHT_MIPS_ABIFLAGS");
+
+  object::Elf_Mips_ABIFlags<ELFT> Flags;
+  zero(Flags);
+  SHeader.sh_entsize = sizeof(Flags);
+  SHeader.sh_size = SHeader.sh_entsize;
+
+  auto &OS = CBA.getOSAndAlignedOffset(SHeader.sh_offset);
+  Flags.version = Section.Version;
+  Flags.isa_level = Section.ISALevel;
+  Flags.isa_rev = Section.ISARevision;
+  Flags.gpr_size = Section.GPRSize;
+  Flags.cpr1_size = Section.CPR1Size;
+  Flags.cpr2_size = Section.CPR2Size;
+  Flags.fp_abi = Section.FpABI;
+  Flags.isa_ext = Section.ISAExtension;
+  Flags.ases = Section.ASEs;
+  Flags.flags1 = Section.Flags1;
+  Flags.flags2 = Section.Flags2;
+  OS.write((const char *)&Flags, sizeof(Flags));
+
   return true;
 }
 
@@ -478,10 +552,10 @@ int yaml2elf(yaml::Input &YIn, raw_ostream &Out) {
     return 1;
   }
   using object::ELFType;
-  typedef ELFType<support::little, 8, true> LE64;
-  typedef ELFType<support::big, 8, true> BE64;
-  typedef ELFType<support::little, 4, false> LE32;
-  typedef ELFType<support::big, 4, false> BE32;
+  typedef ELFType<support::little, true> LE64;
+  typedef ELFType<support::big, true> BE64;
+  typedef ELFType<support::little, false> LE32;
+  typedef ELFType<support::big, false> BE32;
   if (is64Bit(Doc)) {
     if (isLittleEndian(Doc))
       return ELFState<LE64>::writeELF(Out, Doc);

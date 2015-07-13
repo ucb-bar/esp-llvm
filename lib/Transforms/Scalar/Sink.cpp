@@ -21,6 +21,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -35,7 +36,6 @@ namespace {
     DominatorTree *DT;
     LoopInfo *LI;
     AliasAnalysis *AA;
-    const DataLayout *DL;
 
   public:
     static char ID; // Pass identification
@@ -100,8 +100,6 @@ bool Sinking::runOnFunction(Function &F) {
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   AA = &getAnalysis<AliasAnalysis>();
-  DataLayoutPass *DLP = getAnalysisIfAvailable<DataLayoutPass>();
-  DL = DLP ? &DLP->getDataLayout() : nullptr;
 
   bool MadeChange, EverMadeChange = false;
 
@@ -165,7 +163,7 @@ static bool isSafeToMove(Instruction *Inst, AliasAnalysis *AA,
   }
 
   if (LoadInst *L = dyn_cast<LoadInst>(Inst)) {
-    AliasAnalysis::Location Loc = AA->getLocation(L);
+    MemoryLocation Loc = MemoryLocation::get(L);
     for (Instruction *S : Stores)
       if (AA->getModRefInfo(S, Loc) & AliasAnalysis::Mod)
         return false;
@@ -173,6 +171,12 @@ static bool isSafeToMove(Instruction *Inst, AliasAnalysis *AA,
 
   if (isa<TerminatorInst>(Inst) || isa<PHINode>(Inst))
     return false;
+
+  // Convergent operations can only be moved to control equivalent blocks.
+  if (auto CS = CallSite(Inst)) {
+    if (CS.hasFnAttr(Attribute::Convergent))
+      return false;
+  }
 
   return true;
 }
@@ -196,7 +200,7 @@ bool Sinking::IsAcceptableTarget(Instruction *Inst,
   if (SuccToSinkTo->getUniquePredecessor() != Inst->getParent()) {
     // We cannot sink a load across a critical edge - there may be stores in
     // other code paths.
-    if (!isSafeToSpeculativelyExecute(Inst, DL))
+    if (!isSafeToSpeculativelyExecute(Inst))
       return false;
 
     // We don't want to sink across a critical edge if we don't dominate the

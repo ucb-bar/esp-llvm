@@ -51,6 +51,10 @@ private:
   /// Element of the debug map corresponfing to the current object file.
   DebugMapObject *CurrentDebugMapObject;
 
+  /// Holds function info while function scope processing.
+  const char *CurrentFunctionName;
+  uint64_t CurrentFunctionAddress;
+
   void switchToNewDebugMapObject(StringRef Filename);
   void resetParserState();
   uint64_t getMainBinarySymbolAddress(StringRef Name);
@@ -149,21 +153,29 @@ void MachODebugMapParser::handleStabSymbolTableEntry(uint32_t StringIndex,
   if (!CurrentDebugMapObject)
     return;
 
+  uint32_t Size = 0;
   switch (Type) {
   case MachO::N_GSYM:
     // This is a global variable. We need to query the main binary
     // symbol table to find its address as it might not be in the
     // debug map (for common symbols).
     Value = getMainBinarySymbolAddress(Name);
-    if (Value == UnknownAddressOrSize)
+    if (Value == UnknownAddress)
       return;
     break;
   case MachO::N_FUN:
-    // Functions are scopes in STABS. They have an end marker that we
-    // need to ignore.
-    if (Name[0] == '\0')
+    // Functions are scopes in STABS. They have an end marker that
+    // contains the function size.
+    if (Name[0] == '\0') {
+      Size = Value;
+      Value = CurrentFunctionAddress;
+      Name = CurrentFunctionName;
+      break;
+    } else {
+      CurrentFunctionName = Name;
+      CurrentFunctionAddress = Value;
       return;
-    break;
+    }
   case MachO::N_STSYM:
     break;
   default:
@@ -174,7 +186,8 @@ void MachODebugMapParser::handleStabSymbolTableEntry(uint32_t StringIndex,
   if (ObjectSymIt == CurrentObjectAddresses.end())
     return Warning("could not find object file symbol for symbol " +
                    Twine(Name));
-  if (!CurrentDebugMapObject->addSymbol(Name, ObjectSymIt->getValue(), Value))
+  if (!CurrentDebugMapObject->addSymbol(Name, ObjectSymIt->getValue(), Value,
+                                        Size))
     return Warning(Twine("failed to insert symbol '") + Name +
                    "' in the debug map.");
 }
@@ -186,8 +199,7 @@ void MachODebugMapParser::loadCurrentObjectFileSymbols() {
   for (auto Sym : CurrentObjectHolder.Get().symbols()) {
     StringRef Name;
     uint64_t Addr;
-    if (Sym.getAddress(Addr) || Addr == UnknownAddressOrSize ||
-        Sym.getName(Name))
+    if (Sym.getAddress(Addr) || Addr == UnknownAddress || Sym.getName(Name))
       continue;
     CurrentObjectAddresses[Name] = Addr;
   }
@@ -199,7 +211,7 @@ void MachODebugMapParser::loadCurrentObjectFileSymbols() {
 uint64_t MachODebugMapParser::getMainBinarySymbolAddress(StringRef Name) {
   auto Sym = MainBinarySymbolAddresses.find(Name);
   if (Sym == MainBinarySymbolAddresses.end())
-    return UnknownAddressOrSize;
+    return UnknownAddress;
   return Sym->second;
 }
 
@@ -209,10 +221,9 @@ void MachODebugMapParser::loadMainBinarySymbols() {
   const MachOObjectFile &MainBinary = MainBinaryHolder.GetAs<MachOObjectFile>();
   section_iterator Section = MainBinary.section_end();
   for (const auto &Sym : MainBinary.symbols()) {
-    SymbolRef::Type Type;
+    SymbolRef::Type Type = Sym.getType();
     // Skip undefined and STAB entries.
-    if (Sym.getType(Type) || (Type & SymbolRef::ST_Debug) ||
-        (Type & SymbolRef::ST_Unknown))
+    if ((Type & SymbolRef::ST_Debug) || (Type & SymbolRef::ST_Unknown))
       continue;
     StringRef Name;
     uint64_t Addr;
@@ -220,7 +231,7 @@ void MachODebugMapParser::loadMainBinarySymbols() {
     // are the only ones that need to be queried because the address
     // of common data won't be described in the debug map. All other
     // addresses should be fetched for the debug map.
-    if (Sym.getAddress(Addr) || Addr == UnknownAddressOrSize ||
+    if (Sym.getAddress(Addr) || Addr == UnknownAddress ||
         !(Sym.getFlags() & SymbolRef::SF_Global) || Sym.getSection(Section) ||
         Section->isText() || Sym.getName(Name) || Name.size() == 0 ||
         Name[0] == '\0')
@@ -233,9 +244,14 @@ namespace llvm {
 namespace dsymutil {
 llvm::ErrorOr<std::unique_ptr<DebugMap>> parseDebugMap(StringRef InputFile,
                                                        StringRef PrependPath,
-                                                       bool Verbose) {
-  MachODebugMapParser Parser(InputFile, PrependPath, Verbose);
-  return Parser.parse();
+                                                       bool Verbose,
+                                                       bool InputIsYAML) {
+  if (!InputIsYAML) {
+    MachODebugMapParser Parser(InputFile, PrependPath, Verbose);
+    return Parser.parse();
+  } else {
+    return DebugMap::parseYAMLDebugMap(InputFile, PrependPath, Verbose);
+  }
 }
 }
 }

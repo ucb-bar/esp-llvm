@@ -243,7 +243,7 @@ def HI20 : SDNodeXForm<imm, [{
     uint32_t value = N->getZExtValue() & 0x00000800 ? 
                      (N->getZExtValue() >> 12):
                      (N->getZExtValue() >> 12);
-    return getI32Imm(value & 0x000FFFFF);
+    return getI32Imm(value & 0x000FFFFF, SDLoc(N));
 }]>;
 
 //psuedo load low imm instruction to print operands better

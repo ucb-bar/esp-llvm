@@ -14,17 +14,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/CFG.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include <algorithm>
 using namespace llvm;
@@ -63,18 +63,16 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       // This is a cluster of orthogonal Transforms
       AU.addPreserved<UnifyFunctionExitNodes>();
-      AU.addPreserved("mem2reg");
       AU.addPreservedID(LowerInvokePassID);
     }
 
     struct CaseRange {
-      Constant* Low;
-      Constant* High;
+      ConstantInt* Low;
+      ConstantInt* High;
       BasicBlock* BB;
 
-      CaseRange(Constant *low = nullptr, Constant *high = nullptr,
-                BasicBlock *bb = nullptr) :
-        Low(low), High(high), BB(bb) { }
+      CaseRange(ConstantInt *low, ConstantInt *high, BasicBlock *bb)
+          : Low(low), High(high), BB(bb) {}
     };
 
     typedef std::vector<CaseRange> CaseVector;
@@ -177,11 +175,16 @@ static void fixPhis(BasicBlock *SuccBB, BasicBlock *OrigBB, BasicBlock *NewBB,
 
     // Remove additional occurences coming from condensed cases and keep the
     // number of incoming values equal to the number of branches to SuccBB.
+    SmallVector<unsigned, 8> Indices;
     for (++Idx; LocalNumMergedCases > 0 && Idx < E; ++Idx)
       if (PN->getIncomingBlock(Idx) == OrigBB) {
-        PN->removeIncomingValue(Idx);
+        Indices.push_back(Idx);
         LocalNumMergedCases--;
       }
+    // Remove incoming values in the reverse order to prevent invalidating
+    // *successive* index.
+    for (auto III = Indices.rbegin(), IIE = Indices.rend(); III != IIE; ++III)
+      PN->removeIncomingValue(*III);
   }
 }
 
@@ -222,14 +225,14 @@ LowerSwitch::switchConvert(CaseItr Begin, CaseItr End, ConstantInt *LowerBound,
 
   CaseRange &Pivot = *(Begin + Mid);
   DEBUG(dbgs() << "Pivot ==> "
-               << cast<ConstantInt>(Pivot.Low)->getValue()
-               << " -" << cast<ConstantInt>(Pivot.High)->getValue() << "\n");
+               << Pivot.Low->getValue()
+               << " -" << Pivot.High->getValue() << "\n");
 
   // NewLowerBound here should never be the integer minimal value.
   // This is because it is computed from a case range that is never
   // the smallest, so there is always a case range that has at least
   // a smaller value.
-  ConstantInt *NewLowerBound = cast<ConstantInt>(Pivot.Low);
+  ConstantInt *NewLowerBound = Pivot.Low;
 
   // Because NewLowerBound is never the smallest representable integer
   // it is safe here to subtract one.
@@ -238,16 +241,16 @@ LowerSwitch::switchConvert(CaseItr Begin, CaseItr End, ConstantInt *LowerBound,
 
   if (!UnreachableRanges.empty()) {
     // Check if the gap between LHS's highest and NewLowerBound is unreachable.
-    int64_t GapLow = cast<ConstantInt>(LHS.back().High)->getSExtValue() + 1;
+    int64_t GapLow = LHS.back().High->getSExtValue() + 1;
     int64_t GapHigh = NewLowerBound->getSExtValue() - 1;
     IntRange Gap = { GapLow, GapHigh };
     if (GapHigh >= GapLow && IsInRanges(Gap, UnreachableRanges))
-      NewUpperBound = cast<ConstantInt>(LHS.back().High);
+      NewUpperBound = LHS.back().High;
   }
 
   DEBUG(dbgs() << "LHS Bounds ==> ";
         if (LowerBound) {
-          dbgs() << cast<ConstantInt>(LowerBound)->getSExtValue();
+          dbgs() << LowerBound->getSExtValue();
         } else {
           dbgs() << "NONE";
         }
@@ -255,7 +258,7 @@ LowerSwitch::switchConvert(CaseItr Begin, CaseItr End, ConstantInt *LowerBound,
         dbgs() << "RHS Bounds ==> ";
         dbgs() << NewLowerBound->getSExtValue() << " - ";
         if (UpperBound) {
-          dbgs() << cast<ConstantInt>(UpperBound)->getSExtValue() << "\n";
+          dbgs() << UpperBound->getSExtValue() << "\n";
         } else {
           dbgs() << "NONE\n";
         });
@@ -306,11 +309,11 @@ BasicBlock* LowerSwitch::newLeafBlock(CaseRange& Leaf, Value* Val,
                         Leaf.Low, "SwitchLeaf");
   } else {
     // Make range comparison
-    if (cast<ConstantInt>(Leaf.Low)->isMinValue(true /*isSigned*/)) {
+    if (Leaf.Low->isMinValue(true /*isSigned*/)) {
       // Val >= Min && Val <= Hi --> Val <= Hi
       Comp = new ICmpInst(*NewLeaf, ICmpInst::ICMP_SLE, Val, Leaf.High,
                           "SwitchLeaf");
-    } else if (cast<ConstantInt>(Leaf.Low)->isZero()) {
+    } else if (Leaf.Low->isZero()) {
       // Val >= 0 && Val <= Hi --> Val <=u Hi
       Comp = new ICmpInst(*NewLeaf, ICmpInst::ICMP_ULE, Val, Leaf.High,
                           "SwitchLeaf");      
@@ -335,8 +338,8 @@ BasicBlock* LowerSwitch::newLeafBlock(CaseRange& Leaf, Value* Val,
   for (BasicBlock::iterator I = Succ->begin(); isa<PHINode>(I); ++I) {
     PHINode* PN = cast<PHINode>(I);
     // Remove all but one incoming entries from the cluster
-    uint64_t Range = cast<ConstantInt>(Leaf.High)->getSExtValue() -
-                     cast<ConstantInt>(Leaf.Low)->getSExtValue();    
+    uint64_t Range = Leaf.High->getSExtValue() -
+                     Leaf.Low->getSExtValue();
     for (uint64_t j = 0; j < Range; ++j) {
       PN->removeIncomingValue(OrigBlock);
     }
@@ -361,23 +364,26 @@ unsigned LowerSwitch::Clusterify(CaseVector& Cases, SwitchInst *SI) {
   std::sort(Cases.begin(), Cases.end(), CaseCmp());
 
   // Merge case into clusters
-  if (Cases.size()>=2)
-    for (CaseItr I = Cases.begin(), J = std::next(Cases.begin());
-         J != Cases.end();) {
-      int64_t nextValue = cast<ConstantInt>(J->Low)->getSExtValue();
-      int64_t currentValue = cast<ConstantInt>(I->High)->getSExtValue();
+  if (Cases.size() >= 2) {
+    CaseItr I = Cases.begin();
+    for (CaseItr J = std::next(I), E = Cases.end(); J != E; ++J) {
+      int64_t nextValue = J->Low->getSExtValue();
+      int64_t currentValue = I->High->getSExtValue();
       BasicBlock* nextBB = J->BB;
       BasicBlock* currentBB = I->BB;
 
       // If the two neighboring cases go to the same destination, merge them
       // into a single case.
-      if ((nextValue-currentValue==1) && (currentBB == nextBB)) {
+      assert(nextValue > currentValue && "Cases should be strictly ascending");
+      if ((nextValue == currentValue + 1) && (currentBB == nextBB)) {
         I->High = J->High;
-        J = Cases.erase(J);
-      } else {
-        I = J++;
+        // FIXME: Combine branch weights.
+      } else if (++I != J) {
+        *I = *J;
       }
     }
+    Cases.erase(std::next(I), Cases.end());
+  }
 
   for (CaseItr I=Cases.begin(), E=Cases.end(); I!=E; ++I, ++numCmps) {
     if (I->Low != I->High)
@@ -422,8 +428,8 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI) {
     // know that the value passed to the switch must be exactly one of the case
     // values.
     assert(!Cases.empty());
-    LowerBound = cast<ConstantInt>(Cases.front().Low);
-    UpperBound = cast<ConstantInt>(Cases.back().High);
+    LowerBound = Cases.front().Low;
+    UpperBound = Cases.back().High;
 
     DenseMap<BasicBlock *, unsigned> Popularity;
     unsigned MaxPop = 0;
@@ -432,8 +438,8 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI) {
     IntRange R = { INT64_MIN, INT64_MAX };
     UnreachableRanges.push_back(R);
     for (const auto &I : Cases) {
-      int64_t Low = cast<ConstantInt>(I.Low)->getSExtValue();
-      int64_t High = cast<ConstantInt>(I.High)->getSExtValue();
+      int64_t Low = I.Low->getSExtValue();
+      int64_t High = I.High->getSExtValue();
 
       IntRange &LastRange = UnreachableRanges.back();
       if (LastRange.Low == Low) {
@@ -473,12 +479,10 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI) {
     // cases.
     assert(MaxPop > 0 && PopSucc);
     Default = PopSucc;
-    for (CaseItr I = Cases.begin(); I != Cases.end();) {
-      if (I->BB == PopSucc)
-        I = Cases.erase(I);
-      else
-        ++I;
-    }
+    Cases.erase(std::remove_if(
+                    Cases.begin(), Cases.end(),
+                    [PopSucc](const CaseRange &R) { return R.BB == PopSucc; }),
+                Cases.end());
 
     // If there are no cases left, just branch.
     if (Cases.empty()) {

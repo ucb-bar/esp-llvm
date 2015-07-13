@@ -16,7 +16,6 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCSectionMachO.h"
-#include "llvm/MC/MCStreamer.h"
 using namespace llvm;
 
 bool MCAsmInfoDarwin::isSectionAtomizableBySymbols(
@@ -31,6 +30,10 @@ bool MCAsmInfoDarwin::isSectionAtomizableBySymbols(
     return false;
 
   if (SMO.getSegmentName() == "__DATA" && SMO.getSectionName() == "__cfstring")
+    return false;
+
+  if (SMO.getSegmentName() == "__DATA" &&
+      SMO.getSectionName() == "__objc_classrefs")
     return false;
 
   switch (SMO.getType()) {
@@ -90,4 +93,9 @@ MCAsmInfoDarwin::MCAsmInfoDarwin() {
 
   UseIntegratedAssembler = true;
   SetDirectiveSuppressesReloc = true;
+
+  // FIXME: For now keep the previous behavior, AShr, matching the previous
+  // behavior of as(1) (both -q and -Q: resp. LLVM and gas v1.38).
+  // If/when this changes, the AArch64 Darwin special case can go away.
+  UseLogicalShr = false;
 }

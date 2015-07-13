@@ -21,12 +21,14 @@ namespace {
 
 template <class ELFT>
 class ELFDumper {
+  typedef object::Elf_Sym_Impl<ELFT> Elf_Sym;
   typedef typename object::ELFFile<ELFT>::Elf_Shdr Elf_Shdr;
-  typedef typename object::ELFFile<ELFT>::Elf_Sym_Iter Elf_Sym_Iter;
+  typedef typename object::ELFFile<ELFT>::Elf_Word Elf_Word;
 
   const object::ELFFile<ELFT> &Obj;
 
-  std::error_code dumpSymbol(Elf_Sym_Iter Sym, ELFYAML::Symbol &S);
+  std::error_code dumpSymbol(const Elf_Sym *Sym, bool IsDynamic,
+                             ELFYAML::Symbol &S);
   std::error_code dumpCommonSection(const Elf_Shdr *Shdr, ELFYAML::Section &S);
   std::error_code dumpCommonRelocationSection(const Elf_Shdr *Shdr,
                                               ELFYAML::RelocationSection &S);
@@ -38,6 +40,8 @@ class ELFDumper {
   ErrorOr<ELFYAML::RelocationSection *> dumpRelaSection(const Elf_Shdr *Shdr);
   ErrorOr<ELFYAML::RawContentSection *>
   dumpContentSection(const Elf_Shdr *Shdr);
+  ErrorOr<ELFYAML::Group *> dumpGroup(const Elf_Shdr *Shdr);
+  ErrorOr<ELFYAML::MipsABIFlags *> dumpMipsABIFlags(const Elf_Shdr *Shdr);
 
 public:
   ELFDumper(const object::ELFFile<ELFT> &O);
@@ -86,7 +90,20 @@ ErrorOr<ELFYAML::Object *> ELFDumper<ELFT>::dump() {
       Y->Sections.push_back(std::unique_ptr<ELFYAML::Section>(S.get()));
       break;
     }
-    // FIXME: Support SHT_GROUP section format.
+    case ELF::SHT_GROUP: {
+      ErrorOr<ELFYAML::Group *> G = dumpGroup(&Sec);
+      if (std::error_code EC = G.getError())
+        return EC;
+      Y->Sections.push_back(std::unique_ptr<ELFYAML::Section>(G.get()));
+      break;
+    }
+    case ELF::SHT_MIPS_ABIFLAGS: {
+      ErrorOr<ELFYAML::MipsABIFlags *> G = dumpMipsABIFlags(&Sec);
+      if (std::error_code EC = G.getError())
+        return EC;
+      Y->Sections.push_back(std::unique_ptr<ELFYAML::Section>(G.get()));
+      break;
+    }
     default: {
       ErrorOr<ELFYAML::RawContentSection *> S = dumpContentSection(&Sec);
       if (std::error_code EC = S.getError())
@@ -105,7 +122,7 @@ ErrorOr<ELFYAML::Object *> ELFDumper<ELFT>::dump() {
     }
 
     ELFYAML::Symbol S;
-    if (std::error_code EC = ELFDumper<ELFT>::dumpSymbol(SI, S))
+    if (std::error_code EC = ELFDumper<ELFT>::dumpSymbol(SI, false, S))
       return EC;
 
     switch (SI->getBinding())
@@ -128,14 +145,14 @@ ErrorOr<ELFYAML::Object *> ELFDumper<ELFT>::dump() {
 }
 
 template <class ELFT>
-std::error_code ELFDumper<ELFT>::dumpSymbol(Elf_Sym_Iter Sym,
+std::error_code ELFDumper<ELFT>::dumpSymbol(const Elf_Sym *Sym, bool IsDynamic,
                                             ELFYAML::Symbol &S) {
   S.Type = Sym->getType();
   S.Value = Sym->st_value;
   S.Size = Sym->st_size;
   S.Other = Sym->st_other;
 
-  ErrorOr<StringRef> NameOrErr = Obj.getSymbolName(Sym);
+  ErrorOr<StringRef> NameOrErr = Obj.getSymbolName(Sym, IsDynamic);
   if (std::error_code EC = NameOrErr.getError())
     return EC;
   S.Name = NameOrErr.get();
@@ -165,8 +182,14 @@ std::error_code ELFDumper<ELFT>::dumpRelocation(const Elf_Shdr *Shdr,
   if (!NamePair.first)
     return obj2yaml_error::success;
 
-  ErrorOr<StringRef> NameOrErr =
-      Obj.getSymbolName(NamePair.first, NamePair.second);
+  const Elf_Shdr *SymTab = NamePair.first;
+  const Elf_Shdr *StrTabSec = Obj.getSection(SymTab->sh_link);
+  ErrorOr<StringRef> StrTabOrErr = Obj.getStringTable(StrTabSec);
+  if (std::error_code EC = StrTabOrErr.getError())
+    return EC;
+  StringRef StrTab = *StrTabOrErr;
+
+  ErrorOr<StringRef> NameOrErr = Obj.getSymbolName(StrTab, NamePair.second);
   if (std::error_code EC = NameOrErr.getError())
     return EC;
   R.Symbol = NameOrErr.get();
@@ -275,6 +298,75 @@ ELFDumper<ELFT>::dumpContentSection(const Elf_Shdr *Shdr) {
 }
 
 template <class ELFT>
+ErrorOr<ELFYAML::Group *> ELFDumper<ELFT>::dumpGroup(const Elf_Shdr *Shdr) {
+  auto S = make_unique<ELFYAML::Group>();
+
+  if (std::error_code EC = dumpCommonSection(Shdr, *S))
+    return EC;
+  // Get sh_info which is the signature.
+  const Elf_Sym *symbol = Obj.getSymbol(Shdr->sh_info);
+  const Elf_Shdr *symtab = Obj.getSection(Shdr->sh_link);
+  const Elf_Shdr *StrTabSec = Obj.getSection(symtab->sh_link);
+  ErrorOr<StringRef> StrTabOrErr = Obj.getStringTable(StrTabSec);
+  if (std::error_code EC = StrTabOrErr.getError())
+    return EC;
+  StringRef StrTab = *StrTabOrErr;
+  auto sectionContents = Obj.getSectionContents(Shdr);
+  if (std::error_code ec = sectionContents.getError())
+    return ec;
+  ErrorOr<StringRef> symbolName = Obj.getSymbolName(StrTab, symbol);
+  if (std::error_code EC = symbolName.getError())
+    return EC;
+  S->Info = *symbolName;
+  const Elf_Word *groupMembers =
+      reinterpret_cast<const Elf_Word *>(sectionContents->data());
+  const long count = (Shdr->sh_size) / sizeof(Elf_Word);
+  ELFYAML::SectionOrType s;
+  for (int i = 0; i < count; i++) {
+    if (groupMembers[i] == llvm::ELF::GRP_COMDAT) {
+      s.sectionNameOrType = "GRP_COMDAT";
+    } else {
+      const Elf_Shdr *sHdr = Obj.getSection(groupMembers[i]);
+      ErrorOr<StringRef> sectionName = Obj.getSectionName(sHdr);
+      if (std::error_code ec = sectionName.getError())
+        return ec;
+      s.sectionNameOrType = *sectionName;
+    }
+    S->Members.push_back(s);
+  }
+  return S.release();
+}
+
+template <class ELFT>
+ErrorOr<ELFYAML::MipsABIFlags *>
+ELFDumper<ELFT>::dumpMipsABIFlags(const Elf_Shdr *Shdr) {
+  assert(Shdr->sh_type == ELF::SHT_MIPS_ABIFLAGS &&
+         "Section type is not SHT_MIPS_ABIFLAGS");
+  auto S = make_unique<ELFYAML::MipsABIFlags>();
+  if (std::error_code EC = dumpCommonSection(Shdr, *S))
+    return EC;
+
+  ErrorOr<ArrayRef<uint8_t>> ContentOrErr = Obj.getSectionContents(Shdr);
+  if (std::error_code EC = ContentOrErr.getError())
+    return EC;
+
+  auto *Flags = reinterpret_cast<const object::Elf_Mips_ABIFlags<ELFT> *>(
+      ContentOrErr.get().data());
+  S->Version = Flags->version;
+  S->ISALevel = Flags->isa_level;
+  S->ISARevision = Flags->isa_rev;
+  S->GPRSize = Flags->gpr_size;
+  S->CPR1Size = Flags->cpr1_size;
+  S->CPR2Size = Flags->cpr2_size;
+  S->FpABI = Flags->fp_abi;
+  S->ISAExtension = Flags->isa_ext;
+  S->ASEs = Flags->ases;
+  S->Flags1 = Flags->flags1;
+  S->Flags2 = Flags->flags2;
+  return S.release();
+}
+
+template <class ELFT>
 static std::error_code elf2yaml(raw_ostream &Out,
                                 const object::ELFFile<ELFT> &Obj) {
   ELFDumper<ELFT> Dumper(Obj);
@@ -286,7 +378,7 @@ static std::error_code elf2yaml(raw_ostream &Out,
   yaml::Output Yout(Out);
   Yout << *YAML;
 
-  return object::object_error::success;
+  return std::error_code();
 }
 
 std::error_code elf2yaml(raw_ostream &Out, const object::ObjectFile &Obj) {

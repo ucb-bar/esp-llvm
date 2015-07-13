@@ -21,7 +21,6 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetMachine.h"
 #include <cstdlib>
@@ -37,6 +36,10 @@ using namespace llvm;
 static cl::opt<bool> UseSubRegLiveness("ppc-track-subreg-liveness",
 cl::desc("Enable subregister liveness tracking for PPC"), cl::Hidden);
 
+static cl::opt<bool> QPXStackUnaligned("qpx-stack-unaligned",
+  cl::desc("Even when QPX is enabled the stack is not 32-byte aligned"),
+  cl::Hidden);
+
 PPCSubtarget &PPCSubtarget::initializeSubtargetDependencies(StringRef CPU,
                                                             StringRef FS) {
   initializeEnvironment();
@@ -44,14 +47,13 @@ PPCSubtarget &PPCSubtarget::initializeSubtargetDependencies(StringRef CPU,
   return *this;
 }
 
-PPCSubtarget::PPCSubtarget(const std::string &TT, const std::string &CPU,
+PPCSubtarget::PPCSubtarget(const Triple &TT, const std::string &CPU,
                            const std::string &FS, const PPCTargetMachine &TM)
     : PPCGenSubtargetInfo(TT, CPU, FS), TargetTriple(TT),
       IsPPC64(TargetTriple.getArch() == Triple::ppc64 ||
               TargetTriple.getArch() == Triple::ppc64le),
-      TargetABI(PPC_ABI_UNKNOWN),
-      FrameLowering(initializeSubtargetDependencies(CPU, FS)), InstrInfo(*this),
-      TLInfo(TM), TSInfo(TM.getDataLayout()) {}
+      TM(TM), FrameLowering(initializeSubtargetDependencies(CPU, FS)),
+      InstrInfo(*this), TLInfo(TM, *this), TSInfo(TM.getDataLayout()) {}
 
 void PPCSubtarget::initializeEnvironment() {
   StackAlignment = 16;
@@ -65,6 +67,8 @@ void PPCSubtarget::initializeEnvironment() {
   HasQPX = false;
   HasVSX = false;
   HasP8Vector = false;
+  HasP8Altivec = false;
+  HasP8Crypto = false;
   HasFCPSGN = false;
   HasFSQRT = false;
   HasFRE = false;
@@ -78,6 +82,8 @@ void PPCSubtarget::initializeEnvironment() {
   HasFPCVT = false;
   HasISEL = false;
   HasPOPCNTD = false;
+  HasBPERMD = false;
+  HasExtDiv = false;
   HasCMPB = false;
   HasLDBRX = false;
   IsBookE = false;
@@ -85,23 +91,27 @@ void PPCSubtarget::initializeEnvironment() {
   IsPPC4xx = false;
   IsPPC6xx = false;
   IsE500 = false;
-  DeprecatedMFTB = false;
+  FeatureMFTB = false;
   DeprecatedDST = false;
   HasLazyResolverStubs = false;
   HasICBT = false;
   HasInvariantFunctionDescriptors = false;
+  HasPartwordAtomics = false;
+  HasDirectMove = false;
+  IsQPXStackUnaligned = false;
+  HasHTM = false;
 }
 
 void PPCSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   // Determine default and user specified characteristics
   std::string CPUName = CPU;
-  if (CPUName.empty())
-    CPUName = "generic";
-#if (defined(__APPLE__) || defined(__linux__)) && \
-    (defined(__ppc__) || defined(__powerpc__))
-  if (CPUName == "generic")
-    CPUName = sys::getHostCPUName();
-#endif
+  if (CPUName.empty()) {
+    // If cross-compiling with -march=ppc64le without -mcpu
+    if (TargetTriple.getArch() == Triple::ppc64le)
+      CPUName = "ppc64le";
+    else
+      CPUName = "generic";
+  }
 
   // Initialize scheduling itinerary for the specified CPU.
   InstrItins = getInstrItineraryForCPU(CPUName);
@@ -121,28 +131,18 @@ void PPCSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   // QPX requires a 32-byte aligned stack. Note that we need to do this if
   // we're compiling for a BG/Q system regardless of whether or not QPX
   // is enabled because external functions will assume this alignment.
-  if (hasQPX() || isBGQ())
-    StackAlignment = 32;
+  IsQPXStackUnaligned = QPXStackUnaligned;
+  StackAlignment = getPlatformStackAlignment();
 
   // Determine endianness.
+  // FIXME: Part of the TargetMachine.
   IsLittleEndian = (TargetTriple.getArch() == Triple::ppc64le);
-
-  // Determine default ABI.
-  if (TargetABI == PPC_ABI_UNKNOWN) {
-    if (!isDarwin() && IsPPC64) {
-      if (IsLittleEndian)
-        TargetABI = PPC_ABI_ELFv2;
-      else
-        TargetABI = PPC_ABI_ELFv1;
-    }
-  }
 }
 
 /// hasLazyResolverStub - Return true if accesses to the specified global have
 /// to go through a dyld lazy resolution stub.  This means that an extra load
 /// is required to get the address of the global.
-bool PPCSubtarget::hasLazyResolverStub(const GlobalValue *GV,
-                                       const TargetMachine &TM) const {
+bool PPCSubtarget::hasLazyResolverStub(const GlobalValue *GV) const {
   // We never have stubs if HasLazyResolverStubs=false or if in static mode.
   if (!HasLazyResolverStubs || TM.getRelocationModel() == Reloc::Static)
     return false;
@@ -175,7 +175,7 @@ bool PPCSubtarget::enableMachineScheduler() const {
 }
 
 // This overrides the PostRAScheduler bit in the SchedModel for each CPU.
-bool PPCSubtarget::enablePostMachineScheduler() const { return true; }
+bool PPCSubtarget::enablePostRAScheduler() const { return true; }
 
 PPCGenSubtargetInfo::AntiDepBreakMode PPCSubtarget::getAntiDepBreakMode() const {
   return TargetSubtargetInfo::ANTIDEP_ALL;
@@ -210,3 +210,5 @@ bool PPCSubtarget::enableSubRegLiveness() const {
   return UseSubRegLiveness;
 }
 
+bool PPCSubtarget::isELFv2ABI() const { return TM.isELFv2ABI(); }
+bool PPCSubtarget::isPPC64() const { return TM.isPPC64(); }

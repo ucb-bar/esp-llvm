@@ -53,16 +53,30 @@ MDNode *MDBuilder::createBranchWeights(ArrayRef<uint32_t> Weights) {
   return MDNode::get(Context, Vals);
 }
 
+MDNode *MDBuilder::createFunctionEntryCount(uint64_t Count) {
+  SmallVector<Metadata *, 2> Vals(2);
+  Vals[0] = createString("function_entry_count");
+
+  Type *Int64Ty = Type::getInt64Ty(Context);
+  Vals[1] = createConstant(ConstantInt::get(Int64Ty, Count));
+
+  return MDNode::get(Context, Vals);
+}
+
 MDNode *MDBuilder::createRange(const APInt &Lo, const APInt &Hi) {
   assert(Lo.getBitWidth() == Hi.getBitWidth() && "Mismatched bitwidths!");
+
+  Type *Ty = IntegerType::get(Context, Lo.getBitWidth());
+  return createRange(ConstantInt::get(Ty, Lo), ConstantInt::get(Ty, Hi));
+}
+
+MDNode *MDBuilder::createRange(Constant *Lo, Constant *Hi) {
   // If the range is everything then it is useless.
   if (Hi == Lo)
     return nullptr;
 
   // Return the range [Lo, Hi).
-  Type *Ty = IntegerType::get(Context, Lo.getBitWidth());
-  Metadata *Range[2] = {createConstant(ConstantInt::get(Ty, Lo)),
-                        createConstant(ConstantInt::get(Ty, Hi))};
+  Metadata *Range[2] = {createConstant(Lo), createConstant(Hi)};
   return MDNode::get(Context, Range);
 }
 
@@ -154,9 +168,16 @@ MDNode *MDBuilder::createTBAAScalarTypeNode(StringRef Name, MDNode *Parent,
 /// \brief Return metadata for a TBAA tag node with the given
 /// base type, access type and offset relative to the base type.
 MDNode *MDBuilder::createTBAAStructTagNode(MDNode *BaseType, MDNode *AccessType,
-                                           uint64_t Offset) {
+                                           uint64_t Offset, bool IsConstant) {
   Type *Int64 = Type::getInt64Ty(Context);
-  Metadata *Ops[3] = {BaseType, AccessType,
-                      createConstant(ConstantInt::get(Int64, Offset))};
-  return MDNode::get(Context, Ops);
+  if (IsConstant) {
+    Metadata *Ops[4] = {BaseType, AccessType,
+                        createConstant(ConstantInt::get(Int64, Offset)),
+                        createConstant(ConstantInt::get(Int64, 1))};
+    return MDNode::get(Context, Ops);
+  } else {
+    Metadata *Ops[3] = {BaseType, AccessType,
+                        createConstant(ConstantInt::get(Int64, Offset))};
+    return MDNode::get(Context, Ops);
+  }
 }

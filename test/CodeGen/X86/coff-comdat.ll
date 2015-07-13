@@ -53,7 +53,7 @@ define x86_fastcallcc void @f8() comdat($f8) {
 $vftable = comdat largest
 
 @some_name = private unnamed_addr constant [2 x i8*] zeroinitializer, comdat($vftable)
-@vftable = alias getelementptr([2 x i8*]* @some_name, i32 0, i32 1)
+@vftable = alias getelementptr([2 x i8*], [2 x i8*]* @some_name, i32 0, i32 1)
 
 ; CHECK: .section        .text,"xr",discard,_f1
 ; CHECK: .globl  _f1
@@ -73,20 +73,20 @@ $vftable = comdat largest
 ; CHECK: .globl  @v8@0
 ; CHECK: .section        .text,"xr",discard,@f8@0
 ; CHECK: .globl  @f8@0
-; CHECK: .section        .bss,"wb",associative,_f1
+; CHECK: .section        .bss,"bw",associative,_f1
 ; CHECK: .globl  _v1
-; CHECK: .section        .bss,"wb",associative,_f2
+; CHECK: .section        .bss,"bw",associative,_f2
 ; CHECK: .globl  _v2
-; CHECK: .section        .bss,"wb",associative,_f3
+; CHECK: .section        .bss,"bw",associative,_f3
 ; CHECK: .globl  _v3
-; CHECK: .section        .bss,"wb",associative,_f4
+; CHECK: .section        .bss,"bw",associative,_f4
 ; CHECK: .globl  _v4
-; CHECK: .section        .bss,"wb",associative,_f5
+; CHECK: .section        .bss,"bw",associative,_f5
 ; CHECK: .globl  _v5
-; CHECK: .section        .bss,"wb",associative,_f6
+; CHECK: .section        .bss,"bw",associative,_f6
 ; CHECK: .globl  _v6
-; CHECK: .section        .bss,"wb",same_size,_f6
+; CHECK: .section        .bss,"bw",same_size,_f6
 ; CHECK: .globl  _f6
-; CHECK: .section        .rdata,"rd",largest,_vftable
+; CHECK: .section        .rdata,"dr",largest,_vftable
 ; CHECK: .globl  _vftable
 ; CHECK: _vftable = L_some_name+4

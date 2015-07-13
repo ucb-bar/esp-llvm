@@ -69,3 +69,12 @@
   pref 256, 8($5)   # CHECK: :[[@LINE]]:{{[0-9]+}}: error: immediate operand value out of range
   beqz16 $9, 20 # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
   bnez16 $9, 20 # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  movep   $5, $21, $2, $3 # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  movep   $8, $6, $2, $3  # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  movep   $5, $6, $5, $3  # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  movep   $5, $6, $2, $9  # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  break 1024        # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  break 1024, 5     # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  break 7, 1024     # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  break 1024, 1024  # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction
+  wait 1024         # CHECK: :[[@LINE]]:{{[0-9]+}}: error: invalid operand for instruction

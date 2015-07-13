@@ -1,4 +1,3 @@
-//===-- llvm-objdump.h ----------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -26,6 +25,8 @@ extern cl::opt<std::string> TripleName;
 extern cl::opt<std::string> ArchName;
 extern cl::opt<std::string> MCPU;
 extern cl::list<std::string> MAttrs;
+extern cl::list<std::string> DumpSections;
+extern cl::opt<bool> Raw;
 extern cl::opt<bool> Disassemble;
 extern cl::opt<bool> NoShowRawInsn;
 extern cl::opt<bool> PrivateHeaders;
@@ -39,16 +40,22 @@ extern cl::opt<bool> ArchiveHeaders;
 extern cl::opt<bool> IndirectSymbols;
 extern cl::opt<bool> DataInCode;
 extern cl::opt<bool> LinkOptHints;
+extern cl::opt<bool> InfoPlist;
+extern cl::opt<bool> DylibsUsed;
+extern cl::opt<bool> DylibId;
+extern cl::opt<bool> ObjcMetaData;
+extern cl::opt<std::string> DisSymName;
+extern cl::opt<bool> NonVerbose;
 extern cl::opt<bool> Relocations;
 extern cl::opt<bool> SectionHeaders;
 extern cl::opt<bool> SectionContents;
 extern cl::opt<bool> SymbolTable;
 extern cl::opt<bool> UnwindInfo;
+extern cl::opt<bool> PrintImmHex;
 
 // Various helper functions.
 bool error(std::error_code ec);
 bool RelocAddressLess(object::RelocationRef a, object::RelocationRef b);
-void DumpBytes(StringRef bytes);
 void ParseInputMachO(StringRef Filename);
 void printCOFFUnwindInfo(const object::COFFObjectFile* o);
 void printMachOUnwindInfo(const object::MachOObjectFile* o);

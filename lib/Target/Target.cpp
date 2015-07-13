@@ -18,7 +18,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Value.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include <cstring>
 
@@ -34,8 +34,8 @@ inline LLVMTargetLibraryInfoRef wrap(const TargetLibraryInfoImpl *P) {
 }
 
 void llvm::initializeTarget(PassRegistry &Registry) {
-  initializeDataLayoutPassPass(Registry);
   initializeTargetLibraryInfoWrapperPassPass(Registry);
+  initializeTargetTransformInfoWrapperPassPass(Registry);
 }
 
 void LLVMInitializeTarget(LLVMPassRegistryRef R) {
@@ -47,9 +47,6 @@ LLVMTargetDataRef LLVMCreateTargetData(const char *StringRep) {
 }
 
 void LLVMAddTargetData(LLVMTargetDataRef TD, LLVMPassManagerRef PM) {
-  // The DataLayoutPass must now be in sync with the module. Unfortunatelly we
-  // cannot enforce that from the C api.
-  unwrap(PM)->add(new DataLayoutPass());
 }
 
 void LLVMAddTargetLibraryInfo(LLVMTargetLibraryInfoRef TLI,

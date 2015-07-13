@@ -14,14 +14,11 @@
 #include "MipsTargetMachine.h"
 #include "Mips.h"
 #include "Mips16FrameLowering.h"
-#include "Mips16HardFloat.h"
 #include "Mips16ISelDAGToDAG.h"
 #include "Mips16ISelLowering.h"
 #include "Mips16InstrInfo.h"
 #include "MipsFrameLowering.h"
 #include "MipsInstrInfo.h"
-#include "MipsModuleISelDAGToDAG.h"
-#include "MipsOs16.h"
 #include "MipsSEFrameLowering.h"
 #include "MipsSEISelDAGToDAG.h"
 #include "MipsSEISelLowering.h"
@@ -29,11 +26,12 @@
 #include "MipsTargetObjectFile.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/PassManager.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "mips"
@@ -46,8 +44,11 @@ extern "C" void LLVMInitializeMipsTarget() {
   RegisterTargetMachine<MipselTargetMachine> B(TheMips64elTarget);
 }
 
-static std::string computeDataLayout(bool isLittle, MipsABIInfo &ABI) {
+static std::string computeDataLayout(const Triple &TT, StringRef CPU,
+                                     const TargetOptions &Options,
+                                     bool isLittle) {
   std::string Ret = "";
+  MipsABIInfo ABI = MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions);
 
   // There are both little and big endian mips.
   if (isLittle)
@@ -81,16 +82,16 @@ static std::string computeDataLayout(bool isLittle, MipsABIInfo &ABI) {
 // offset from the stack/frame pointer, using StackGrowsUp enables
 // an easier handling.
 // Using CodeModel::Large enables different CALL behavior.
-MipsTargetMachine::MipsTargetMachine(const Target &T, StringRef TT,
+MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      StringRef CPU, StringRef FS,
                                      const TargetOptions &Options,
                                      Reloc::Model RM, CodeModel::Model CM,
                                      CodeGenOpt::Level OL, bool isLittle)
-    : LLVMTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL),
+    : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, isLittle), TT,
+                        CPU, FS, Options, RM, CM, OL),
       isLittle(isLittle), TLOF(make_unique<MipsTargetObjectFile>()),
-      ABI(MipsABIInfo::computeTargetABI(Triple(TT), CPU, Options.MCOptions)),
-      DL(computeDataLayout(isLittle, ABI)), Subtarget(nullptr),
-      DefaultSubtarget(TT, CPU, FS, isLittle, *this),
+      ABI(MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions)),
+      Subtarget(nullptr), DefaultSubtarget(TT, CPU, FS, isLittle, *this),
       NoMips16Subtarget(TT, CPU, FS.empty() ? "-mips16" : FS.str() + ",-mips16",
                         isLittle, *this),
       Mips16Subtarget(TT, CPU, FS.empty() ? "+mips16" : FS.str() + ",+mips16",
@@ -103,29 +104,26 @@ MipsTargetMachine::~MipsTargetMachine() {}
 
 void MipsebTargetMachine::anchor() { }
 
-MipsebTargetMachine::
-MipsebTargetMachine(const Target &T, StringRef TT,
-                    StringRef CPU, StringRef FS, const TargetOptions &Options,
-                    Reloc::Model RM, CodeModel::Model CM,
-                    CodeGenOpt::Level OL)
-  : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
+MipsebTargetMachine::MipsebTargetMachine(const Target &T, const Triple &TT,
+                                         StringRef CPU, StringRef FS,
+                                         const TargetOptions &Options,
+                                         Reloc::Model RM, CodeModel::Model CM,
+                                         CodeGenOpt::Level OL)
+    : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
 
 void MipselTargetMachine::anchor() { }
 
-MipselTargetMachine::
-MipselTargetMachine(const Target &T, StringRef TT,
-                    StringRef CPU, StringRef FS, const TargetOptions &Options,
-                    Reloc::Model RM, CodeModel::Model CM,
-                    CodeGenOpt::Level OL)
-  : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
+MipselTargetMachine::MipselTargetMachine(const Target &T, const Triple &TT,
+                                         StringRef CPU, StringRef FS,
+                                         const TargetOptions &Options,
+                                         Reloc::Model RM, CodeModel::Model CM,
+                                         CodeGenOpt::Level OL)
+    : MipsTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, true) {}
 
 const MipsSubtarget *
 MipsTargetMachine::getSubtargetImpl(const Function &F) const {
-  AttributeSet FnAttrs = F.getAttributes();
-  Attribute CPUAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "target-cpu");
-  Attribute FSAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "target-features");
+  Attribute CPUAttr = F.getFnAttribute("target-cpu");
+  Attribute FSAttr = F.getFnAttribute("target-features");
 
   std::string CPU = !CPUAttr.hasAttribute(Attribute::None)
                         ? CPUAttr.getValueAsString().str()
@@ -134,36 +132,32 @@ MipsTargetMachine::getSubtargetImpl(const Function &F) const {
                        ? FSAttr.getValueAsString().str()
                        : TargetFS;
   bool hasMips16Attr =
-      !FnAttrs.getAttribute(AttributeSet::FunctionIndex, "mips16")
-           .hasAttribute(Attribute::None);
+      !F.getFnAttribute("mips16").hasAttribute(Attribute::None);
   bool hasNoMips16Attr =
-      !FnAttrs.getAttribute(AttributeSet::FunctionIndex, "nomips16")
-           .hasAttribute(Attribute::None);
+      !F.getFnAttribute("nomips16").hasAttribute(Attribute::None);
 
   // FIXME: This is related to the code below to reset the target options,
   // we need to know whether or not the soft float flag is set on the
-  // function before we can generate a subtarget. We also need to use
-  // it as a key for the subtarget since that can be the only difference
-  // between two functions.
-  Attribute SFAttr =
-      FnAttrs.getAttribute(AttributeSet::FunctionIndex, "use-soft-float");
-  bool softFloat = !SFAttr.hasAttribute(Attribute::None)
-                       ? SFAttr.getValueAsString() == "true"
-                       : Options.UseSoftFloat;
+  // function, so we can enable it as a subtarget feature.
+  bool softFloat =
+      F.hasFnAttribute("use-soft-float") &&
+      F.getFnAttribute("use-soft-float").getValueAsString() == "true";
 
   if (hasMips16Attr)
     FS += FS.empty() ? "+mips16" : ",+mips16";
   else if (hasNoMips16Attr)
     FS += FS.empty() ? "-mips16" : ",-mips16";
+  if (softFloat)
+    FS += FS.empty() ? "+soft-float" : ",+soft-float";
 
-  auto &I = SubtargetMap[CPU + FS + (softFloat ? "use-soft-float=true"
-                                               : "use-soft-float=false")];
+  auto &I = SubtargetMap[CPU + FS];
   if (!I) {
     // This needs to be done before we create a new subtarget since any
     // creation will depend on the TM and the code generation flags on the
     // function that reside in TargetOptions.
     resetTargetOptions(F);
-    I = llvm::make_unique<MipsSubtarget>(TargetTriple, CPU, FS, isLittle, *this);
+    I = llvm::make_unique<MipsSubtarget>(TargetTriple, CPU, FS, isLittle,
+                                         *this);
   }
   return I.get();
 }
@@ -215,14 +209,14 @@ void MipsPassConfig::addIRPasses() {
   TargetPassConfig::addIRPasses();
   addPass(createAtomicExpandPass(&getMipsTargetMachine()));
   if (getMipsSubtarget().os16())
-    addPass(createMipsOs16(getMipsTargetMachine()));
+    addPass(createMipsOs16Pass(getMipsTargetMachine()));
   if (getMipsSubtarget().inMips16HardFloat())
-    addPass(createMips16HardFloat(getMipsTargetMachine()));
+    addPass(createMips16HardFloatPass(getMipsTargetMachine()));
 }
 // Install an instruction selector pass using
 // the ISelDag to gen Mips code.
 bool MipsPassConfig::addInstSelector() {
-  addPass(createMipsModuleISelDag(getMipsTargetMachine()));
+  addPass(createMipsModuleISelDagPass(getMipsTargetMachine()));
   addPass(createMips16ISelDag(getMipsTargetMachine()));
   addPass(createMipsSEISelDag(getMipsTargetMachine()));
   return false;
@@ -238,17 +232,17 @@ void MipsPassConfig::addPreRegAlloc() {
     addPass(createMipsOptimizePICCallPass(getMipsTargetMachine()));
 }
 
-void MipsTargetMachine::addAnalysisPasses(PassManagerBase &PM) {
-  if (Subtarget->allowMixed16_32()) {
-    DEBUG(errs() << "No ");
-    //FIXME: The Basic Target Transform Info
-    // pass needs to become a function pass instead of
-    // being an immutable pass and then this method as it exists now
-    // would be unnecessary.
-    PM.add(createNoTargetTransformInfoPass());
-  } else
-    LLVMTargetMachine::addAnalysisPasses(PM);
-  DEBUG(errs() << "Target Transform Info Pass Added\n");
+TargetIRAnalysis MipsTargetMachine::getTargetIRAnalysis() {
+  return TargetIRAnalysis([this](Function &F) {
+    if (Subtarget->allowMixed16_32()) {
+      DEBUG(errs() << "No Target Transform Info Pass Added\n");
+      // FIXME: This is no longer necessary as the TTI returned is per-function.
+      return TargetTransformInfo(getDataLayout());
+    }
+
+    DEBUG(errs() << "Target Transform Info Pass Added\n");
+    return TargetTransformInfo(BasicTTIImpl(this, F));
+  });
 }
 
 // Implemented by targets that want to run passes immediately before

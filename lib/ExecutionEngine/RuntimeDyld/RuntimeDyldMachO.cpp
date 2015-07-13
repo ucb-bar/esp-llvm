@@ -26,11 +26,12 @@ using namespace llvm::object;
 
 namespace {
 
-class LoadedMachOObjectInfo : public RuntimeDyld::LoadedObjectInfo {
+class LoadedMachOObjectInfo
+    : public RuntimeDyld::LoadedObjectInfoHelper<LoadedMachOObjectInfo> {
 public:
   LoadedMachOObjectInfo(RuntimeDyldImpl &RTDyld, unsigned BeginIdx,
                         unsigned EndIdx)
-    : RuntimeDyld::LoadedObjectInfo(RTDyld, BeginIdx, EndIdx) {}
+      : LoadedObjectInfoHelper(RTDyld, BeginIdx, EndIdx) {}
 
   OwningBinary<ObjectFile>
   getObjectForDebug(const ObjectFile &Obj) const override {
@@ -75,7 +76,7 @@ RelocationValueRef RuntimeDyldMachO::getRelocationValueRef(
       Value.Offset = RE.Addend;
     }
   } else {
-    SectionRef Sec = Obj.getRelocationSection(RelInfo);
+    SectionRef Sec = Obj.getAnyRelocationSection(RelInfo);
     bool IsCode = Sec.isText();
     Value.SectionID = findOrEmitSection(Obj, Sec, IsCode, ObjSectionToID);
     uint64_t Addr = Sec.getAddress();
@@ -178,25 +179,30 @@ bool RuntimeDyldMachO::isCompatibleFile(const object::ObjectFile &Obj) const {
 }
 
 template <typename Impl>
-void RuntimeDyldMachOCRTPBase<Impl>::finalizeLoad(const ObjectFile &ObjImg,
+void RuntimeDyldMachOCRTPBase<Impl>::finalizeLoad(const ObjectFile &Obj,
                                                   ObjSectionToIDMap &SectionMap) {
   unsigned EHFrameSID = RTDYLD_INVALID_SECTION_ID;
   unsigned TextSID = RTDYLD_INVALID_SECTION_ID;
   unsigned ExceptTabSID = RTDYLD_INVALID_SECTION_ID;
-  ObjSectionToIDMap::iterator i, e;
 
-  for (i = SectionMap.begin(), e = SectionMap.end(); i != e; ++i) {
-    const SectionRef &Section = i->first;
+  for (const auto &Section : Obj.sections()) {
     StringRef Name;
     Section.getName(Name);
-    if (Name == "__eh_frame")
-      EHFrameSID = i->second;
-    else if (Name == "__text")
-      TextSID = i->second;
+
+    // Force emission of the __text, __eh_frame, and __gcc_except_tab sections
+    // if they're present. Otherwise call down to the impl to handle other
+    // sections that have already been emitted.
+    if (Name == "__text")
+      TextSID = findOrEmitSection(Obj, Section, true, SectionMap);
+    else if (Name == "__eh_frame")
+      EHFrameSID = findOrEmitSection(Obj, Section, false, SectionMap);
     else if (Name == "__gcc_except_tab")
-      ExceptTabSID = i->second;
-    else
-      impl().finalizeSection(ObjImg, i->second, Section);
+      ExceptTabSID = findOrEmitSection(Obj, Section, true, SectionMap);
+    else {
+      auto I = SectionMap.find(Section);
+      if (I != SectionMap.end())
+        impl().finalizeSection(Obj, I->second, Section);
+    }
   }
   UnregisteredEHFrameSections.push_back(
     EHFrameRelatedSections(EHFrameSID, TextSID, ExceptTabSID));
@@ -239,7 +245,8 @@ unsigned char *RuntimeDyldMachOCRTPBase<Impl>::processFDE(unsigned char *P,
 }
 
 static int64_t computeDelta(SectionEntry *A, SectionEntry *B) {
-  int64_t ObjDistance = A->ObjAddress - B->ObjAddress;
+  int64_t ObjDistance =
+    static_cast<int64_t>(A->ObjAddress) - static_cast<int64_t>(B->ObjAddress);
   int64_t MemDistance = A->LoadAddress - B->LoadAddress;
   return ObjDistance - MemDistance;
 }
@@ -247,8 +254,6 @@ static int64_t computeDelta(SectionEntry *A, SectionEntry *B) {
 template <typename Impl>
 void RuntimeDyldMachOCRTPBase<Impl>::registerEHFrames() {
 
-  if (!MemMgr)
-    return;
   for (int i = 0, e = UnregisteredEHFrameSections.size(); i != e; ++i) {
     EHFrameRelatedSections &SectionInfo = UnregisteredEHFrameSections[i];
     if (SectionInfo.EHFrameSID == RTDYLD_INVALID_SECTION_ID ||
@@ -271,22 +276,28 @@ void RuntimeDyldMachOCRTPBase<Impl>::registerEHFrames() {
       P = processFDE(P, DeltaForText, DeltaForEH);
     } while (P != End);
 
-    MemMgr->registerEHFrames(EHFrame->Address, EHFrame->LoadAddress,
-                             EHFrame->Size);
+    MemMgr.registerEHFrames(EHFrame->Address, EHFrame->LoadAddress,
+                            EHFrame->Size);
   }
   UnregisteredEHFrameSections.clear();
 }
 
 std::unique_ptr<RuntimeDyldMachO>
-RuntimeDyldMachO::create(Triple::ArchType Arch, RTDyldMemoryManager *MM) {
+RuntimeDyldMachO::create(Triple::ArchType Arch,
+                         RuntimeDyld::MemoryManager &MemMgr,
+                         RuntimeDyld::SymbolResolver &Resolver) {
   switch (Arch) {
   default:
     llvm_unreachable("Unsupported target for RuntimeDyldMachO.");
     break;
-  case Triple::arm: return make_unique<RuntimeDyldMachOARM>(MM);
-  case Triple::aarch64: return make_unique<RuntimeDyldMachOAArch64>(MM);
-  case Triple::x86: return make_unique<RuntimeDyldMachOI386>(MM);
-  case Triple::x86_64: return make_unique<RuntimeDyldMachOX86_64>(MM);
+  case Triple::arm:
+    return make_unique<RuntimeDyldMachOARM>(MemMgr, Resolver);
+  case Triple::aarch64:
+    return make_unique<RuntimeDyldMachOAArch64>(MemMgr, Resolver);
+  case Triple::x86:
+    return make_unique<RuntimeDyldMachOI386>(MemMgr, Resolver);
+  case Triple::x86_64:
+    return make_unique<RuntimeDyldMachOX86_64>(MemMgr, Resolver);
   }
 }
 

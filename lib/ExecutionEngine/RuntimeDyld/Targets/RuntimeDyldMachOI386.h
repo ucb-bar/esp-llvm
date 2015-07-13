@@ -22,8 +22,9 @@ public:
 
   typedef uint32_t TargetPtrT;
 
-  RuntimeDyldMachOI386(RTDyldMemoryManager *MM)
-      : RuntimeDyldMachOCRTPBase(MM) {}
+  RuntimeDyldMachOI386(RuntimeDyld::MemoryManager &MM,
+                       RuntimeDyld::SymbolResolver &Resolver)
+      : RuntimeDyldMachOCRTPBase(MM, Resolver) {}
 
   unsigned getMaxStubSize() override { return 0; }
 
@@ -166,20 +167,19 @@ private:
     uint32_t SectionBID =
         findOrEmitSection(Obj, SectionB, IsCode, ObjSectionToID);
 
-    if (Addend != AddrA - AddrB)
-      Error("Unexpected SECTDIFF relocation addend.");
+    // Compute the addend 'C' from the original expression 'A - B + C'.
+    Addend -= AddrA - AddrB;
 
     DEBUG(dbgs() << "Found SECTDIFF: AddrA: " << AddrA << ", AddrB: " << AddrB
                  << ", Addend: " << Addend << ", SectionA ID: " << SectionAID
                  << ", SectionAOffset: " << SectionAOffset
                  << ", SectionB ID: " << SectionBID
                  << ", SectionBOffset: " << SectionBOffset << "\n");
-    RelocationEntry R(SectionID, Offset, RelocType, 0, SectionAID,
-                      SectionAOffset, SectionBID, SectionBOffset, IsPCRel,
-                      Size);
+    RelocationEntry R(SectionID, Offset, RelocType, Addend, SectionAID,
+                      SectionAOffset, SectionBID, SectionBOffset,
+                      IsPCRel, Size);
 
     addRelocationForSection(R, SectionAID);
-    addRelocationForSection(R, SectionBID);
 
     return ++RelI;
   }

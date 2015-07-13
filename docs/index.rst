@@ -70,6 +70,7 @@ representation.
    CommandGuide/index
    GettingStarted
    GettingStartedVS
+   BuildingLLVMWithAutotools
    FAQ
    Lexicon
    HowToAddABuilder
@@ -83,6 +84,7 @@ representation.
    Passes
    YamlIO
    GetElementPtr
+   Frontend/PerformanceTips
    MCJITDesignAndImplementation
 
 :doc:`GettingStarted`
@@ -103,6 +105,10 @@ representation.
 :doc:`GettingStartedVS`
    An addendum to the main Getting Started guide for those using Visual Studio
    on Windows.
+
+:doc:`BuildingLLVMWithAutotools`
+   An addendum to the Getting Started guide with instructions for building LLVM
+   with the Autotools build system.
 
 :doc:`tutorial/index`
    Tutorials about using LLVM. Includes a tutorial about making a custom
@@ -150,6 +156,11 @@ representation.
   Answers to some very frequent questions about LLVM's most frequently
   misunderstood instruction.
 
+:doc:`Frontend/PerformanceTips`
+   A collection of tips for frontend authors on how to generate IR 
+   which LLVM is able to effectively optimize.
+
+
 Programming Documentation
 =========================
 
@@ -166,6 +177,7 @@ For developers of applications which use LLVM as a library.
    HowToSetUpLLVMStyleRTTI
    ProgrammersManual
    Extensions
+   LibFuzzer
 
 :doc:`LLVM Language Reference Manual <LangRef>`
   Defines the LLVM intermediate representation and the assembly form of the
@@ -207,6 +219,9 @@ For developers of applications which use LLVM as a library.
 :doc:`CompilerWriterInfo`
   A list of helpful links for compiler writers.
 
+:doc:`LibFuzzer`
+  A library for writing in-process guided fuzzers.
+
 Subsystem Documentation
 =======================
 
@@ -237,13 +252,15 @@ For API clients and LLVM developers.
    WritingAnLLVMPass
    HowToUseAttributes
    NVPTXUsage
-   R600Usage
+   AMDGPUUsage
    StackMaps
    InAlloca
    BigEndianNEON
    CoverageMappingFormat
    Statepoints
    MergeFunctions
+   BitSets
+   FaultMaps
 
 :doc:`WritingAnLLVMPass`
    Information on how to write LLVM transformations and analyses.
@@ -322,8 +339,8 @@ For API clients and LLVM developers.
 :doc:`NVPTXUsage`
    This document describes using the NVPTX back-end to compile GPU kernels.
 
-:doc:`R600Usage`
-   This document describes how to use the R600 back-end.
+:doc:`AMDGPUUsage`
+   This document describes how to use the AMDGPU back-end.
 
 :doc:`StackMaps`
   LLVM support for mapping instruction addresses to the location of
@@ -342,6 +359,12 @@ For API clients and LLVM developers.
 
 :doc:`MergeFunctions`
   Describes functions merging optimization.
+
+:doc:`InAlloca`
+  Description of the ``inalloca`` argument attribute.
+
+:doc:`FaultMaps`
+  LLVM support for folding control flow into faulting machine instructions.
 
 Development Process Documentation
 =================================

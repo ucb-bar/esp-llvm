@@ -78,7 +78,7 @@ void RISCVInstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
 }
 
 void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
-                                   StringRef Annot) {
+                                   StringRef Annot, const MCSubtargetInfo &STI) {
   printInstruction(MI, O);
   printAnnotation(O, Annot);
 }

@@ -16,6 +16,7 @@
 #include "ARMWinEHPrinter.h"
 #include "Error.h"
 #include "ObjDumper.h"
+#include "StackMapPrinter.h"
 #include "StreamWriter.h"
 #include "Win64EHDumper.h"
 #include "llvm/ADT/DenseMap.h"
@@ -60,7 +61,7 @@ public:
   void printCOFFExports() override;
   void printCOFFDirectives() override;
   void printCOFFBaseReloc() override;
-
+  void printStackMap() const override;
 private:
   void printSymbol(const SymbolRef &Sym);
   void printRelocation(const SectionRef &Section, const RelocationRef &Reloc);
@@ -71,7 +72,7 @@ private:
   void printBaseOfDataField(const pe32_header *Hdr);
   void printBaseOfDataField(const pe32plus_header *Hdr);
 
-  void printCodeViewLineTables(const SectionRef &Section);
+  void printCodeViewDebugInfo(const SectionRef &Section);
 
   void printCodeViewSymbolsSubsection(StringRef Subsection,
                                       const SectionRef &Section,
@@ -142,7 +143,7 @@ std::error_code COFFDumper::resolveSymbolName(const coff_section *Section,
     return EC;
   if (std::error_code EC = Symbol.getName(Name))
     return EC;
-  return object_error::success;
+  return std::error_code();
 }
 
 static const EnumEntry<COFF::MachineTypes> ImageFileMachineType[] = {
@@ -469,7 +470,7 @@ void COFFDumper::printBaseOfDataField(const pe32_header *Hdr) {
 
 void COFFDumper::printBaseOfDataField(const pe32plus_header *) {}
 
-void COFFDumper::printCodeViewLineTables(const SectionRef &Section) {
+void COFFDumper::printCodeViewDebugInfo(const SectionRef &Section) {
   StringRef Data;
   if (error(Section.getContents(Data)))
     return;
@@ -477,7 +478,7 @@ void COFFDumper::printCodeViewLineTables(const SectionRef &Section) {
   SmallVector<StringRef, 10> FunctionNames;
   StringMap<StringRef> FunctionLineTables;
 
-  ListScope D(W, "CodeViewLineTables");
+  ListScope D(W, "CodeViewDebugInfo");
   {
     // FIXME: Add more offset correctness checks.
     DataExtractor DE(Data, true, 4);
@@ -503,14 +504,17 @@ void COFFDumper::printCodeViewLineTables(const SectionRef &Section) {
         return;
       }
 
-      // Print the raw contents to simplify debugging if anything goes wrong
-      // afterwards.
       StringRef Contents = Data.substr(Offset, PayloadSize);
-      W.printBinaryBlock("Contents", Contents);
+      if (opts::CodeViewSubsectionBytes) {
+        // Print the raw contents to simplify debugging if anything goes wrong
+        // afterwards.
+        W.printBinaryBlock("Contents", Contents);
+      }
 
       switch (SubSectionType) {
       case COFF::DEBUG_SYMBOL_SUBSECTION:
-        printCodeViewSymbolsSubsection(Contents, Section, Offset);
+        if (opts::SectionSymbols)
+          printCodeViewSymbolsSubsection(Contents, Section, Offset);
         break;
       case COFF::DEBUG_LINE_TABLE_SUBSECTION: {
         // Holds a PC to file:line table.  Some data to parse this subsection is
@@ -695,9 +699,19 @@ void COFFDumper::printCodeViewSymbolsSubsection(StringRef Subsection,
       InFunctionScope = false;
       break;
     }
-    default:
+    default: {
+      if (opts::CodeViewSubsectionBytes) {
+        ListScope S(W, "Record");
+        W.printHex("Size", Size);
+        W.printHex("Type", Type);
+
+        StringRef Contents = DE.getData().substr(Offset, Size);
+        W.printBinaryBlock("Contents", Contents);
+      }
+
       Offset += Size;
       break;
+    }
     }
   }
 
@@ -747,8 +761,8 @@ void COFFDumper::printSections() {
       }
     }
 
-    if (Name == ".debug$S" && opts::CodeViewLineTables)
-      printCodeViewLineTables(Sec);
+    if (Name == ".debug$S" && opts::CodeView)
+      printCodeViewDebugInfo(Sec);
 
     if (opts::SectionData &&
         !(Section->Characteristics & COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA)) {
@@ -1126,4 +1140,33 @@ void COFFDumper::printCOFFBaseReloc() {
     W.printString("Type", getBaseRelocTypeName(Type));
     W.printHex("Address", RVA);
   }
+}
+
+void COFFDumper::printStackMap() const {
+  object::SectionRef StackMapSection;
+  for (auto Sec : Obj->sections()) {
+    StringRef Name;
+    Sec.getName(Name);
+    if (Name == ".llvm_stackmaps") {
+      StackMapSection = Sec;
+      break;
+    }
+  }
+
+  if (StackMapSection == object::SectionRef())
+    return;
+
+  StringRef StackMapContents;
+  StackMapSection.getContents(StackMapContents);
+  ArrayRef<uint8_t> StackMapContentsArray(
+      reinterpret_cast<const uint8_t*>(StackMapContents.data()),
+      StackMapContents.size());
+
+  if (Obj->isLittleEndian())
+    prettyPrintStackMap(
+                      llvm::outs(),
+                      StackMapV1Parser<support::little>(StackMapContentsArray));
+  else
+    prettyPrintStackMap(llvm::outs(),
+                        StackMapV1Parser<support::big>(StackMapContentsArray));
 }

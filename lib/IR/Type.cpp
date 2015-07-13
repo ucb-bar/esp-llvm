@@ -238,6 +238,7 @@ IntegerType *Type::getInt8Ty(LLVMContext &C) { return &C.pImpl->Int8Ty; }
 IntegerType *Type::getInt16Ty(LLVMContext &C) { return &C.pImpl->Int16Ty; }
 IntegerType *Type::getInt32Ty(LLVMContext &C) { return &C.pImpl->Int32Ty; }
 IntegerType *Type::getInt64Ty(LLVMContext &C) { return &C.pImpl->Int64Ty; }
+IntegerType *Type::getInt128Ty(LLVMContext &C) { return &C.pImpl->Int128Ty; }
 
 IntegerType *Type::getIntNTy(LLVMContext &C, unsigned N) {
   return IntegerType::get(C, N);
@@ -306,12 +307,13 @@ IntegerType *IntegerType::get(LLVMContext &C, unsigned NumBits) {
   
   // Check for the built-in integer types
   switch (NumBits) {
-  case  1: return cast<IntegerType>(Type::getInt1Ty(C));
-  case  8: return cast<IntegerType>(Type::getInt8Ty(C));
-  case 16: return cast<IntegerType>(Type::getInt16Ty(C));
-  case 32: return cast<IntegerType>(Type::getInt32Ty(C));
-  case 64: return cast<IntegerType>(Type::getInt64Ty(C));
-  default: 
+  case   1: return cast<IntegerType>(Type::getInt1Ty(C));
+  case   8: return cast<IntegerType>(Type::getInt8Ty(C));
+  case  16: return cast<IntegerType>(Type::getInt16Ty(C));
+  case  32: return cast<IntegerType>(Type::getInt32Ty(C));
+  case  64: return cast<IntegerType>(Type::getInt64Ty(C));
+  case 128: return cast<IntegerType>(Type::getInt128Ty(C));
+  default:
     break;
   }
   
@@ -708,9 +710,10 @@ VectorType::VectorType(Type *ElType, unsigned NumEl)
 VectorType *VectorType::get(Type *elementType, unsigned NumElements) {
   Type *ElementType = const_cast<Type*>(elementType);
   assert(NumElements > 0 && "#Elements of a VectorType must be greater than 0");
-  assert(isValidElementType(ElementType) &&
-         "Elements of a VectorType must be a primitive type");
-  
+  assert(isValidElementType(ElementType) && "Element type of a VectorType must "
+                                            "be an integer, floating point, or "
+                                            "pointer type.");
+
   LLVMContextImpl *pImpl = ElementType->getContext().pImpl;
   VectorType *&Entry = ElementType->getContext().pImpl
     ->VectorTypes[std::make_pair(ElementType, NumElements)];
@@ -762,4 +765,8 @@ PointerType *Type::getPointerTo(unsigned addrs) {
 bool PointerType::isValidElementType(Type *ElemTy) {
   return !ElemTy->isVoidTy() && !ElemTy->isLabelTy() &&
          !ElemTy->isMetadataTy();
+}
+
+bool PointerType::isLoadableOrStorableType(Type *ElemTy) {
+  return isValidElementType(ElemTy) && !ElemTy->isFunctionTy();
 }

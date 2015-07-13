@@ -6,9 +6,9 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/PassManager.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include <cctype>
@@ -107,7 +107,7 @@ class NumberExprAST : public ExprAST {
 
 public:
   NumberExprAST(double val) : Val(val) {}
-  virtual Value *Codegen();
+  Value *Codegen() override;
 };
 
 /// VariableExprAST - Expression class for referencing a variable, like "a".
@@ -116,7 +116,7 @@ class VariableExprAST : public ExprAST {
 
 public:
   VariableExprAST(const std::string &name) : Name(name) {}
-  virtual Value *Codegen();
+  Value *Codegen() override;
 };
 
 /// BinaryExprAST - Expression class for a binary operator.
@@ -127,7 +127,7 @@ class BinaryExprAST : public ExprAST {
 public:
   BinaryExprAST(char op, ExprAST *lhs, ExprAST *rhs)
       : Op(op), LHS(lhs), RHS(rhs) {}
-  virtual Value *Codegen();
+  Value *Codegen() override;
 };
 
 /// CallExprAST - Expression class for function calls.
@@ -138,7 +138,7 @@ class CallExprAST : public ExprAST {
 public:
   CallExprAST(const std::string &callee, std::vector<ExprAST *> &args)
       : Callee(callee), Args(args) {}
-  virtual Value *Codegen();
+  Value *Codegen() override;
 };
 
 /// PrototypeAST - This class represents the "prototype" for a function,
@@ -447,18 +447,18 @@ private:
 };
 
 class HelpingMemoryManager : public SectionMemoryManager {
-  HelpingMemoryManager(const HelpingMemoryManager &) LLVM_DELETED_FUNCTION;
-  void operator=(const HelpingMemoryManager &) LLVM_DELETED_FUNCTION;
+  HelpingMemoryManager(const HelpingMemoryManager &) = delete;
+  void operator=(const HelpingMemoryManager &) = delete;
 
 public:
   HelpingMemoryManager(MCJITHelper *Helper) : MasterHelper(Helper) {}
-  virtual ~HelpingMemoryManager() {}
+  ~HelpingMemoryManager() override {}
 
   /// This method returns the address of the specified symbol.
   /// Our implementation will attempt to find symbols in other
   /// modules associated with the MCJITHelper to cross link symbols
   /// from one generated module to another.
-  virtual uint64_t getSymbolAddress(const std::string &Name) override;
+  uint64_t getSymbolAddress(const std::string &Name) override;
 
 private:
   MCJITHelper *MasterHelper;
@@ -556,12 +556,11 @@ void *MCJITHelper::getPointerToFunction(Function *F) {
     }
 
     // Create a function pass manager for this engine
-    FunctionPassManager *FPM = new FunctionPassManager(OpenModule);
+    auto *FPM = new legacy::FunctionPassManager(OpenModule);
 
     // Set up the optimizer pipeline.  Start with registering info about how the
     // target lays out data structures.
-    OpenModule->setDataLayout(NewEngine->getDataLayout());
-    FPM->add(new DataLayoutPass());
+    OpenModule->setDataLayout(*NewEngine->getDataLayout());
     // Provide basic AliasAnalysis support for GVN.
     FPM->add(createBasicAliasAnalysisPass());
     // Promote allocas to registers.

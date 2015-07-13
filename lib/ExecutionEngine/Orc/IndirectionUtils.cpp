@@ -1,157 +1,181 @@
+//===---- IndirectionUtils.cpp - Utilities for call indirection in Orc ----===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is distributed under the University of Illinois Open Source
+// License. See LICENSE.TXT for details.
+//
+//===----------------------------------------------------------------------===//
+
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ExecutionEngine/Orc/IndirectionUtils.h"
-#include "llvm/ExecutionEngine/Orc/CloneSubModule.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 #include <set>
-
-using namespace llvm;
+#include <sstream>
 
 namespace llvm {
+namespace orc {
 
-JITIndirections makeCallsSingleIndirect(
-    Module &M, const std::function<bool(const Function &)> &ShouldIndirect,
-    const char *JITImplSuffix, const char *JITAddrSuffix) {
-  std::vector<Function *> Worklist;
-  std::vector<std::string> FuncNames;
-
-  for (auto &F : M)
-    if (ShouldIndirect(F) && (F.user_begin() != F.user_end())) {
-      Worklist.push_back(&F);
-      FuncNames.push_back(F.getName());
-    }
-
-  for (auto *F : Worklist) {
-    GlobalVariable *FImplAddr = new GlobalVariable(
-        M, F->getType(), false, GlobalValue::ExternalLinkage,
-        Constant::getNullValue(F->getType()), F->getName() + JITAddrSuffix,
-        nullptr, GlobalValue::NotThreadLocal, 0, true);
-    FImplAddr->setVisibility(GlobalValue::HiddenVisibility);
-
-    for (auto *U : F->users()) {
-      assert(isa<Instruction>(U) && "Cannot indirect non-instruction use");
-      IRBuilder<> Builder(cast<Instruction>(U));
-      U->replaceUsesOfWith(F, Builder.CreateLoad(FImplAddr));
-    }
-  }
-
-  return JITIndirections(
-      FuncNames, [=](StringRef S) -> std::string { return std::string(S); },
-      [=](StringRef S)
-          -> std::string { return std::string(S) + JITAddrSuffix; });
+Constant* createIRTypedAddress(FunctionType &FT, TargetAddress Addr) {
+  Constant *AddrIntVal =
+    ConstantInt::get(Type::getInt64Ty(FT.getContext()), Addr);
+  Constant *AddrPtrVal =
+    ConstantExpr::getCast(Instruction::IntToPtr, AddrIntVal,
+                          PointerType::get(&FT, 0));
+  return AddrPtrVal;
 }
 
-JITIndirections makeCallsDoubleIndirect(
-    Module &M, const std::function<bool(const Function &)> &ShouldIndirect,
-    const char *JITImplSuffix, const char *JITAddrSuffix) {
+GlobalVariable* createImplPointer(PointerType &PT, Module &M,
+                                  const Twine &Name, Constant *Initializer) {
+  auto IP = new GlobalVariable(M, &PT, false, GlobalValue::ExternalLinkage,
+                               Initializer, Name, nullptr,
+                               GlobalValue::NotThreadLocal, 0, true);
+  IP->setVisibility(GlobalValue::HiddenVisibility);
+  return IP;
+}
 
-  std::vector<Function *> Worklist;
-  std::vector<std::string> FuncNames;
-
-  for (auto &F : M)
-    if (!F.isDeclaration() && !F.hasAvailableExternallyLinkage() &&
-        ShouldIndirect(F))
-      Worklist.push_back(&F);
-
-  for (auto *F : Worklist) {
-    std::string OrigName = F->getName();
-    F->setName(OrigName + JITImplSuffix);
-    FuncNames.push_back(OrigName);
-
-    GlobalVariable *FImplAddr = new GlobalVariable(
-        M, F->getType(), false, GlobalValue::ExternalLinkage,
-        Constant::getNullValue(F->getType()), OrigName + JITAddrSuffix, nullptr,
-        GlobalValue::NotThreadLocal, 0, true);
-    FImplAddr->setVisibility(GlobalValue::HiddenVisibility);
-
-    Function *FRedirect =
-        Function::Create(F->getFunctionType(), F->getLinkage(), OrigName, &M);
-
-    F->replaceAllUsesWith(FRedirect);
-
-    BasicBlock *EntryBlock =
-        BasicBlock::Create(M.getContext(), "entry", FRedirect);
-
-    IRBuilder<> Builder(EntryBlock);
-    LoadInst *FImplLoadedAddr = Builder.CreateLoad(FImplAddr);
-
-    std::vector<Value *> CallArgs;
-    for (Value &Arg : FRedirect->args())
-      CallArgs.push_back(&Arg);
-    CallInst *Call = Builder.CreateCall(FImplLoadedAddr, CallArgs);
-    Call->setTailCall();
+void makeStub(Function &F, GlobalVariable &ImplPointer) {
+  assert(F.isDeclaration() && "Can't turn a definition into a stub.");
+  assert(F.getParent() && "Function isn't in a module.");
+  Module &M = *F.getParent();
+  BasicBlock *EntryBlock = BasicBlock::Create(M.getContext(), "entry", &F);
+  IRBuilder<> Builder(EntryBlock);
+  LoadInst *ImplAddr = Builder.CreateLoad(&ImplPointer);
+  std::vector<Value*> CallArgs;
+  for (auto &A : F.args())
+    CallArgs.push_back(&A);
+  CallInst *Call = Builder.CreateCall(ImplAddr, CallArgs);
+  Call->setTailCall();
+  Call->setAttributes(F.getAttributes());
+  if (F.getReturnType()->isVoidTy())
+    Builder.CreateRetVoid();
+  else
     Builder.CreateRet(Call);
-  }
-
-  return JITIndirections(
-      FuncNames, [=](StringRef S)
-                     -> std::string { return std::string(S) + JITImplSuffix; },
-      [=](StringRef S)
-          -> std::string { return std::string(S) + JITAddrSuffix; });
 }
 
-std::vector<std::unique_ptr<Module>>
-explode(const Module &OrigMod,
-        const std::function<bool(const Function &)> &ShouldExtract) {
+// Utility class for renaming global values and functions during partitioning.
+class GlobalRenamer {
+public:
 
-  std::vector<std::unique_ptr<Module>> NewModules;
+  static bool needsRenaming(const Value &New) {
+    if (!New.hasName() || New.getName().startswith("\01L"))
+      return true;
+    return false;
+  }
 
-  // Split all the globals, non-indirected functions, etc. into a single module.
-  auto ExtractGlobalVars = [&](GlobalVariable &New, const GlobalVariable &Orig,
-                               ValueToValueMapTy &VMap) {
-    copyGVInitializer(New, Orig, VMap);
-    if (New.getLinkage() == GlobalValue::PrivateLinkage) {
-      New.setLinkage(GlobalValue::ExternalLinkage);
-      New.setVisibility(GlobalValue::HiddenVisibility);
+  const std::string& getRename(const Value &Orig) {
+    // See if we have a name for this global.
+    {
+      auto I = Names.find(&Orig);
+      if (I != Names.end())
+        return I->second;
     }
-  };
 
-  auto ExtractNonImplFunctions =
-      [&](Function &New, const Function &Orig, ValueToValueMapTy &VMap) {
-        if (!ShouldExtract(New))
-          copyFunctionBody(New, Orig, VMap);
-      };
+    // Nope. Create a new one.
+    // FIXME: Use a more robust uniquing scheme. (This may blow up if the user
+    //        writes a "__orc_anon[[:digit:]]* method).
+    unsigned ID = Names.size();
+    std::ostringstream NameStream;
+    NameStream << "__orc_anon" << ID++;
+    auto I = Names.insert(std::make_pair(&Orig, NameStream.str()));
+    return I.first->second;
+  }
+private:
+  DenseMap<const Value*, std::string> Names;
+};
 
-  NewModules.push_back(CloneSubModule(OrigMod, ExtractGlobalVars,
-                                      ExtractNonImplFunctions, true));
+static void raiseVisibilityOnValue(GlobalValue &V, GlobalRenamer &R) {
+  if (V.hasLocalLinkage()) {
+    if (R.needsRenaming(V))
+      V.setName(R.getRename(V));
+    V.setLinkage(GlobalValue::ExternalLinkage);
+    V.setVisibility(GlobalValue::HiddenVisibility);
+  }
+  V.setUnnamedAddr(false);
+  assert(!R.needsRenaming(V) && "Invalid global name.");
+}
 
-  // Preserve initializers for Common linkage vars, and make private linkage
-  // globals external: they are now provided by the globals module extracted
-  // above.
-  auto DropGlobalVars = [&](GlobalVariable &New, const GlobalVariable &Orig,
-                            ValueToValueMapTy &VMap) {
-    if (New.getLinkage() == GlobalValue::CommonLinkage)
-      copyGVInitializer(New, Orig, VMap);
-    else if (New.getLinkage() == GlobalValue::PrivateLinkage)
-      New.setLinkage(GlobalValue::ExternalLinkage);
-  };
+void makeAllSymbolsExternallyAccessible(Module &M) {
+  GlobalRenamer Renamer;
 
-  // Split each 'impl' function out in to its own module.
-  for (const auto &Func : OrigMod) {
-    if (Func.isDeclaration() || !ShouldExtract(Func))
-      continue;
+  for (auto &F : M)
+    raiseVisibilityOnValue(F, Renamer);
 
-    auto ExtractNamedFunction =
-        [&](Function &New, const Function &Orig, ValueToValueMapTy &VMap) {
-          if (New.getName() == Func.getName())
-            copyFunctionBody(New, Orig, VMap);
-        };
+  for (auto &GV : M.globals())
+    raiseVisibilityOnValue(GV, Renamer);
+}
 
-    NewModules.push_back(
-        CloneSubModule(OrigMod, DropGlobalVars, ExtractNamedFunction, false));
+Function* cloneFunctionDecl(Module &Dst, const Function &F,
+                            ValueToValueMapTy *VMap) {
+  assert(F.getParent() != &Dst && "Can't copy decl over existing function.");
+  Function *NewF =
+    Function::Create(cast<FunctionType>(F.getType()->getElementType()),
+                     F.getLinkage(), F.getName(), &Dst);
+  NewF->copyAttributesFrom(&F);
+
+  if (VMap) {
+    (*VMap)[&F] = NewF;
+    auto NewArgI = NewF->arg_begin();
+    for (auto ArgI = F.arg_begin(), ArgE = F.arg_end(); ArgI != ArgE;
+         ++ArgI, ++NewArgI)
+      (*VMap)[ArgI] = NewArgI;
   }
 
-  return NewModules;
+  return NewF;
 }
 
-std::vector<std::unique_ptr<Module>>
-explode(const Module &OrigMod, const JITIndirections &Indirections) {
-  std::set<std::string> ImplNames;
+void moveFunctionBody(Function &OrigF, ValueToValueMapTy &VMap,
+                      ValueMaterializer *Materializer,
+                      Function *NewF) {
+  assert(!OrigF.isDeclaration() && "Nothing to move");
+  if (!NewF)
+    NewF = cast<Function>(VMap[&OrigF]);
+  else
+    assert(VMap[&OrigF] == NewF && "Incorrect function mapping in VMap.");
+  assert(NewF && "Function mapping missing from VMap.");
+  assert(NewF->getParent() != OrigF.getParent() &&
+         "moveFunctionBody should only be used to move bodies between "
+         "modules.");
 
-  for (const auto &FuncName : Indirections.IndirectedNames)
-    ImplNames.insert(Indirections.GetImplName(FuncName));
+  SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
+  CloneFunctionInto(NewF, &OrigF, VMap, /*ModuleLevelChanges=*/true, Returns,
+                    "", nullptr, nullptr, Materializer);
+  OrigF.deleteBody();
+}
 
-  return explode(
-      OrigMod, [&](const Function &F) { return ImplNames.count(F.getName()); });
+GlobalVariable* cloneGlobalVariableDecl(Module &Dst, const GlobalVariable &GV,
+                                        ValueToValueMapTy *VMap) {
+  assert(GV.getParent() != &Dst && "Can't copy decl over existing global var.");
+  GlobalVariable *NewGV = new GlobalVariable(
+      Dst, GV.getType()->getElementType(), GV.isConstant(),
+      GV.getLinkage(), nullptr, GV.getName(), nullptr,
+      GV.getThreadLocalMode(), GV.getType()->getAddressSpace());
+  NewGV->copyAttributesFrom(&GV);
+  if (VMap)
+    (*VMap)[&GV] = NewGV;
+  return NewGV;
 }
+
+void moveGlobalVariableInitializer(GlobalVariable &OrigGV,
+                                   ValueToValueMapTy &VMap,
+                                   ValueMaterializer *Materializer,
+                                   GlobalVariable *NewGV) {
+  assert(OrigGV.hasInitializer() && "Nothing to move");
+  if (!NewGV)
+    NewGV = cast<GlobalVariable>(VMap[&OrigGV]);
+  else
+    assert(VMap[&OrigGV] == NewGV &&
+           "Incorrect global variable mapping in VMap.");
+  assert(NewGV->getParent() != OrigGV.getParent() &&
+         "moveGlobalVariable should only be used to move initializers between "
+         "modules");
+
+  NewGV->setInitializer(MapValue(OrigGV.getInitializer(), VMap, RF_None,
+                                 nullptr, Materializer));
 }
+
+} // End namespace orc.
+} // End namespace llvm.

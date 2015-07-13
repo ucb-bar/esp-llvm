@@ -33,9 +33,8 @@ using namespace llvm;
 void SparcInstrInfo::anchor() {}
 
 SparcInstrInfo::SparcInstrInfo(SparcSubtarget &ST)
-  : SparcGenInstrInfo(SP::ADJCALLSTACKDOWN, SP::ADJCALLSTACKUP),
-    RI(ST), Subtarget(ST) {
-}
+    : SparcGenInstrInfo(SP::ADJCALLSTACKDOWN, SP::ADJCALLSTACKUP), RI(),
+      Subtarget(ST) {}
 
 /// isLoadFromStackSlot - If the specified machine instruction is a direct
 /// load from a stack slot, return the virtual or physical register number of
@@ -230,7 +229,7 @@ bool SparcInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
 unsigned
 SparcInstrInfo::InsertBranch(MachineBasicBlock &MBB,MachineBasicBlock *TBB,
                              MachineBasicBlock *FBB,
-                             const SmallVectorImpl<MachineOperand> &Cond,
+                             ArrayRef<MachineOperand> Cond,
                              DebugLoc DL) const {
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");
   assert((Cond.size() == 1 || Cond.size() == 0) &&

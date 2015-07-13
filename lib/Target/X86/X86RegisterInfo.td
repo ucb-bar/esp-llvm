@@ -302,6 +302,11 @@ def CR15 : X86Reg<"cr15", 15>;
 def EIZ : X86Reg<"eiz", 4>;
 def RIZ : X86Reg<"riz", 4>;
 
+// Bound registers, used in MPX instructions
+def BND0 : X86Reg<"bnd0",   0>;
+def BND1 : X86Reg<"bnd1",   1>;
+def BND2 : X86Reg<"bnd2",   2>;
+def BND3 : X86Reg<"bnd3",   3>;
 
 //===----------------------------------------------------------------------===//
 // Register Class Definitions... now that we have all of the pieces, define the
@@ -325,7 +330,7 @@ def GR8 : RegisterClass<"X86", [i8],  8,
                              R8B, R9B, R10B, R11B, R14B, R15B, R12B, R13B)> {
   let AltOrders = [(sub GR8, AH, BH, CH, DH)];
   let AltOrderSelect = [{
-    return MF.getTarget().getSubtarget<X86Subtarget>().is64Bit();
+    return MF.getSubtarget<X86Subtarget>().is64Bit();
   }];
 }
 
@@ -377,7 +382,7 @@ def GR8_NOREX : RegisterClass<"X86", [i8], 8,
                               (add AL, CL, DL, AH, CH, DH, BL, BH)> {
   let AltOrders = [(sub GR8_NOREX, AH, BH, CH, DH)];
   let AltOrderSelect = [{
-    return MF.getTarget().getSubtarget<X86Subtarget>().is64Bit();
+    return MF.getSubtarget<X86Subtarget>().is64Bit();
   }];
 }
 // GR16_NOREX - GR16 registers which do not require a REX prefix.
@@ -484,3 +489,6 @@ def VK8WM   : RegisterClass<"X86", [v8i1],  8,  (sub VK8, K0)> {let Size = 8;}
 def VK16WM  : RegisterClass<"X86", [v16i1], 16, (add VK8WM)>   {let Size = 16;}
 def VK32WM  : RegisterClass<"X86", [v32i1], 32, (add VK16WM)> {let Size = 32;}
 def VK64WM  : RegisterClass<"X86", [v64i1], 64, (add VK32WM)> {let Size = 64;}
+
+// Bound registers
+def BNDR : RegisterClass<"X86", [v2i64], 128, (sequence "BND%u", 0, 3)>;

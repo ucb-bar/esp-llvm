@@ -117,24 +117,24 @@ def F32ConstOne : Operand<f32>, PatLeaf<(f32 fpimm)>, SDNodeXForm<fpimm, [{
 //===----------------------------------------------------------------------===//
 
 
-def hasAtomRedG32 : Predicate<"Subtarget.hasAtomRedG32()">;
-def hasAtomRedS32 : Predicate<"Subtarget.hasAtomRedS32()">;
-def hasAtomRedGen32 : Predicate<"Subtarget.hasAtomRedGen32()">;
+def hasAtomRedG32 : Predicate<"Subtarget->hasAtomRedG32()">;
+def hasAtomRedS32 : Predicate<"Subtarget->hasAtomRedS32()">;
+def hasAtomRedGen32 : Predicate<"Subtarget->hasAtomRedGen32()">;
 def useAtomRedG32forGen32 :
-  Predicate<"!Subtarget.hasAtomRedGen32() && Subtarget.hasAtomRedG32()">;
-def hasBrkPt : Predicate<"Subtarget.hasBrkPt()">;
-def hasAtomRedG64 : Predicate<"Subtarget.hasAtomRedG64()">;
-def hasAtomRedS64 : Predicate<"Subtarget.hasAtomRedS64()">;
-def hasAtomRedGen64 : Predicate<"Subtarget.hasAtomRedGen64()">;
+  Predicate<"!Subtarget->hasAtomRedGen32() && Subtarget->hasAtomRedG32()">;
+def hasBrkPt : Predicate<"Subtarget->hasBrkPt()">;
+def hasAtomRedG64 : Predicate<"Subtarget->hasAtomRedG64()">;
+def hasAtomRedS64 : Predicate<"Subtarget->hasAtomRedS64()">;
+def hasAtomRedGen64 : Predicate<"Subtarget->hasAtomRedGen64()">;
 def useAtomRedG64forGen64 :
-  Predicate<"!Subtarget.hasAtomRedGen64() && Subtarget.hasAtomRedG64()">;
-def hasAtomAddF32 : Predicate<"Subtarget.hasAtomAddF32()">;
-def hasVote : Predicate<"Subtarget.hasVote()">;
-def hasDouble : Predicate<"Subtarget.hasDouble()">;
-def reqPTX20 : Predicate<"Subtarget.reqPTX20()">;
-def hasLDG : Predicate<"Subtarget.hasLDG()">;
-def hasLDU : Predicate<"Subtarget.hasLDU()">;
-def hasGenericLdSt : Predicate<"Subtarget.hasGenericLdSt()">;
+  Predicate<"!Subtarget->hasAtomRedGen64() && Subtarget->hasAtomRedG64()">;
+def hasAtomAddF32 : Predicate<"Subtarget->hasAtomAddF32()">;
+def hasVote : Predicate<"Subtarget->hasVote()">;
+def hasDouble : Predicate<"Subtarget->hasDouble()">;
+def reqPTX20 : Predicate<"Subtarget->reqPTX20()">;
+def hasLDG : Predicate<"Subtarget->hasLDG()">;
+def hasLDU : Predicate<"Subtarget->hasLDU()">;
+def hasGenericLdSt : Predicate<"Subtarget->hasGenericLdSt()">;
 
 def doF32FTZ : Predicate<"useF32FTZ()">;
 def doNoF32FTZ : Predicate<"!useF32FTZ()">;
@@ -150,12 +150,12 @@ def do_DIVF32_FULL : Predicate<"getDivF32Level()==1">;
 def do_SQRTF32_APPROX : Predicate<"!usePrecSqrtF32()">;
 def do_SQRTF32_RN : Predicate<"usePrecSqrtF32()">;
 
-def hasHWROT32 : Predicate<"Subtarget.hasHWROT32()">;
-def noHWROT32 : Predicate<"!Subtarget.hasHWROT32()">;
+def hasHWROT32 : Predicate<"Subtarget->hasHWROT32()">;
+def noHWROT32 : Predicate<"!Subtarget->hasHWROT32()">;
 
 def true : Predicate<"1">;
 
-def hasPTX31 : Predicate<"Subtarget.getPTXVersion() >= 31">;
+def hasPTX31 : Predicate<"Subtarget->getPTXVersion() >= 31">;
 
 
 //===----------------------------------------------------------------------===//
@@ -452,13 +452,13 @@ def Int4Const : PatLeaf<(imm), [{
 def SHL2MUL32 : SDNodeXForm<imm, [{
   const APInt &v = N->getAPIntValue();
   APInt temp(32, 1);
-  return CurDAG->getTargetConstant(temp.shl(v), MVT::i32);
+  return CurDAG->getTargetConstant(temp.shl(v), SDLoc(N), MVT::i32);
 }]>;
 
 def SHL2MUL16 : SDNodeXForm<imm, [{
   const APInt &v = N->getAPIntValue();
   APInt temp(16, 1);
-  return CurDAG->getTargetConstant(temp.shl(v), MVT::i16);
+  return CurDAG->getTargetConstant(temp.shl(v), SDLoc(N), MVT::i16);
 }]>;
 
 def MULWIDES64
@@ -1138,7 +1138,7 @@ def ROT32imm_sw : NVPTXInst<(outs Int32Regs:$dst),
     []>;
 
 def SUB_FRM_32 : SDNodeXForm<imm, [{
-    return CurDAG->getTargetConstant(32-N->getZExtValue(), MVT::i32);
+    return CurDAG->getTargetConstant(32-N->getZExtValue(), SDLoc(N), MVT::i32);
 }]>;
 
 def : Pat<(rotl Int32Regs:$src, (i32 imm:$amt)),
@@ -1189,7 +1189,7 @@ def ROT64imm_sw : NVPTXInst<(outs Int64Regs:$dst), (ins Int64Regs:$src,
     []>;
 
 def SUB_FRM_64 : SDNodeXForm<imm, [{
-    return CurDAG->getTargetConstant(64-N->getZExtValue(), MVT::i32);
+    return CurDAG->getTargetConstant(64-N->getZExtValue(), SDLoc(N), MVT::i32);
 }]>;
 
 def : Pat<(rotl Int64Regs:$src, (i32 imm:$amt)),
