@@ -80,7 +80,7 @@ unsigned RISCVFrameLowering::ehDataReg(unsigned I) const {
 void RISCVFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const {
   assert(&MBB == &MF.front() && "Shrink-wrapping not yet implemented");
   MachineFrameInfo *MFI    = MF.getFrameInfo();
-  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
   const RISCVRegisterInfo *RegInfo =
     static_cast<const RISCVRegisterInfo*>(MF.getSubtarget().getRegisterInfo());
   const RISCVInstrInfo &TII =
@@ -177,7 +177,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
   MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
   MachineFrameInfo *MFI            = MF.getFrameInfo();
-  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
   const RISCVRegisterInfo *RegInfo =
     static_cast<const RISCVRegisterInfo*>(MF.getSubtarget().getRegisterInfo());
   const RISCVInstrInfo &TII =
@@ -295,7 +295,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
                                      RegScavenger *RS) const {
   MachineRegisterInfo &MRI = MF.getRegInfo();
   MachineFrameInfo *MFI = MF.getFrameInfo();
-  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
   const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
 
@@ -308,7 +308,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
     RISCVFI->createEhDataRegsFI();
 
   // Set scavenging frame index if necessary.
-  uint64_t MaxSPOffset = MF.getInfo<RISCVMachineFunctionInfo>()->getIncomingArgSize() +
+  uint64_t MaxSPOffset = MF.getInfo<RISCVFunctionInfo>()->getIncomingArgSize() +
     MFI->estimateStackSize(MF);
 
   if (isInt<12>(MaxSPOffset))

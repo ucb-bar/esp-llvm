@@ -644,398 +644,6 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDLoc DL, CCValAssign &VA,
   }
 }
 
-/// This function returns true if CallSym is a long double emulation routine.
-static bool isF128SoftLibCall(const char *CallSym) {
-  const char *const LibCalls[] =
-    {"__addtf3", "__divtf3", "__eqtf2", "__extenddftf2", "__extendsftf2",
-     "__fixtfdi", "__fixtfsi", "__fixtfti", "__fixunstfdi", "__fixunstfsi",
-     "__fixunstfti", "__floatditf", "__floatsitf", "__floattitf",
-     "__floatunditf", "__floatunsitf", "__floatuntitf", "__getf2", "__gttf2",
-     "__letf2", "__lttf2", "__multf3", "__netf2", "__powitf2", "__subtf3",
-     "__trunctfdf2", "__trunctfsf2", "__unordtf2",
-     "ceill", "copysignl", "cosl", "exp2l", "expl", "floorl", "fmal", "fmodl",
-     "log10l", "log2l", "logl", "nearbyintl", "powl", "rintl", "sinl", "sqrtl",
-     "truncl"};
-
-  const char * const *End = LibCalls + array_lengthof(LibCalls);
-
-  // Check that LibCalls is sorted alphabetically.
-  RISCVTargetLowering::LTStr Comp;
-
-#ifndef NDEBUG
-  for (const char * const *I = LibCalls; I < End - 1; ++I)
-    assert(Comp(*I, *(I + 1)));
-#endif
-
-  return std::binary_search(LibCalls, End, CallSym, Comp);
-}
-
-/// This function returns true if Ty is fp128 or i128 which was originally a
-/// fp128.
-static bool originalTypeIsF128(const Type *Ty, const SDNode *CallNode) {
-  if (Ty->isFP128Ty())
-    return true;
-
-  const ExternalSymbolSDNode *ES =
-    dyn_cast_or_null<const ExternalSymbolSDNode>(CallNode);
-
-  // If the Ty is i128 and the function being called is a long double emulation
-  // routine, then the original type is f128.
-  return (ES && Ty->isIntegerTy(128) && isF128SoftLibCall(ES->getSymbol()));
-}
-
-//RISCVCC Implementation
-RISCVTargetLowering::RISCVCC::RISCVCC(CallingConv::ID CC, bool IsRV32_,
-                                   CCState &Info, const RISCVSubtarget &Subtarget)
-  : CCInfo(Info), CallConv(CC), IsRV32(IsRV32_), Subtarget(Subtarget) {
-  // Pre-allocate reserved argument area.
-  //TODO: is this entirely unused in RISCV
-  CCInfo.AllocateStack(reservedArgArea(), 1);
-}
-
-void RISCVTargetLowering::RISCVCC::
-analyzeCallOperands(const SmallVectorImpl<ISD::OutputArg> &Args,
-                    bool IsVarArg, bool IsSoftFloat, const SDNode *CallNode,
-                    std::vector<ArgListEntry> &FuncArgs) {
-  assert((CallConv != CallingConv::Fast || !IsVarArg) &&
-         "CallingConv::Fast shouldn't be used for vararg functions.");
-
-  unsigned NumOpnds = Args.size();
-  llvm::CCAssignFn *FixedFn = fixedArgFn(), *VarFn = varArgFn();
-
-  for (unsigned I = 0; I != NumOpnds; ++I) {
-    MVT ArgVT = Args[I].VT;
-    ISD::ArgFlagsTy ArgFlags = Args[I].Flags;
-    bool R;
-
-    if (ArgFlags.isByVal()) {
-      handleByValArg(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags);
-      continue;
-    }
-
-    if (IsVarArg && !Args[I].IsFixed)
-      if(ArgVT.isFloatingPoint()) //Bitconvert floats
-        R = VarFn(I, ArgVT, ArgVT, CCValAssign::BCvt, ArgFlags, CCInfo);
-      else 
-        R = VarFn(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags, CCInfo);
-    else {
-      MVT RegVT = getRegVT(ArgVT, FuncArgs[Args[I].OrigArgIndex].Ty, CallNode,
-                           IsSoftFloat);
-      R = FixedFn(I, ArgVT, RegVT, CCValAssign::Full, ArgFlags, CCInfo);
-    }
-
-    if (R) {
-#ifndef NDEBUG
-      dbgs() << "Call operand #" << I << " has unhandled type "
-             << EVT(ArgVT).getEVTString();
-#endif
-      llvm_unreachable(0);
-    }
-  }
-}
-
-void RISCVTargetLowering::RISCVCC::
-analyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Args,
-                       bool IsSoftFloat, Function::const_arg_iterator FuncArg) {
-  unsigned NumArgs = Args.size();
-  llvm::CCAssignFn *FixedFn;
-  if(!IsRV32)
-    FixedFn = CC_RISCV64;
-  else
-    FixedFn = CC_RISCV32;
-  unsigned CurArgIdx = 0;
-
-  for (unsigned I = 0; I != NumArgs; ++I) {
-    MVT ArgVT = Args[I].VT;
-    ISD::ArgFlagsTy ArgFlags = Args[I].Flags;
-    std::advance(FuncArg, Args[I].OrigArgIndex - CurArgIdx);
-    CurArgIdx = Args[I].OrigArgIndex;
-
-    if (ArgFlags.isByVal()) {
-      handleByValArg(I, ArgVT, ArgVT, CCValAssign::Full, ArgFlags);
-      continue;
-    }
-
-    if(ArgFlags.isSRet()) {
-      
-    }
-
-    MVT RegVT = getRegVT(ArgVT, FuncArg->getType(), 0, IsSoftFloat);
-
-    if (!FixedFn(I, ArgVT, RegVT, CCValAssign::Full, ArgFlags, CCInfo))
-      continue;
-
-#ifndef NDEBUG
-    dbgs() << "Formal Arg #" << I << " has unhandled type "
-           << EVT(ArgVT).getEVTString();
-#endif
-    llvm_unreachable(0);
-  }
-}
-
-MVT RISCVTargetLowering::RISCVCC::getRegVT(MVT VT, const Type *OrigTy,
-                                         const SDNode *CallNode,
-                                         bool IsSoftFloat) const {
-  if (IsSoftFloat || IsRV32)
-    return VT;
-
-  // Check if the original type was fp128.
-  if (originalTypeIsF128(OrigTy, CallNode)) {
-    assert(VT == MVT::i64);
-    return MVT::f64;
-  }
-
-  return VT;
-}
-
-void RISCVTargetLowering::
-copyByValRegs(SDValue Chain, SDLoc DL, std::vector<SDValue> &OutChains,
-              SelectionDAG &DAG, const ISD::ArgFlagsTy &Flags,
-              SmallVectorImpl<SDValue> &InVals, const Argument *FuncArg,
-              const RISCVCC &CC, const ByValArgInfo &ByVal) const {
-  MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
-  unsigned RegAreaSize = ByVal.NumRegs * CC.regSize();
-  unsigned FrameObjSize = std::max(Flags.getByValSize(), RegAreaSize);
-  int FrameObjOffset;
-
-  if (RegAreaSize)
-    FrameObjOffset = (int)CC.reservedArgArea() -
-      (int)((CC.numIntArgRegs() - ByVal.FirstIdx) * CC.regSize());
-  else
-    FrameObjOffset = ByVal.Address;
-
-  // Create frame object.
-  EVT PtrTy = getPointerTy();
-  int FI = MFI->CreateFixedObject(FrameObjSize, FrameObjOffset, true);
-  SDValue FIN = DAG.getFrameIndex(FI, PtrTy);
-  InVals.push_back(FIN);
-
-  if (!ByVal.NumRegs)
-    return;
-
-  // Copy arg registers.
-  MVT RegTy = MVT::getIntegerVT(CC.regSize() * 8);
-  const TargetRegisterClass *RC = getRegClassFor(RegTy);
-
-  for (unsigned I = 0; I < ByVal.NumRegs; ++I) {
-    unsigned ArgReg = CC.intArgRegs()[ByVal.FirstIdx + I];
-    unsigned VReg = addLiveIn(MF, ArgReg, RC);
-    unsigned Offset = I * CC.regSize();
-    SDValue StorePtr = DAG.getNode(ISD::ADD, DL, PtrTy, FIN,
-                                   DAG.getConstant(Offset, DL, PtrTy));
-    SDValue Store = DAG.getStore(Chain, DL, DAG.getRegister(VReg, RegTy),
-                                 StorePtr, MachinePointerInfo(FuncArg, Offset),
-                                 false, false, 0);
-    OutChains.push_back(Store);
-  }
-}
-
-// Copy byVal arg to registers and stack.
-void RISCVTargetLowering::
-passByValArg(SDValue Chain, SDLoc DL,
-             std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
-             SmallVector<SDValue, 8> &MemOpChains, SDValue StackPtr,
-             MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
-             const RISCVCC &CC, const ByValArgInfo &ByVal,
-             const ISD::ArgFlagsTy &Flags, bool isLittle) const {
-  unsigned ByValSize = Flags.getByValSize();
-  unsigned Offset = 0; // Offset in # of bytes from the beginning of struct.
-  unsigned RegSize = CC.regSize();
-  unsigned Alignment = std::min(Flags.getByValAlign(), RegSize);
-  EVT PtrTy = getPointerTy(), RegTy = MVT::getIntegerVT(RegSize * 8);
-
-  if (ByVal.NumRegs) {
-    const uint16_t *ArgRegs = CC.intArgRegs();
-    bool LeftoverBytes = (ByVal.NumRegs * RegSize > ByValSize);
-    unsigned I = 0;
-
-    // Copy words to registers.
-    for (; I < ByVal.NumRegs - LeftoverBytes; ++I, Offset += RegSize) {
-      SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                                    DAG.getConstant(Offset, DL, PtrTy));
-      SDValue LoadVal = DAG.getLoad(RegTy, DL, Chain, LoadPtr,
-                                    MachinePointerInfo(), false, false, false,
-                                    Alignment);
-      MemOpChains.push_back(LoadVal.getValue(1));
-      unsigned ArgReg = ArgRegs[ByVal.FirstIdx + I];
-      RegsToPass.push_back(std::make_pair(ArgReg, LoadVal));
-    }
-
-    // Return if the struct has been fully copied.
-    if (ByValSize == Offset)
-      return;
-
-    // Copy the remainder of the byval argument with sub-word loads and shifts.
-    if (LeftoverBytes) {
-      assert((ByValSize > Offset) && (ByValSize < Offset + RegSize) &&
-             "Size of the remainder should be smaller than RegSize.");
-      SDValue Val;
-
-      for (unsigned LoadSize = RegSize / 2, TotalSizeLoaded = 0;
-           Offset < ByValSize; LoadSize /= 2) {
-        unsigned RemSize = ByValSize - Offset;
-
-        if (RemSize < LoadSize)
-          continue;
-
-        // Load subword.
-        SDValue LoadPtr = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                                      DAG.getConstant(Offset, DL, PtrTy));
-        SDValue LoadVal =
-          DAG.getExtLoad(ISD::ZEXTLOAD, DL, RegTy, Chain, LoadPtr,
-                         MachinePointerInfo(), MVT::getIntegerVT(LoadSize * 8),
-                         false, false, false, Alignment);
-        MemOpChains.push_back(LoadVal.getValue(1));
-
-        // Shift the loaded value.
-        unsigned Shamt;
-
-        if (isLittle)
-          Shamt = TotalSizeLoaded;
-        else
-          Shamt = (RegSize - (TotalSizeLoaded + LoadSize)) * 8;
-
-        SDValue Shift = DAG.getNode(ISD::SHL, DL, RegTy, LoadVal,
-                                    DAG.getConstant(Shamt, DL, MVT::i32));
-
-        if (Val.getNode())
-          Val = DAG.getNode(ISD::OR, DL, RegTy, Val, Shift);
-        else
-          Val = Shift;
-
-        Offset += LoadSize;
-        TotalSizeLoaded += LoadSize;
-        Alignment = std::min(Alignment, LoadSize);
-      }
-
-      unsigned ArgReg = ArgRegs[ByVal.FirstIdx + I];
-      RegsToPass.push_back(std::make_pair(ArgReg, Val));
-      return;
-    }
-  }
-
-  // Copy remainder of byval arg to it with memcpy.
-  unsigned MemCpySize = ByValSize - Offset;
-  SDValue Src = DAG.getNode(ISD::ADD, DL, PtrTy, Arg,
-                            DAG.getConstant(Offset, DL, PtrTy));
-  SDValue Dst = DAG.getNode(ISD::ADD, DL, PtrTy, StackPtr,
-                            DAG.getIntPtrConstant(ByVal.Address, DL));
-  Chain = DAG.getMemcpy(Chain, DL, Dst, Src,
-                        DAG.getConstant(MemCpySize, DL, PtrTy), Alignment,
-                        /*isVolatile=*/false, /*AlwaysInline=*/false, /*TailCall=*/false,
-                        MachinePointerInfo(), MachinePointerInfo());
-  MemOpChains.push_back(Chain);
-}
-
-void
-RISCVTargetLowering::RISCVCC::handleByValArg(unsigned ValNo, MVT ValVT,
-                                           MVT LocVT,
-                                           CCValAssign::LocInfo LocInfo,
-                                           ISD::ArgFlagsTy ArgFlags) {
-  assert(ArgFlags.getByValSize() && "Byval argument's size shouldn't be 0.");
-
-  struct ByValArgInfo ByVal;
-  unsigned RegSize = regSize();
-  unsigned ByValSize = RoundUpToAlignment(ArgFlags.getByValSize(), RegSize);
-  unsigned Align = std::min(std::max(ArgFlags.getByValAlign(), RegSize),
-                            RegSize * 2);
-
-  if (useRegsForByval())
-    allocateRegs(ByVal, ByValSize, Align, ValVT);
-
-  // Allocate space on caller's stack.
-  ByVal.Address = CCInfo.AllocateStack(ByValSize - RegSize * ByVal.NumRegs,
-                                       Align);
-  CCInfo.addLoc(CCValAssign::getMem(ValNo, ValVT, ByVal.Address, LocVT,
-                                    LocInfo));
-  ByValArgs.push_back(ByVal);
-}
-
-unsigned RISCVTargetLowering::RISCVCC::fpRegSize() const {
-  return Subtarget.hasD() ? 8 : Subtarget.hasF() ? 4 : regSize();
-}
-
-unsigned RISCVTargetLowering::RISCVCC::numIntArgRegs() const {
-  return llvm::RISCV::NumArgGPRs;
-}
-
-unsigned RISCVTargetLowering::RISCVCC::numFPArgRegs() const {
-  return llvm::RISCV::NumArgFPRs;
-}
-
-unsigned RISCVTargetLowering::RISCVCC::reservedArgArea() const {
-  return 0;
-}
-
-const MCPhysReg *RISCVTargetLowering::RISCVCC::intArgRegs() const {
-  return IsRV32 ? RV32IntRegs : RV64IntRegs;
-}
-
-const MCPhysReg *RISCVTargetLowering::RISCVCC::fpArgRegs() const {
-  return Subtarget.hasD() ? FPDRegs : 
-         Subtarget.hasF() ? FPFRegs :
-         intArgRegs();
-}
-
-
-llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::fixedArgFn() const {
-  return IsRV32 ? CC_RISCV32 : CC_RISCV64;
-}
-
-llvm::CCAssignFn *RISCVTargetLowering::RISCVCC::varArgFn() const {
-  return IsRV32 ? CC_RISCV32_VAR : CC_RISCV64_VAR;
-}
-
-void RISCVTargetLowering::RISCVCC::allocateRegs(ByValArgInfo &ByVal,
-                                              unsigned ByValSize,
-                                              unsigned Align,
-                                              MVT ValVT) {
-  unsigned RegSize = regSize(); 
-  if(ValVT.isInteger()) {
-    unsigned NumIntArgRegs = numIntArgRegs();
-    const MCPhysReg *IntArgRegs = intArgRegs();//, *ShadowRegs = shadowRegs();
-    assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
-           "Byval argument's size and alignment should be a multiple of"
-           "RegSize.");
-  
-    ByVal.FirstIdx = CCInfo.getFirstUnallocated(*IntArgRegs);
-  
-    // If Align > RegSize, the first arg register must be even.
-    if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
-      CCInfo.AllocateReg(IntArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
-      ++ByVal.FirstIdx;
-    }
-  
-    // Mark the registers allocated.
-    for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumIntArgRegs);
-         ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
-      CCInfo.AllocateReg(IntArgRegs[I]);//, ShadowRegs[I]);
-  }else if(ValVT.isFloatingPoint()){
-    RegSize = fpRegSize();
-    unsigned NumFPArgRegs = numFPArgRegs();
-    const MCPhysReg *FPArgRegs = fpArgRegs();//, *ShadowRegs = shadowRegs();
-    assert(!(ByValSize % RegSize) && !(Align % RegSize) &&
-           "Byval argument's size and alignment should be a multiple of"
-           "RegSize.");
-  
-    ByVal.FirstIdx = CCInfo.getFirstUnallocated(*FPArgRegs);
-  
-    // If Align > RegSize, the first arg register must be even.
-    if ((Align > RegSize) && (ByVal.FirstIdx % 2)) {
-      CCInfo.AllocateReg(FPArgRegs[ByVal.FirstIdx]);//, ShadowRegs[ByVal.FirstIdx]);
-      ++ByVal.FirstIdx;
-    }
-  
-    // Mark the registers allocated.
-    for (unsigned I = ByVal.FirstIdx; ByValSize && (I < NumFPArgRegs);
-         ByValSize -= RegSize, ++I, ++ByVal.NumRegs)
-      CCInfo.AllocateReg(FPArgRegs[I]);//, ShadowRegs[I]);
-  }else
-    llvm_unreachable("Cannot pass this type by value");
-  }
-  //End RISCVCC Implementation
-
 SDValue RISCVTargetLowering::
 LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                      const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -1043,7 +651,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                      SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
-  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
 
   RISCVFI->setVarArgsFrameIndex(0);
 
@@ -1054,60 +662,34 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
 		 *DAG.getContext());
+
+  CCInfo.AnalyzeFormalArguments(Ins, IsRV32 ? CC_RISCV32 : CC_RISCV64);
   
-  RISCVCC RISCVCCInfo(CallConv, IsRV32, CCInfo, Subtarget);
-  Function::const_arg_iterator FuncArg =
-    DAG.getMachineFunction().getFunction()->arg_begin();
-  bool UseSoftFloat = Subtarget.useSoftFloat();
-
-  RISCVCCInfo.analyzeFormalArguments(Ins, UseSoftFloat, FuncArg);
-  RISCVFI->setFormalArgInfo(CCInfo.getNextStackOffset(),
-                           RISCVCCInfo.hasByValArg());
-
-  unsigned CurArgIdx = 0;
-  RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
-
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
-    std::advance(FuncArg, Ins[i].OrigArgIndex - CurArgIdx);
-    CurArgIdx = Ins[i].OrigArgIndex;
-    EVT ValVT = VA.getValVT();
-    ISD::ArgFlagsTy Flags = Ins[i].Flags;
-    bool IsRegLoc = VA.isRegLoc();
-
-    if (Flags.isByVal()) {
-      assert(Flags.getByValSize() &&
-             "ByVal args of size 0 should have been ignored by front-end.");
-      assert(ByValArg != RISCVCCInfo.byval_end());
-      copyByValRegs(Chain, DL, OutChains, DAG, Flags, InVals, &*FuncArg,
-                    RISCVCCInfo, *ByValArg);
-      ++ByValArg;
-      continue;
-    }
-
     // Arguments stored on registers
-    if (IsRegLoc) {
-      EVT RegVT = VA.getLocVT();
-      unsigned ArgReg = VA.getLocReg();
+    if (VA.isRegLoc()) {
+      EVT ValVT = VA.getValVT();
+      MVT RegVT = VA.getLocVT();
       const TargetRegisterClass *RC;
 
-      if (RegVT == MVT::i32 || RegVT.getSizeInBits() < 32)//All word and subword values stored in GR32
+      if (ValVT == MVT::i32 || ValVT.getSizeInBits() < 32)//All word and subword values stored in GR32
         RC = &RISCV::GR32BitRegClass;
-      else if (RegVT == MVT::i64){
+      else if (ValVT == MVT::i64){
         if(Subtarget.isRV32()){
           //for RV32 store in pair of two GR32
           RC = &RISCV::PairGR64BitRegClass;
         } else {
           RC = &RISCV::GR64BitRegClass;
         }
-      } else if (RegVT == MVT::f32) {
+      } else if (ValVT == MVT::f32) {
           if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
           else if(Subtarget.hasF())
             RC = &RISCV::FP32BitRegClass;
           else 
             RC = &RISCV::GR32BitRegClass;
-      } else if (RegVT == MVT::f64) {
+      } else if (ValVT == MVT::f64) {
           if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
           else if(Subtarget.hasF())
@@ -1121,8 +703,8 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
 
       // Transform the arguments stored on
       // physical registers into virtual ones
-      unsigned Reg = addLiveIn(DAG.getMachineFunction(), ArgReg, RC);
-      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
+      unsigned Reg = MF.addLiveIn(VA.getLocReg(), RC);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, ValVT);
 
       // If this is an 8 or 16-bit value, it has been passed promoted
       // to 32 bits.  Insert an assert[sz]ext to capture this, then
@@ -1140,10 +722,12 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
       }
 
       InVals.push_back(ArgValue);
-    } else { // VA.isRegLoc()
+    } else { // !VA.isRegLoc()
 
       // sanity check
       assert(VA.isMemLoc());
+
+      EVT ValVT = VA.getValVT();
 
       // The stack pointer offset is relative to the caller stack frame.
       int FI = MFI->CreateFixedObject(ValVT.getSizeInBits()/8,
@@ -1157,8 +741,44 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     }
   }
 
-  if (IsVarArg)
-    writeVarArgRegs(OutChains, RISCVCCInfo, Chain, DL, DAG);
+  //TODO: handle ByVal
+
+  if (IsVarArg){
+    const MCPhysReg *ArgRegs = IsRV32 ? RV32IntRegs : RV64IntRegs;
+    unsigned NumRegs = llvm::RISCV::NumArgGPRs;
+    unsigned Idx = CCInfo.getFirstUnallocated(*ArgRegs);
+    unsigned RegSize = IsRV32 ? 4 : 8;
+    MVT RegTy = MVT::getIntegerVT(RegSize * 8);
+    const TargetRegisterClass *RC = getRegClassFor(RegTy);
+
+    // Offset of the first variable argument from stack pointer.
+    int VaArgOffset;
+
+    if (NumRegs == Idx)
+      VaArgOffset = RoundUpToAlignment(CCInfo.getNextStackOffset(), RegSize);
+    else
+      VaArgOffset = -(int)(RegSize * (NumRegs - Idx));
+
+    // Record the frame index of the first variable argument
+    // which is a value necessary to VASTART.
+    int FI = MFI->CreateFixedObject(RegSize, VaArgOffset, true);
+    RISCVFI->setVarArgsFrameIndex(FI);
+
+    // Copy the integer registers that have not been used for argument passing
+    // to the argument register save area. 
+    for (unsigned I = Idx; I < NumRegs; ++I, VaArgOffset += RegSize) {
+      unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
+      FI = MFI->CreateFixedObject(RegSize, VaArgOffset, true);
+      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy());
+      SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
+                                   MachinePointerInfo(), false, false, 0);
+      cast<StoreSDNode>(Store.getNode())
+          ->getMemOperand()
+          ->setValue((Value *)nullptr);
+      OutChains.push_back(Store);
+    }
+  }
 
   // All stores are grouped in one node to allow the matching between
   // the size of Ins and InVals. This only happens when on varg functions
@@ -1220,7 +840,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
   MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
   EVT PtrVT = getPointerTy();
 
   // RISCV target does not yet support tail call optimization.
@@ -1228,19 +847,18 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
-  CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
-  RISCVCC RISCVCCInfo(CallConv, Subtarget.isRV32(), ArgCCInfo, Subtarget);
-  RISCVCCInfo.analyzeCallOperands(Outs, IsVarArg, Subtarget.useSoftFloat(),
-                                   Callee.getNode(), CLI.Args);
+  CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
+  CCAssignFn *CC = IsRV32 ? IsVarArg ? CC_RISCV32_VAR : CC_RISCV32 :
+                           IsVarArg ? CC_RISCV64_VAR : CC_RISCV64;
+  CCInfo.AnalyzeCallOperands(Outs, CC);
+  //
   // Get a count of how many bytes are to be pushed on the stack.
-  unsigned NumBytes = ArgCCInfo.getNextStackOffset();
+  unsigned NumBytes = CCInfo.getNextStackOffset();
 
   // Mark the start of the call.
   Chain = DAG.getCALLSEQ_START(Chain, DAG.getConstant(NumBytes, DL, PtrVT, true),
                                DL);
-
-  RISCVCC::byval_iterator ByValArg = RISCVCCInfo.byval_begin();
 
   // Copy argument values to their designated locations.
   std::deque< std::pair<unsigned, SDValue> > RegsToPass;
@@ -1251,26 +869,45 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     SDValue ArgValue = OutVals[I];
     ISD::ArgFlagsTy Flags = Outs[I].Flags;
 
-    // ByVal Arg.
-    if (Flags.isByVal()) {
-      assert(Flags.getByValSize() &&
-             "ByVal args of size 0 should have been ignored by front-end.");
-      assert(ByValArg != RISCVCCInfo.byval_end());
-      assert(!isTailCall &&
-             "Do not tail-call optimize if there is a byval argument.");
-      if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp, PtrVT);
-      passByValArg(Chain, DL, RegsToPass, MemOpChains, StackPtr, MFI, DAG, ArgValue,
-                   RISCVCCInfo, *ByValArg, Flags, true);// Subtarget is little endian so we have true
-      ++ByValArg;
-      continue;
-    }
-
-      ArgValue = convertValVTToLocVT(DAG, DL, VA, ArgValue);
+    ArgValue = convertValVTToLocVT(DAG, DL, VA, ArgValue);
 
     if (VA.isRegLoc())
       // Queue up the argument copies and emit them at the end.
       RegsToPass.push_back(std::make_pair(VA.getLocReg(), ArgValue));
+    else if (Flags.isByVal()) {
+      assert(VA.isMemLoc());
+      assert(Flags.getByValSize() &&
+             "ByVal args of size 0 should have been ignored by front-end.");
+      assert(!isTailCall &&
+             "Do not tail-call optimize if there is a byval argument.");
+
+      // True if this byval aggregate will be split between registers
+      // and memory.
+      unsigned ByValArgsCount = CCInfo.getInRegsParamsCount();
+      unsigned CurByValIdx = CCInfo.getInRegsParamsProcessed();
+      if (CurByValIdx < ByValArgsCount) {
+        unsigned RegBegin, RegEnd;
+        CCInfo.getInRegsParamInfo(CurByValIdx, RegBegin, RegEnd);
+
+        EVT PtrVT = DAG.getTargetLoweringInfo().getPointerTy();
+        unsigned int i, j;
+        for (i = 0, j = RegBegin; j < RegEnd; i++, j++) {
+          SDValue Const = DAG.getConstant(4*i, DL, MVT::i32);//TODO:should this i32 be ptrTy
+          SDValue AddArg = DAG.getNode(ISD::ADD, DL, PtrVT, ArgValue, Const);
+          SDValue Load = DAG.getLoad(PtrVT, DL, Chain, AddArg,
+                                     MachinePointerInfo(),
+                                     false, false, false,
+                                     DAG.InferPtrAlignment(AddArg));
+          MemOpChains.push_back(Load.getValue(1));
+          RegsToPass.push_back(std::make_pair(j, Load));
+        }
+
+        CCInfo.nextInRegsParam();
+      }
+
+      // TODO: Handle byvals partially or entirely not in registers
+
+    }
     else {
       assert(VA.isMemLoc() && "Argument not register or memory");
 
@@ -1555,8 +1192,8 @@ SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
 SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
                                             SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  RISCVMachineFunctionInfo *FuncInfo =
-    MF.getInfo<RISCVMachineFunctionInfo>();
+  RISCVFunctionInfo *FuncInfo =
+    MF.getInfo<RISCVFunctionInfo>();
   EVT PtrVT = getPointerTy();
 
   SDValue Chain   = Op.getOperand(0);
@@ -1632,7 +1269,7 @@ SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) co
 SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
                                               SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
+  MF.getInfo<RISCVFunctionInfo>()->setManipulatesSP(true);
   unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
   return DAG.getCopyFromReg(Op.getOperand(0), SDLoc(Op), sp, Op.getValueType());
 }
@@ -1640,7 +1277,7 @@ SDValue RISCVTargetLowering::lowerSTACKSAVE(SDValue Op,
 SDValue RISCVTargetLowering::lowerSTACKRESTORE(SDValue Op,
                                                  SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
-  MF.getInfo<RISCVMachineFunctionInfo>()->setManipulatesSP(true);
+  MF.getInfo<RISCVFunctionInfo>()->setManipulatesSP(true);
   unsigned sp = Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp;
   return DAG.getCopyToReg(Op.getOperand(0), SDLoc(Op), sp, Op.getOperand(1));
 }
@@ -1828,52 +1465,5 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
       return emitSelectCC(MI, MBB);
   default:
     llvm_unreachable("Unexpected instr type to insert");
-  }
-}
-
-void
-RISCVTargetLowering::writeVarArgRegs(std::vector<SDValue> &OutChains,
-                                    const RISCVCC &CC, SDValue Chain,
-                                    SDLoc DL, SelectionDAG &DAG) const {
-  unsigned NumRegs = CC.numIntArgRegs();
-  const MCPhysReg *ArgRegs = CC.intArgRegs();
-  const CCState &CCInfo = CC.getCCInfo();
-  unsigned Idx = CCInfo.getFirstUnallocated(*ArgRegs);
-  unsigned RegSize = CC.regSize();
-  MVT RegTy = MVT::getIntegerVT(RegSize * 8);
-  const TargetRegisterClass *RC = getRegClassFor(RegTy);
-  MachineFunction &MF = DAG.getMachineFunction();
-  MachineFrameInfo *MFI = MF.getFrameInfo();
-  RISCVMachineFunctionInfo *RISCVFI = MF.getInfo<RISCVMachineFunctionInfo>();
-
-  // Offset of the first variable argument from stack pointer.
-  int VaArgOffset;
-
-  if (NumRegs == Idx)
-    VaArgOffset = RoundUpToAlignment(CCInfo.getNextStackOffset(), RegSize);
-  else
-    VaArgOffset =
-      (int)CC.reservedArgArea() - (int)(RegSize * (NumRegs - Idx));
-
-  // Record the frame index of the first variable argument
-  // which is a value necessary to VASTART.
-  int FI = MFI->CreateFixedObject(RegSize, VaArgOffset, true);
-  RISCVFI->setVarArgsFrameIndex(FI);
-
-  // Copy the integer registers that have not been used for argument passing
-  // to the argument register save area. For O32, the save area is allocated
-  // in the caller's stack frame, while for N32/64, it is allocated in the
-  // callee's stack frame.
-  for (unsigned I = Idx; I < NumRegs; ++I, VaArgOffset += RegSize) {
-    unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
-    SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
-    FI = MFI->CreateFixedObject(RegSize, VaArgOffset, true);
-    SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy());
-    SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
-                                 MachinePointerInfo(), false, false, 0);
-    cast<StoreSDNode>(Store.getNode())
-        ->getMemOperand()
-        ->setValue((Value *)nullptr);
-    OutChains.push_back(Store);
   }
 }

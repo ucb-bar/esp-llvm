@@ -17,7 +17,7 @@
 
 using namespace llvm;
 
-void RISCVMachineFunctionInfo::createEhDataRegsFI() {
+void RISCVFunctionInfo::createEhDataRegsFI() {
   //TODO: why is this a magic number
   for (int I = 0; I < 2; ++I) {
     const RISCVSubtarget *ST = &MF.getSubtarget<RISCVSubtarget>();
@@ -28,6 +28,6 @@ void RISCVMachineFunctionInfo::createEhDataRegsFI() {
   }
 }
 
-bool RISCVMachineFunctionInfo::isEhDataRegFI(int FI) const {
+bool RISCVFunctionInfo::isEhDataRegFI(int FI) const {
   return CallsEhReturn && (FI == EhDataRegFI[0] || FI == EhDataRegFI[1]);
 }

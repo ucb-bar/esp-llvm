@@ -16,7 +16,7 @@
 
 namespace llvm {
 
-class RISCVMachineFunctionInfo : public MachineFunctionInfo {
+class RISCVFunctionInfo : public MachineFunctionInfo {
   MachineFunction& MF;
 
   unsigned SavedGPRFrameSize;
@@ -37,7 +37,7 @@ class RISCVMachineFunctionInfo : public MachineFunctionInfo {
   int EhDataRegFI[2];
 
 public:
-  explicit RISCVMachineFunctionInfo(MachineFunction &MF)
+  explicit RISCVFunctionInfo(MachineFunction &MF)
     : MF(MF), SavedGPRFrameSize(0), LowSavedGPR(0), HighSavedGPR(0), VarArgsFirstGPR(0),
       VarArgsFirstFPR(0), VarArgsFrameIndex(0), RegSaveFrameIndex(0),
       ManipulatesSP(false), CallsEhReturn(false) {}
