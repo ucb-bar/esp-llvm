@@ -66,11 +66,13 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
 
 
   // Set up special registers.
-  setExceptionPointerRegister(RISCV::epc);
-  setExceptionSelectorRegister(RISCV::evec);
   if(Subtarget.isRV64()) {
+    setExceptionPointerRegister(RISCV::epc_64);
+    setExceptionSelectorRegister(RISCV::evec_64);
     setStackPointerRegisterToSaveRestore(RISCV::sp_64);
   }else {
+    setExceptionPointerRegister(RISCV::epc);
+    setExceptionSelectorRegister(RISCV::evec);
     setStackPointerRegisterToSaveRestore(RISCV::sp);
   }
 
