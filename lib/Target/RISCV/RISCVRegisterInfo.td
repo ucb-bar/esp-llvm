@@ -415,6 +415,71 @@ defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
   //write only
   fatc,  send_ipi, clear_ipi), 0>;
 
+class PCR64<bits<16> num, string n> : RISCVReg<n> {
+  let HWEncoding = num;
+}
+//Scratch register for exception handlers
+def sup0_64     : PCR64<0,"cr0">;
+//Scratch register for exception handlers
+def sup1_64     : PCR64<1,"cr1">;
+//exception program counter
+def epc_64      : PCR64<2, "cr2">;
+//Bad virtual address
+def badvaddr_64 : PCR64<3, "cr3">;
+//Page table base register
+def ptbr_64     : PCR64<4, "cr4">;
+//Address space ID
+def asid_64     : PCR64<5, "cr5">;
+//Cycle counter for timer
+def count_64    : PCR64<6, "cr6">;
+//Timer compare value
+def compare_64  : PCR64<7, "cr7">;
+//Exception handler address
+def evec_64     : PCR64<8, "cr8">;
+//Cause of exception
+def cause_64    : PCR64<9, "cr9">;
+//status reg
+def status_64   : PCR64<10, "cr10">;
+//Hart ID
+def hartid_64   : PCR64<11,"cr11">;
+//Implementation ID
+def impl_64     : PCR64<12,"cr12">;
+//Flush address translation cache
+def fatc_64     : PCR64<13, "cr13">;
+//Send inter-processor interrupt
+def send_ipi_64 : PCR64<14,"cr14">;
+//Clear inter-processor interrupt
+def clear_ipi_64: PCR64<15,"cr15">;
+//Reserved 
+def pr0_64      : PCR64<16,"cr16">;
+def pr1_64      : PCR64<17,"cr17">;
+def pr2_64      : PCR64<18,"cr18">;
+def pr3_64      : PCR64<19,"cr19">;
+def pr4_64      : PCR64<20,"cr20">;
+def pr5_64      : PCR64<21,"cr21">;
+def pr6_64      : PCR64<22,"cr22">;
+def pr7_64      : PCR64<23,"cr23">;
+def pr8_64      : PCR64<24,"cr24">;
+def pr9_64      : PCR64<25,"cr25">;
+def pr10_64     : PCR64<26,"cr26">;
+def pr11_64     : PCR64<27,"cr27">;
+def pr12_64     : PCR64<28,"cr28">;
+def pr13_64     : PCR64<29,"cr29">;
+//Test output register
+def tohost_64   : PCR64<30,"cr30">;
+//Test input register
+def fromhost_64 : PCR64<31,"cr31">;
+
+//PCRs (64-bit)
+defm PCR64Reg : RISCVRegClass<"PCR64Reg", i64, 64, (add
+  //read/write
+  status_64, epc_64, evec_64, ptbr_64, asid_64, count_64, compare_64, 
+  sup0_64, sup1_64, tohost_64, fromhost_64,
+  //read only
+  badvaddr_64, cause_64, hartid_64, impl_64, 
+  //write only
+  fatc_64,  send_ipi_64, clear_ipi_64), 0>;
+
 
 //===----------------------------------------------------------------------===//
 // Other registers

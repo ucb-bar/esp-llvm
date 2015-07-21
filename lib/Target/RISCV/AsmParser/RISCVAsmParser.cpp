@@ -33,6 +33,7 @@ public:
   enum RegisterKind {
     PCReg,
     PCRReg,
+    PCR64Reg,
     GR32Reg,
     GR64Reg,
     PairGR64Reg,
@@ -199,6 +200,7 @@ public:
   // Used by the TableGen code to check for particular operand types.
   bool isPCReg() const { return isReg(PCReg); }
   bool isPCRReg() const { return isReg(PCRReg); }
+  bool isPCR64Reg() const { return isReg(PCR64Reg); }
   bool isGR32() const { return isReg(GR32Reg); }
   bool isGR64() const { return isReg(GR64Reg); }
   bool isPairGR64() const { return isReg(PairGR64Reg); }
@@ -282,6 +284,15 @@ static const unsigned PCRRegs[] = {
   RISCV::badvaddr, RISCV::cause, RISCV::hartid, RISCV::impl, 
   //write only
   RISCV::fatc,  RISCV::send_ipi, RISCV::clear_ipi
+};
+
+static const unsigned PCR64Regs[] = {
+  RISCV::status_64, RISCV::epc_64, RISCV::evec_64, RISCV::ptbr_64, RISCV::asid_64,
+  RISCV::count_64, RISCV::compare_64, RISCV::sup0_64, RISCV::sup1_64, RISCV::tohost_64, RISCV::fromhost_64,
+  //read only
+  RISCV::badvaddr_64, RISCV::cause_64, RISCV::hartid_64, RISCV::impl_64, 
+  //write only
+  RISCV::fatc_64,  RISCV::send_ipi_64, RISCV::clear_ipi_64
 };
 
 class RISCVAsmParser : public MCTargetAsmParser {
@@ -453,6 +464,75 @@ public:
     }
     //fallback
     return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
+  }
+
+  OperandMatchResultTy
+  parsePCR64Reg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+    const AsmToken &Tok = Parser.getTok();
+    if(Tok.is(AsmToken::Identifier) && Tok.getIdentifier().equals("ASM_CR")) {
+      SMLoc S = Tok.getLoc();
+      const AsmToken Tok = Parser.getTok();
+      if(Tok.is(AsmToken::LParen)) {
+        const AsmToken Tok = Parser.getTok();
+        if(Tok.is(AsmToken::Identifier)) {
+          RISCVOperand *op;
+          //TODO: make this a tablegen or something
+          if(Tok.getIdentifier().equals_lower("PCR_K0"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup0_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_K1"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup1_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_EPC"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::epc_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_badvaddr"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::badvaddr_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_asid"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::asid_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_count"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::count_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_compare"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::compare_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_evec"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::evec_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_cause"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::cause_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_status"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::status_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_hartid"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::hartid_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_impl"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::impl_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_fatc"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fatc_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_send_ipi"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::send_ipi_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_clear_ipi"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::clear_ipi_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_tohost"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::tohost_64,S, Tok.getLoc());
+          else if(Tok.getIdentifier().equals_lower("PCR_fromhost"))
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fromhost_64,S, Tok.getLoc());
+          else
+            return MatchOperand_ParseFail;
+
+          Operands.push_back(op);
+
+          Parser.Lex();//eat close paren
+          return MatchOperand_Success;
+        }else {
+          return MatchOperand_ParseFail;
+        }
+      }else {
+        return MatchOperand_ParseFail;
+      }
+    }else {
+      return MatchOperand_NoMatch;
+    }
+    //fallback
+    return parseRegister(Operands, 'p', PCR64Regs, RISCVOperand::PCR64Reg);
   }
 
 };
