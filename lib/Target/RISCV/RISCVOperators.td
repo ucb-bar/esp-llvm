@@ -14,6 +14,7 @@ def SDT_CallSeqStart        : SDCallSeqStart<[SDTCisVT<0, i64>]>;
 def SDT_CallSeqEnd          : SDCallSeqEnd<[SDTCisVT<0, i64>,
                                             SDTCisVT<1, i64>]>;
 def SDT_RCall               : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
+def SDT_RJAL                : SDTypeProfile<1, -1, [SDTCisSameAs<0,1>,SDTCisPtrTy<1>]>;
 def SDT_RSelectCC           : SDTypeProfile<1, 3,
                                             [SDTCisSameAs<0, 1>,
                                              SDTCisSameAs<1, 2>,
@@ -41,6 +42,9 @@ def callseq_end         : SDNode<"ISD::CALLSEQ_END",   SDT_CallSeqEnd,
 def r_retflag           : SDNode<"RISCVISD::RET_FLAG", SDTNone,
                                  [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
 def r_call              : SDNode<"RISCVISD::CALL", SDT_RCall,
+                                 [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                                  SDNPVariadic]>;
+def r_jal               : SDNode<"RISCVISD::JAL", SDT_RJAL,
                                  [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                                   SDNPVariadic]>;
 def r_pcrel_wrapper     : SDNode<"RISCVISD::PCREL_WRAPPER", SDT_RWrapPtr, []>;

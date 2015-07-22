@@ -107,22 +107,27 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def J  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "j\t$target", 
           [(br bb:$target)]>, Requires<[IsRV32]>;
 }
-let isCall = 1 in {
-  let Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64, gp] in { //after call return addr and values are defined
-    def JAL: InstJ<0b1101111, (outs), (ins pcrel32call:$target), "jal\t$target", 
-          [(r_call pcrel32call:$target)]>, Requires<[IsRV32]>;
-  }
+let isCall = 1, Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64] in { //after call return addr and values are defined
+    def JAL: InstJ<0b1101111, (outs GR32:$ret), (ins pcrel32call:$target),
+      "jal\t$ret, $target", 
+          [(set GR32:$ret, (r_jal pcrel32call:$target))]>, Requires<[IsRV32]>;
 }
-let isCall = 1 in {
+
+//call psuedo ops
+let isCall = 1, isCodeGenOnly = 1, usesCustomInserter = 1,
+  Defs = [ra, a0, a1, fa0, fa1] in {
+  def CALL : Pseudo<(outs), (ins pcrel32call:$target),
+                              [(r_call pcrel32call:$target)]>, Requires<[IsRV32]>;
+  def CALLREG : Pseudo<(outs), (ins jalrmem:$target),
+                              [(r_call addr:$target)]>, Requires<[IsRV32]>;
+}
   //TODO: fix jalr and write test
   //TODO: JALR can be implemented at brind in llvm since brind is unconditional
   // JLEIDEL : possible fix in place; requires more testing
-  let Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64, gp] in { //after call return addr and values are defined
+let isCall = 1,  Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64] in { //after call return addr and values are defined
 
-    def JALR: InstRISCV<4, (outs GR32:$dest1), (ins jalrmem:$target), 
-          "jalr\t$dest1, $target", []>, Requires<[IsRV32]>{ 
-          //[(r_call addr:$target)]>, Requires<[IsRV32]>{//, (r_call addr:$target))]>{
-          //[]>{
+    def JALR: InstRISCV<4, (outs GR32:$ret), (ins jalrmem:$target), 
+          "jalr\t$ret, $target", [(set GR32:$ret, (r_jal addr:$target))]>, Requires<[IsRV32]>{
             field bits<32> Inst;
 
             bits<5> RD;
@@ -135,7 +140,6 @@ let isCall = 1 in {
             let Inst{11- 7} = RD;
             let Inst{6 - 0} = 0b1100111;
           }
-    }
 }
  
 
@@ -264,8 +268,8 @@ def : Pat<(i32 imm32:$imm), (LI imm32:$imm)>;
 //global addr loading
 def : Pat<(i32 tglobaladdr:$g), (LLI (LUI (HI20 tglobaladdr:$g)), (LO12 tglobaladdr:$g))>, Requires<[IsRV32]>;
 //call
-def : Pat<(r_call (i32 texternalsym:$in)), (JAL texternalsym:$in)>, Requires<[IsRV32]>;
-def : Pat<(r_call (i32 tglobaladdr:$in)), (JAL tglobaladdr:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_call (i32 texternalsym:$in)), (CALL texternalsym:$in)>, Requires<[IsRV32]>;
+def : Pat<(r_call (i32 tglobaladdr:$in)), (CALL tglobaladdr:$in)>, Requires<[IsRV32]>;
 //pcrel addr loading using LA
 def : Pat<(r_pcrel_wrapper tglobaladdr:$in), (LA tglobaladdr:$in)>, Requires<[IsRV32]>;
 def : Pat<(r_pcrel_wrapper tblockaddress:$in), (LA tblockaddress:$in)>, Requires<[IsRV32]>;

@@ -242,7 +242,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // It's killed at the spill, unless the register is RA and return address
     // is taken.
     unsigned Reg = CSI[i].getReg();
-    bool IsRAAndRetAddrIsTaken = Reg == RISCV::ra
+    bool IsRAAndRetAddrIsTaken = (Reg == RISCV::ra || Reg == RISCV::ra_64)
         && MF->getFrameInfo()->isReturnAddressTaken();
     if (!IsRAAndRetAddrIsTaken)
       EntryBlock->addLiveIn(Reg);

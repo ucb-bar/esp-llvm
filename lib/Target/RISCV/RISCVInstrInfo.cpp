@@ -581,8 +581,8 @@ void RISCVInstrInfo::getLoadStoreOpcodes(const TargetRegisterClass *RC,
                                            unsigned &LoadOpcode,
                                            unsigned &StoreOpcode) const {
   if (RC == &RISCV::GR32BitRegClass ){
-    LoadOpcode = STI.isRV64() ? RISCV::LW64 : RISCV::LW;
-    StoreOpcode = STI.isRV64() ? RISCV::SW64 : RISCV::SW;
+    LoadOpcode = STI.isRV64() ? RISCV::LW64_32 : RISCV::LW;
+    StoreOpcode = STI.isRV64() ? RISCV::SW64_32 : RISCV::SW;
   } else if (RC == &RISCV::GR64BitRegClass) {
     LoadOpcode = RISCV::LD;
     StoreOpcode = RISCV::SD;

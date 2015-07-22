@@ -669,27 +669,28 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     CCValAssign &VA = ArgLocs[i];
     // Arguments stored on registers
     if (VA.isRegLoc()) {
-      EVT ValVT = VA.getValVT();
-      MVT RegVT = VA.getLocVT();
+      EVT RegVT = VA.getLocVT();
       const TargetRegisterClass *RC;
 
-      if (ValVT == MVT::i32 || ValVT.getSizeInBits() < 32)//All word and subword values stored in GR32
+      if (RegVT == MVT::i32) {
         RC = &RISCV::GR32BitRegClass;
-      else if (ValVT == MVT::i64){
+        if(Subtarget.isRV64())
+          RC = &RISCV::GR64BitRegClass; //promoted
+      } else if (RegVT == MVT::i64){
         if(Subtarget.isRV32()){
           //for RV32 store in pair of two GR32
           RC = &RISCV::PairGR64BitRegClass;
         } else {
           RC = &RISCV::GR64BitRegClass;
         }
-      } else if (ValVT == MVT::f32) {
+      } else if (RegVT == MVT::f32) {
           if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
           else if(Subtarget.hasF())
             RC = &RISCV::FP32BitRegClass;
           else 
             RC = &RISCV::GR32BitRegClass;
-      } else if (ValVT == MVT::f64) {
+      } else if (RegVT == MVT::f64) {
           if(Subtarget.hasD())
             RC = &RISCV::FP64BitRegClass;
           else if(Subtarget.hasF())
@@ -704,7 +705,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
       // Transform the arguments stored on
       // physical registers into virtual ones
       unsigned Reg = MF.addLiveIn(VA.getLocReg(), RC);
-      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, ValVT);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegVT);
 
       // If this is an 8 or 16-bit value, it has been passed promoted
       // to 32 bits.  Insert an assert[sz]ext to capture this, then
@@ -717,8 +718,8 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
           Opcode = ISD::AssertZext;
         if (Opcode)
           ArgValue = DAG.getNode(Opcode, DL, RegVT, ArgValue,
-                                 DAG.getValueType(ValVT));
-        ArgValue = DAG.getNode(ISD::TRUNCATE, DL, ValVT, ArgValue);
+                                 DAG.getValueType(VA.getValVT()));
+        ArgValue = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), ArgValue);
       }
 
       InVals.push_back(ArgValue);
@@ -790,8 +791,8 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   return Chain;
 }
 
-static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
-  EVT Ty = Op.getValueType();
+SDValue RISCVTargetLowering::getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) const {
+  EVT Ty = getPointerTy();
 
   if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
     return DAG.getTargetGlobalAddress(N->getGlobal(), SDLoc(Op), Ty, 0, Flag);
@@ -810,9 +811,9 @@ static SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) {
 }
 
 
-static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
+SDValue RISCVTargetLowering::getAddrNonPIC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
-  EVT Ty = Op.getValueType();
+  EVT Ty = getPointerTy();
   SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
   SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
   SDValue ResHi = DAG.getNode(RISCVISD::Hi, DL, Ty, Hi);
@@ -820,7 +821,7 @@ static SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::ADD, DL, Ty, ResHi, ResLo);
 }
 
-static SDValue getAddrPIC(SDValue Op, SelectionDAG &DAG) {
+SDValue RISCVTargetLowering::getAddrPIC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   EVT Ty = Op.getValueType();
   return DAG.getNode(RISCVISD::PCREL_WRAPPER, DL, Ty, Op);
@@ -967,7 +968,6 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (Glue.getNode())
     Ops.push_back(Glue);
 
-  // Emit the call.
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
   Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
   Glue = Chain.getValue(1);
@@ -1001,6 +1001,8 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // being returned.
     InVals.push_back(convertLocVTToValVT(DAG, DL, VA, Chain, RetValue));
   }
+
+
 
   return Chain;
 }
@@ -1095,8 +1097,8 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   MFI->setReturnAddressIsTaken(true);
 
   // Return RA, which contains the return address. Mark it an implicit live-in.
-  unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), Reg, VT);
+  MF.addLiveIn(RA, getRegClassFor(VT));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), RA, VT);
 }
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
@@ -1350,6 +1352,39 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
 // Custom insertion
 //===----------------------------------------------------------------------===//
 
+
+// Call pseduo ops for ABI compliant calls (output is always ra)
+MachineBasicBlock *RISCVTargetLowering::
+emitCALL(MachineInstr *MI, MachineBasicBlock *BB) const {
+  const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
+  DebugLoc DL = MI->getDebugLoc();
+
+  unsigned jump;
+  unsigned RA;
+  switch(MI->getOpcode()) {
+  case RISCV::CALL:
+    jump = RISCV::JAL; RA = RISCV::ra; break;
+  case RISCV::CALLREG:
+    jump = RISCV::JALR; RA = RISCV::ra; break;
+  case RISCV::CALL64:
+    jump = RISCV::JAL64; RA = RISCV::ra_64; break;
+  case RISCV::CALLREG64:
+    jump = RISCV::JALR64; RA = RISCV::ra_64; break;
+  default:
+    llvm_unreachable("Unexpected call instr type to insert");
+  }
+  
+  MachineInstrBuilder jumpMI = BuildMI(*BB, MI, DL, TII->get(jump), RA);
+
+  //copy over other operands
+  for(unsigned i = 0; i < MI->getNumOperands(); i++){
+    jumpMI.addOperand(MI->getOperand(i));
+  }
+  MI->eraseFromParent();
+
+  return BB;
+}
+
 MachineBasicBlock *RISCVTargetLowering::
 emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
 
@@ -1463,6 +1498,11 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   case RISCV::FSELECT_CC_F:
   case RISCV::FSELECT_CC_D:
       return emitSelectCC(MI, MBB);
+  case RISCV::CALL:
+  case RISCV::CALLREG:
+  case RISCV::CALL64:
+  case RISCV::CALLREG64:
+      return emitCALL(MI, MBB);
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }

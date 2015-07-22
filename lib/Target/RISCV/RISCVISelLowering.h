@@ -36,6 +36,10 @@ namespace RISCVISD {
     // There is an optional glue operand at the end.
     CALL,
 
+    // Jump and link to Operand 0 is the chain operand and operand 1
+    // is the register to store the return address. Operand 2 is the target address
+    JAL,
+
     // Wraps a TargetGlobalAddress that should be loaded using PC-relative
     // accesses (AUIPC).  Operand 0 is the address.
     PCREL_WRAPPER,
@@ -188,7 +192,14 @@ private:
   SDValue lowerSTACKRESTORE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
 
+  // Helper functions for above
+  SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) const;
+  SDValue getAddrNonPIC(SDValue Op, SelectionDAG &DAG) const;
+  SDValue getAddrPIC(SDValue Op, SelectionDAG &DAG) const;
+
   // Implement EmitInstrWithCustomInserter for individual operation types.
+  MachineBasicBlock *emitCALL(MachineInstr *MI,
+                                MachineBasicBlock *BB) const;
   MachineBasicBlock *emitSelectCC(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
 

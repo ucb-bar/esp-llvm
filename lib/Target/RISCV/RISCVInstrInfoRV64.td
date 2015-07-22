@@ -108,24 +108,25 @@ let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
   def J64  : InstJ<0b1100111, (outs), (ins jumptarget:$target), "j\t$target", 
           [(br bb:$target)]>, Requires<[IsRV64]>;
 }
-let isCall = 1 in {
-  let Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64, //after call return addr and values are defined
-           a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
-           t0_64, t1_64, t2_64, t3_64, t4_64, gp_64] in {
-  //let Defs = [ra_64] in { //after call return addr and values are defined
-    def JAL64: InstJ<0b1101111, (outs), (ins pcrel64call:$target), "jal\t$target", 
-          [(r_call pcrel64call:$target)]>, Requires<[IsRV64]>;
-  }
+let isCall = 1, Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64] in {
+    def JAL64: InstJ<0b1101111, (outs GR64:$ret), (ins pcrel64call:$target),
+      "jal\t$ret, $target", 
+          [(set GR64:$ret, (r_jal pcrel64call:$target))]>, Requires<[IsRV64]>;
 }
-let isCall = 1 in {
-  //TODO: fix jalr and write test
-  let Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64,
-           a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64,
-           t0_64, t1_64, t2_64, t3_64, t4_64] in {
 
-    def JALR64: InstRISCV<4, (outs GR64:$dest1), (ins jalrmem64:$target),
-          "jalr\t$dest1, $target",  []>, Requires<[IsRV64]>{
-          //[(r_call addr:$target)]>, Requires<[IsRV64]>{
+//call psuedo ops
+let isCall = 1, isCodeGenOnly = 1, usesCustomInserter = 1,
+  Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64] in {
+  def CALL64 : Pseudo<(outs), (ins pcrel64call:$target),
+                              [(r_call pcrel64call:$target)]>, Requires<[IsRV64]>;
+  def CALLREG64 : Pseudo<(outs), (ins jalrmem64:$target),
+                              [(r_call addr:$target)]>, Requires<[IsRV64]>;
+}
+
+let isCall = 1, Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64] in {
+    def JALR64: InstRISCV<4, (outs GR64:$ret), (ins jalrmem64:$target),
+          "jalr\t$ret, $target",
+          [(set GR64:$ret, (r_jal addr:$target))]>, Requires<[IsRV64]>{
             field bits<32> Inst;
 
             bits<5> RD;
@@ -137,15 +138,7 @@ let isCall = 1 in {
             let Inst{14-12} = 0b000;
             let Inst{11- 7} = RD;
             let Inst{6 - 0} = 0b1100111;
-
-            //let Inst{31-27} = 0b00001;
-            //let Inst{26-22} = RS1;
-            //let Inst{21-17} = IMM{11-7};
-            //let Inst{16-10} = IMM{6 -0};
-            //let Inst{9 - 7} = 0b000;
-            //let Inst{6 - 0} = 0b1101011;
           }
-  }
 }
 //simple brind pat
 def : Pat<(brind i64:$dst), (JALR64 $dst, 0)>, Requires<[IsRV64]>;
@@ -302,8 +295,8 @@ def : Pat<(i64 imm64:$imm), (LI64 imm64:$imm)>; //cheat and use gas for these
 def : Pat<(i64 imm64sx12:$imm), (LI64 imm64sx12:$imm)>; 
 def : Pat<(i64 imm64sxu32:$imm), (LI64 imm64sxu32:$imm)>; //cheat and use gas for these
 //call
-def : Pat<(r_call (i64 texternalsym:$in)), (JAL64 texternalsym:$in)>;
-def : Pat<(r_call (i64 tglobaladdr:$in)), (JAL64 tglobaladdr:$in)>;
+def : Pat<(r_call (i64 texternalsym:$in)), (CALL64 texternalsym:$in)>;
+def : Pat<(r_call (i64 tglobaladdr:$in)), (CALL64 tglobaladdr:$in)>;
 //pcrel addr loading using LA
 def : Pat<(r_pcrel_wrapper tglobaladdr:$in), (LA64 tglobaladdr:$in)>, Requires<[IsRV64]>;
 def : Pat<(r_pcrel_wrapper tblockaddress:$in), (LA64 tblockaddress:$in)>, Requires<[IsRV64]>;
