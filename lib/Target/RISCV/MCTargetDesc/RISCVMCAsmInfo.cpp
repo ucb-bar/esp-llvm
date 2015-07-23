@@ -29,6 +29,7 @@ RISCVMCAsmInfo::RISCVMCAsmInfo(const Target &T, StringRef TT) {
   SupportsDebugInformation = true;
   HasLEB128 = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
+  AlignmentIsInBytes = false;
 }
 
 const MCSection *
