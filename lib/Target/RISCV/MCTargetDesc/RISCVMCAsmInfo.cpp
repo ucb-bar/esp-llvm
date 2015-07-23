@@ -24,4 +24,5 @@ RISCVMCAsmInfo::RISCVMCAsmInfo() {
   UsesELFSectionDirectiveForBSS = true;
   SupportsDebugInformation = true;
   ExceptionsType = ExceptionHandling::DwarfCFI;
+  AlignmentIsInBytes = false;
 }
