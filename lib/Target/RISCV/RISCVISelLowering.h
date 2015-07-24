@@ -20,6 +20,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include <string>
 #include <deque>
 
@@ -204,6 +205,11 @@ private:
                                 MachineBasicBlock *BB) const;
 
 };
+
+class RISCVTargetObjectFile : public TargetLoweringObjectFileELF {
+  void Initialize(MCContext &Ctx, const TargetMachine &TM);
+};
+
 } // end namespace llvm
 
 #endif // LLVM_TARGET_RISCV_ISELLOWERING_H

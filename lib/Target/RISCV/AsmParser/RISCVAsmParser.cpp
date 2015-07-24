@@ -459,7 +459,7 @@ public:
   }
 
   OperandMatchResultTy
-  parsePCR64Reg(SmallVectorImpl<MCParsedAsmOperand*> &Operands) {
+  parsePCR64Reg(OperandVector &Operands) {
     const AsmToken &Tok = Parser.getTok();
     if(Tok.is(AsmToken::Identifier) && Tok.getIdentifier().equals("ASM_CR")) {
       SMLoc S = Tok.getLoc();
@@ -467,7 +467,7 @@ public:
       if(Tok.is(AsmToken::LParen)) {
         const AsmToken Tok = Parser.getTok();
         if(Tok.is(AsmToken::Identifier)) {
-          RISCVOperand *op;
+          std::unique_ptr<RISCVOperand> op;
           //TODO: make this a tablegen or something
           if(Tok.getIdentifier().equals_lower("PCR_K0"))
             op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup0_64,S, Tok.getLoc());
@@ -510,7 +510,7 @@ public:
           else
             return MatchOperand_ParseFail;
 
-          Operands.push_back(op);
+          Operands.push_back(std::move(op));
 
           Parser.Lex();//eat close paren
           return MatchOperand_Success;

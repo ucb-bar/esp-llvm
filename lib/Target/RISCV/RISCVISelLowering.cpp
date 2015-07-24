@@ -49,11 +49,21 @@ static const MCPhysReg FPDRegs[8] = {
   RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64
 };
 
+void RISCVTargetObjectFile::Initialize(MCContext &Ctx, const TargetMachine &TM) {
+  TargetLoweringObjectFileELF::Initialize(Ctx, TM);
+  InitializeELF(TM.Options.UseInitArray);
+}
+
+/*
+RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
+  : TargetLowering(tm, new RISCVTargetObjectFile()),
+    Subtarget(*tm.getSubtargetImpl()), TM(tm), 
+    IsRV32(Subtarget.isRV32()) {
+>>>>>>> 2615d79... Add RISCVTargetObjectFile to fix UseInitArray*/
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm, 
                                          const RISCVSubtarget &STI)
     : TargetLowering(tm), Subtarget(STI), IsRV32(Subtarget.isRV32()) {
   MVT PtrVT = getPointerTy();
-
   // Set up the register classes.
   addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
   if(Subtarget.isRV64())
