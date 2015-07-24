@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include <string>
 #include <deque>
 
@@ -315,6 +316,11 @@ private:
   void writeVarArgRegs(std::vector<SDValue> &OutChains, const RISCVCC &CC,
                        SDValue Chain, DebugLoc DL, SelectionDAG &DAG) const;
 };
+
+class RISCVTargetObjectFile : public TargetLoweringObjectFileELF {
+  void Initialize(MCContext &Ctx, const TargetMachine &TM);
+};
+
 } // end namespace llvm
 
 #endif // LLVM_TARGET_RISCV_ISELLOWERING_H
