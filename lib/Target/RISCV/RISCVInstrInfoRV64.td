@@ -360,3 +360,44 @@ let isReturn = 1, isTerminator = 1, isBarrier = 1, hasCtrlDep = 1,
           }
    }
   def : Pat<(r_retflag), (RET)>, Requires<[IsRV64]>;
+
+//===----------------------------------------------------------------------===//
+// 64-bit CSR access (some of the regs are available in user mode)
+//===----------------------------------------------------------------------===//
+
+// We only need CSRR and CSRW for exception handling etc.
+// The others are generally complicated atomic operations.
+// Supporting them would require adding more intrinsics.
+
+def CSRR_64: InstRISCV<4, (outs GR64:$dst), (ins PCR64Reg:$csr),
+              "csrr\t$dst, $csr",
+              [(set GR64:$dst, PCR64Reg:$csr)]>,Requires<[IsRV64]> {
+  field bits<32> Inst;
+  
+  bits<12> CSR;
+  bits<5> RD;
+
+  // Encoded as CSRRS rd, csr, z0
+  let Inst{31-20} = CSR;
+  let Inst{19-15} = 0;
+  let Inst{14-12} = 0b010;
+  let Inst{11-7} = RD;
+  let Inst{6-0} = 0b1110011;
+}
+
+def CSRW_64: InstRISCV<4, (outs PCR64Reg:$csr), (ins GR64:$src),
+              "csrw\t$csr, $src",
+              [(set PCR64Reg:$csr, GR64:$src)]>,Requires<[IsRV64]> {
+  field bits<32> Inst;
+  
+  bits<12> CSR;
+  bits<5> RS1;
+
+  // Encoded as CSRRW z0, csr, rs1
+  let Inst{31-20} = CSR;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = 0b001;
+  let Inst{11-7} = 0;
+  let Inst{6-0} = 0b1110011;
+}
+
