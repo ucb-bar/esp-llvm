@@ -27,7 +27,9 @@ Version : (under version control)
 
 This repository contains a new target for LLVM RISC-V. It supports the latest
 version of the ISA 2.0. This backend currently only supports assembly generation
-and riscv64-unknown-\*-gcc must be used to assemble and link the executable.
+and riscv64-unknown-\*-gcc must be used to assemble and link the executable. The
+[RISCV](https://github.com/riscv/riscv-llvm/tree/RISCV) branch is based on LLVM 3.3 and, the 
+[riscv-trunk](https://github.com/riscv/riscv-llvm/tree/riscv-trunk) branch is following upstream LLVM master.
 
 The backend is structured similarly to most other LLVM backends and tries to use 
 the tablegen format as much as possible. The description of the instructions
