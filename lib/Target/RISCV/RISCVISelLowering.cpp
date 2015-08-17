@@ -54,12 +54,6 @@ void RISCVTargetObjectFile::Initialize(MCContext &Ctx, const TargetMachine &TM) 
   InitializeELF(TM.Options.UseInitArray);
 }
 
-/*
-RISCVTargetLowering::RISCVTargetLowering(RISCVTargetMachine &tm)
-  : TargetLowering(tm, new RISCVTargetObjectFile()),
-    Subtarget(*tm.getSubtargetImpl()), TM(tm), 
-    IsRV32(Subtarget.isRV32()) {
->>>>>>> 2615d79... Add RISCVTargetObjectFile to fix UseInitArray*/
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm, 
                                          const RISCVSubtarget &STI)
     : TargetLowering(tm), Subtarget(STI), IsRV32(Subtarget.isRV32()) {
