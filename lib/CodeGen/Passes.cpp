@@ -13,7 +13,11 @@
 //===---------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/Analysis/BasicAliasAnalysis.h"
+#include "llvm/Analysis/CFLAliasAnalysis.h"
 #include "llvm/Analysis/Passes.h"
+#include "llvm/Analysis/ScopedNoAliasAA.h"
+#include "llvm/Analysis/TypeBasedAliasAnalysis.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
 #include "llvm/IR/IRPrintingPasses.h"
@@ -214,10 +218,10 @@ TargetPassConfig::~TargetPassConfig() {
 // Out of line constructor provides default values for pass options and
 // registers all common codegen passes.
 TargetPassConfig::TargetPassConfig(TargetMachine *tm, PassManagerBase &pm)
-    : ImmutablePass(ID), PM(&pm), StartAfter(nullptr), StopAfter(nullptr),
-      Started(true), Stopped(false), AddingMachinePasses(false), TM(tm),
-      Impl(nullptr), Initialized(false), DisableVerify(false),
-      EnableTailMerge(true), EnableShrinkWrap(false) {
+    : ImmutablePass(ID), PM(&pm), StartBefore(nullptr), StartAfter(nullptr),
+      StopAfter(nullptr), Started(true), Stopped(false),
+      AddingMachinePasses(false), TM(tm), Impl(nullptr), Initialized(false),
+      DisableVerify(false), EnableTailMerge(true), EnableShrinkWrap(false) {
 
   Impl = new PassConfigImpl();
 
@@ -288,6 +292,8 @@ void TargetPassConfig::addPass(Pass *P, bool verifyAfter, bool printAfter) {
   // and shouldn't reference it.
   AnalysisID PassID = P->getPassID();
 
+  if (StartBefore == PassID)
+    Started = true;
   if (Started && !Stopped) {
     std::string Banner;
     // Construct banner message before PM->add() as that may delete the pass.
@@ -422,7 +428,7 @@ void TargetPassConfig::addPassesToHandleExceptions() {
     // removed from the parent invoke(s). This could happen when a landing
     // pad is shared by multiple invokes and is also a target of a normal
     // edge from elsewhere.
-    addPass(createSjLjEHPreparePass(TM));
+    addPass(createSjLjEHPreparePass());
     // FALLTHROUGH
   case ExceptionHandling::DwarfCFI:
   case ExceptionHandling::ARM:

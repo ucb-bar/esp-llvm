@@ -382,10 +382,24 @@ public:
   ///
   /// Note that this does not consider malloc and alloca to have side
   /// effects because the newly allocated memory is completely invisible to
-  /// instructions which don't used the returned value.  For cases where this
+  /// instructions which don't use the returned value.  For cases where this
   /// matters, isSafeToSpeculativelyExecute may be more appropriate.
   bool mayHaveSideEffects() const {
     return mayWriteToMemory() || mayThrow() || !mayReturn();
+  }
+
+  /// \brief Return true if the instruction is a variety of EH-block.
+  bool isEHPad() const {
+    switch (getOpcode()) {
+    case Instruction::CatchPad:
+    case Instruction::CatchEndPad:
+    case Instruction::CleanupPad:
+    case Instruction::LandingPad:
+    case Instruction::TerminatePad:
+      return true;
+    default:
+      return false;
+    }
   }
 
   /// clone() - Create a copy of 'this' instruction that is identical in all

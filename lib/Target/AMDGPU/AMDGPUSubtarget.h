@@ -76,6 +76,7 @@ private:
   bool EnablePromoteAlloca;
   bool EnableIfCvt;
   bool EnableLoadStoreOpt;
+  bool EnableUnsafeDSOffsetFolding;
   unsigned WavefrontSize;
   bool CFALUBug;
   int LocalMemorySize;
@@ -88,6 +89,7 @@ private:
   bool FeatureDisable;
   int LDSBankCount;
   unsigned IsaVersion; 
+  bool EnableHugeScratchBuffer;
 
   AMDGPUFrameLowering FrameLowering;
   std::unique_ptr<AMDGPUTargetLowering> TLInfo;
@@ -222,6 +224,10 @@ public:
     return EnableLoadStoreOpt;
   }
 
+  bool unsafeDSOffsetFoldingEnabled() const {
+    return EnableUnsafeDSOffsetFolding;
+  }
+
   unsigned getWavefrontSize() const {
     return WavefrontSize;
   }
@@ -264,6 +270,10 @@ public:
 
   StringRef getDeviceName() const {
     return DevName;
+  }
+
+  bool enableHugeScratchBuffer() const {
+    return EnableHugeScratchBuffer;
   }
 
   bool dumpCode() const {

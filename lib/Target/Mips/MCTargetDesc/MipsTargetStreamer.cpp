@@ -99,8 +99,14 @@ void MipsTargetStreamer::emitDirectiveModuleOddSPReg() {
   if (!ABIFlagsSection.OddSPReg && !ABIFlagsSection.Is32BitABI)
     report_fatal_error("+nooddspreg is only valid for O32");
 }
+void MipsTargetStreamer::emitDirectiveModuleSoftFloat() {}
+void MipsTargetStreamer::emitDirectiveModuleHardFloat() {}
 void MipsTargetStreamer::emitDirectiveSetFp(
     MipsABIFlagsSection::FpABIKind Value) {
+  forbidModuleDirective();
+}
+void MipsTargetStreamer::emitDirectiveSetOddSPReg() { forbidModuleDirective(); }
+void MipsTargetStreamer::emitDirectiveSetNoOddSPReg() {
   forbidModuleDirective();
 }
 
@@ -388,6 +394,24 @@ void MipsTargetAsmStreamer::emitDirectiveModuleOddSPReg() {
   MipsTargetStreamer::emitDirectiveModuleOddSPReg();
 
   OS << "\t.module\t" << (ABIFlagsSection.OddSPReg ? "" : "no") << "oddspreg\n";
+}
+
+void MipsTargetAsmStreamer::emitDirectiveSetOddSPReg() {
+  MipsTargetStreamer::emitDirectiveSetOddSPReg();
+  OS << "\t.set\toddspreg\n";
+}
+
+void MipsTargetAsmStreamer::emitDirectiveSetNoOddSPReg() {
+  MipsTargetStreamer::emitDirectiveSetNoOddSPReg();
+  OS << "\t.set\tnooddspreg\n";
+}
+
+void MipsTargetAsmStreamer::emitDirectiveModuleSoftFloat() {
+  OS << "\t.module\tsoftfloat\n";
+}
+
+void MipsTargetAsmStreamer::emitDirectiveModuleHardFloat() {
+  OS << "\t.module\thardfloat\n";
 }
 
 // This part is for ELF object output.
@@ -742,7 +766,7 @@ void MipsTargetELFStreamer::emitDirectiveCpsetup(unsigned RegNo,
   // Either store the old $gp in a register or on the stack
   if (IsReg) {
     // move $save, $gpreg
-    Inst.setOpcode(Mips::DADDu);
+    Inst.setOpcode(Mips::OR64);
     Inst.addOperand(MCOperand::createReg(RegOrOffset));
     Inst.addOperand(MCOperand::createReg(Mips::GP));
     Inst.addOperand(MCOperand::createReg(Mips::ZERO));

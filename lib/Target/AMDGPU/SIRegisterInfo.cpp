@@ -348,7 +348,8 @@ const TargetRegisterClass *SIRegisterInfo::getPhysRegClass(unsigned Reg) const {
     &AMDGPU::SReg_128RegClass,
     &AMDGPU::VReg_256RegClass,
     &AMDGPU::SReg_256RegClass,
-    &AMDGPU::VReg_512RegClass
+    &AMDGPU::VReg_512RegClass,
+    &AMDGPU::SReg_512RegClass
   };
 
   for (const TargetRegisterClass *BaseClass : BaseClasses) {
@@ -372,8 +373,6 @@ const TargetRegisterClass *SIRegisterInfo::getEquivalentVGPRClass(
                                          const TargetRegisterClass *SRC) const {
     if (hasVGPRs(SRC)) {
       return SRC;
-    } else if (SRC == &AMDGPU::SCCRegRegClass) {
-      return &AMDGPU::VCCRegRegClass;
     } else if (getCommonSubClass(SRC, &AMDGPU::SGPR_32RegClass)) {
       return &AMDGPU::VGPR_32RegClass;
     } else if (getCommonSubClass(SRC, &AMDGPU::SGPR_64RegClass)) {
@@ -499,7 +498,7 @@ unsigned SIRegisterInfo::findUnusedRegister(const MachineRegisterInfo &MRI,
 
   for (TargetRegisterClass::iterator I = RC->begin(), E = RC->end();
        I != E; ++I) {
-    if (!MRI.isPhysRegUsed(*I))
+    if (MRI.reg_nodbg_empty(*I))
       return *I;
   }
   return AMDGPU::NoRegister;

@@ -272,19 +272,18 @@ public:
 
     RelocationEntry RE(getRelocationEntry(SectionID, Obj, RelI));
     RE.Addend = decodeAddend(RE);
-    RelocationValueRef Value(
-        getRelocationValueRef(Obj, RelI, RE, ObjSectionToID));
 
     assert((ExplicitAddend == 0 || RE.Addend == 0) && "Relocation has "\
       "ARM64_RELOC_ADDEND and embedded addend in the instruction.");
-    if (ExplicitAddend) {
+    if (ExplicitAddend)
       RE.Addend = ExplicitAddend;
-      Value.Offset = ExplicitAddend;
-    }
+
+    RelocationValueRef Value(
+        getRelocationValueRef(Obj, RelI, RE, ObjSectionToID));
 
     bool IsExtern = Obj.getPlainRelocationExternal(RelInfo);
     if (!IsExtern && RE.IsPCRel)
-      makeValueAddendPCRel(Value, Obj, RelI, 1 << RE.Size);
+      makeValueAddendPCRel(Value, RelI, 1 << RE.Size);
 
     RE.Addend = Value.Offset;
 

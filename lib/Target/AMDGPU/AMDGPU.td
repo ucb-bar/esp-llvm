@@ -98,6 +98,16 @@ def FeatureEnableLoadStoreOpt : SubtargetFeature <"load-store-opt",
         "true",
         "Enable SI load/store optimizer pass">;
 
+// Performance debugging feature. Allow using DS instruction immediate
+// offsets even if the base pointer can't be proven to be base. On SI,
+// base pointer values that won't give the same result as a 16-bit add
+// are not safe to fold, but this will override the conservative test
+// for the base pointer.
+def FeatureEnableUnsafeDSOffsetFolding : SubtargetFeature <"unsafe-ds-offset-folding",
+        "EnableUnsafeDSOffsetFolding",
+        "true",
+        "Force using DS instruction immediate offsets on SI">;
+
 def FeatureFlatAddressSpace : SubtargetFeature<"flat-address-space",
         "FlatAddressSpace",
         "true",
@@ -112,6 +122,11 @@ def FeatureSGPRInitBug : SubtargetFeature<"sgpr-init-bug",
         "SGPRInitBug",
         "true",
         "VI SGPR initilization bug requiring a fixed SGPR allocation size">;
+
+def FeatureEnableHugeScratchBuffer : SubtargetFeature<"huge-scratch-buffer",
+        "EnableHugeScratchBuffer",
+        "true",
+        "Enable scratch buffer sizes greater than 128 GB">;
 
 class SubtargetFeatureFetchLimit <string Value> :
                           SubtargetFeature <"fetch"#Value,

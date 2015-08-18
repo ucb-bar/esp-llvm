@@ -80,8 +80,7 @@ computeTargetABI(const Triple &TT, StringRef CPU,
   // FIXME: This is duplicated code from the front end and should be unified.
   if (TT.isOSBinFormatMachO()) {
     if (TT.getEnvironment() == llvm::Triple::EABI ||
-        (TT.getOS() == llvm::Triple::UnknownOS &&
-         TT.getObjectFormat() == llvm::Triple::MachO) ||
+        (TT.getOS() == llvm::Triple::UnknownOS && TT.isOSBinFormatMachO()) ||
         CPU.startswith("cortex-m")) {
       TargetABI = ARMBaseTargetMachine::ARM_ABI_AAPCS;
     } else {
@@ -104,8 +103,8 @@ computeTargetABI(const Triple &TT, StringRef CPU,
       TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
       break;
     default:
-      if (TT.getOS() == llvm::Triple::NetBSD)
-	TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
+      if (TT.isOSNetBSD())
+        TargetABI = ARMBaseTargetMachine::ARM_ABI_APCS;
       else
 	TargetABI = ARMBaseTargetMachine::ARM_ABI_AAPCS;
       break;
@@ -349,7 +348,13 @@ bool ARMPassConfig::addPreISel() {
     // tricky when doing code gen per function.
     bool OnlyOptimizeForSize = (TM->getOptLevel() < CodeGenOpt::Aggressive) &&
                                (EnableGlobalMerge == cl::BOU_UNSET);
-    addPass(createGlobalMergePass(TM, 127, OnlyOptimizeForSize));
+    // Merging of extern globals is enabled by default on non-Mach-O as we
+    // expect it to be generally either beneficial or harmless. On Mach-O it
+    // is disabled as we emit the .subsections_via_symbols directive which
+    // means that merging extern globals is not safe.
+    bool MergeExternalByDefault = !TM->getTargetTriple().isOSBinFormatMachO();
+    addPass(createGlobalMergePass(TM, 127, OnlyOptimizeForSize,
+                                  MergeExternalByDefault));
   }
 
   return false;

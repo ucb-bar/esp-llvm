@@ -32,10 +32,10 @@ dnl===-----------------------------------------------------------------------===
 dnl Initialize autoconf and define the package name, version number and
 dnl address for reporting bugs.
 
-AC_INIT([LLVM],[3.7.0svn],[http://llvm.org/bugs/])
+AC_INIT([LLVM],[3.8.0svn],[http://llvm.org/bugs/])
 
 LLVM_VERSION_MAJOR=3
-LLVM_VERSION_MINOR=7
+LLVM_VERSION_MINOR=8
 LLVM_VERSION_PATCH=0
 LLVM_VERSION_SUFFIX=svn
 
@@ -75,15 +75,7 @@ fi
 
 dnl Quit if it is an in-source build
 if test ${srcdir} == "." ; then
-  AC_MSG_WARN([**************************************************************************************])
-  AC_MSG_WARN([*                                                                                    *])
-  AC_MSG_WARN([*                                   WARNING                                          *])
-  AC_MSG_WARN([*                                                                                    *])
-  AC_MSG_WARN([*                        In-source builds are deprecated.                            *])
-  AC_MSG_WARN([*                                                                                    *])
-  AC_MSG_WARN([*               Please configure from a separate build directory!                    *])
-  AC_MSG_WARN([*                                                                                    *])
-  AC_MSG_WARN([**************************************************************************************])
+  AC_MSG_ERROR([In-source builds are not allowed. Please configure from a separate build directory!])
 fi
 
 dnl Default to empty (i.e. assigning the null string to) CFLAGS and CXXFLAGS,
@@ -445,7 +437,7 @@ AC_CACHE_CHECK([target architecture],[llvm_cv_target_arch],
   hexagon-*)              llvm_cv_target_arch="Hexagon" ;;
   nvptx-*)                llvm_cv_target_arch="NVPTX" ;;
   s390x-*)                llvm_cv_target_arch="SystemZ" ;;
-  riscv-*)                llvm_cv_target_arch="RISCV" ;;
+  wasm*-*)                llvm_cv_target_arch="WebAssembly" ;;
   *)                      llvm_cv_target_arch="Unknown" ;;
 esac])
 
@@ -481,7 +473,7 @@ case $host in
   msp430-*)               host_arch="MSP430" ;;
   hexagon-*)              host_arch="Hexagon" ;;
   s390x-*)                host_arch="SystemZ" ;;
-  riscv-*)                host_arch="RISCV" ;;
+  wasm*-*)                host_arch="WebAssembly" ;;
   *)                      host_arch="Unknown" ;;
 esac
 
@@ -814,7 +806,7 @@ else
     Hexagon)     AC_SUBST(TARGET_HAS_JIT,0) ;;
     NVPTX)       AC_SUBST(TARGET_HAS_JIT,0) ;;
     SystemZ)     AC_SUBST(TARGET_HAS_JIT,1) ;;
-    RISCV)       AC_SUBST(TARGET_HAS_JIT,0) ;;
+    WebAssembly) AC_SUBST(TARGET_HAS_JIT,0) ;;
     *)           AC_SUBST(TARGET_HAS_JIT,0) ;;
   esac
 fi
@@ -1108,7 +1100,7 @@ TARGETS_TO_BUILD=""
 AC_ARG_ENABLE([targets],AS_HELP_STRING([--enable-targets],
     [Build specific host targets: all or target1,target2,... Valid targets are:
      host, x86, x86_64, sparc, powerpc, arm64, arm, aarch64, mips, hexagon,
-     xcore, msp430, nvptx, systemz, r600, bpf, and cpp (default=all)]),,
+     xcore, msp430, nvptx, systemz, r600, bpf, wasm, and cpp (default=all)]),,
     enableval=all)
 if test "$enableval" = host-only ; then
   enableval=host
@@ -1137,6 +1129,7 @@ case "$enableval" in
         systemz)  TARGETS_TO_BUILD="SystemZ $TARGETS_TO_BUILD" ;;
         amdgpu)   TARGETS_TO_BUILD="AMDGPU $TARGETS_TO_BUILD" ;;
         r600)     TARGETS_TO_BUILD="AMDGPU $TARGETS_TO_BUILD" ;;
+        wasm)     TARGETS_TO_BUILD="WebAssembly $TARGETS_TO_BUILD" ;;
         host) case "$llvm_cv_target_arch" in
             x86)         TARGETS_TO_BUILD="X86 $TARGETS_TO_BUILD" ;;
             x86_64)      TARGETS_TO_BUILD="X86 $TARGETS_TO_BUILD" ;;
@@ -1150,7 +1143,7 @@ case "$enableval" in
             Hexagon)     TARGETS_TO_BUILD="Hexagon $TARGETS_TO_BUILD" ;;
             NVPTX)       TARGETS_TO_BUILD="NVPTX $TARGETS_TO_BUILD" ;;
             SystemZ)     TARGETS_TO_BUILD="SystemZ $TARGETS_TO_BUILD" ;;
-            RISCV)       TARGETS_TO_BUILD="RISCV $TARGETS_TO_BUILD" ;;
+            WebAssembly) TARGETS_TO_BUILD="WebAssembly $TARGETS_TO_BUILD" ;;
             *)       AC_MSG_ERROR([Can not set target to build]) ;;
           esac ;;
         *) AC_MSG_ERROR([Unrecognized target $a_target]) ;;
@@ -1555,25 +1548,31 @@ AC_MSG_RESULT([ok])
 
 dnl Check optional compiler flags.
 AC_MSG_CHECKING([optional compiler flags])
-CXX_FLAG_CHECK(NO_VARIADIC_MACROS, [-Wno-variadic-macros])
-CXX_FLAG_CHECK(NO_MISSING_FIELD_INITIALIZERS, [-Wno-missing-field-initializers])
-CXX_FLAG_CHECK(COVERED_SWITCH_DEFAULT, [-Wcovered-switch-default])
-
-dnl GCC's potential uninitialized use analysis is weak and presents lots of
-dnl false positives, so disable it.
-NO_UNINITIALIZED=
-NO_MAYBE_UNINITIALIZED=
-if test "$GXX" = "yes"
-then
-  CXX_FLAG_CHECK(NO_MAYBE_UNINITIALIZED, [-Wno-maybe-uninitialized])
-  dnl gcc 4.7 introduced -Wmaybe-uninitialized to distinguish cases which are
-  dnl known to be uninitialized from cases which might be uninitialized.  We
-  dnl still want to catch the first kind of errors.
-  if test -z "$NO_MAYBE_UNINITIALIZED"
-  then
-    CXX_FLAG_CHECK(NO_UNINITIALIZED, [-Wno-uninitialized])
-  fi
-fi
+case "$llvm_cv_cxx_compiler" in
+  clang)
+    CXX_FLAG_CHECK(NO_VARIADIC_MACROS, [-Wno-variadic-macros])
+    CXX_FLAG_CHECK(MISSING_FIELD_INITIALIZERS, [-Wmissing-field-initializers])
+    CXX_FLAG_CHECK(COVERED_SWITCH_DEFAULT, [-Wcovered-switch-default])
+    ;;
+  gcc)
+    dnl If we're using gcc check for -Wno-missing-field-initializers as gcc will warn
+    dnl on plain open brace initializations. clang won't so use -Wmissing-field-initializers
+    dnl there.
+    CXX_FLAG_CHECK(MISSING_FIELD_INITIALIZERS, [-Wno-missing-field-initializers])
+    CXX_FLAG_CHECK(NO_VARIADIC_MACROS, [-Wno-variadic-macros])
+    CXX_FLAG_CHECK(COVERED_SWITCH_DEFAULT, [-Wcovered-switch-default])
+    CXX_FLAG_CHECK(NO_MAYBE_UNINITIALIZED, [-Wno-maybe-uninitialized])
+    dnl gcc 4.7 introduced -Wmaybe-uninitialized to distinguish cases which are
+    dnl known to be uninitialized from cases which might be uninitialized.  We
+    dnl still want to catch the first kind of errors.
+    if test -z "$NO_MAYBE_UNINITIALIZED"
+    then
+      CXX_FLAG_CHECK(NO_UNINITIALIZED, [-Wno-uninitialized])
+    fi
+    ;;
+  unknown)
+    ;;
+esac
 
 dnl Check for misbehaving -Wcomment (gcc-4.7 has this) and maybe add
 dnl -Wno-comment to the flags.
@@ -1594,7 +1593,7 @@ int main() { return 0; }
 AC_SUBST(NO_COMMENT, [$no_comment])
 CXXFLAGS="$llvm_cv_old_cxxflags"
 
-AC_MSG_RESULT([$NO_VARIADIC_MACROS $NO_MISSING_FIELD_INITIALIZERS $COVERED_SWITCH_DEFAULT $NO_UNINITIALIZED $NO_MAYBE_UNINITIALIZED $NO_COMMENT])
+AC_MSG_RESULT([$NO_VARIADIC_MACROS $MISSING_FIELD_INITIALIZERS $COVERED_SWITCH_DEFAULT $NO_UNINITIALIZED $NO_MAYBE_UNINITIALIZED $NO_COMMENT])
 
 AC_ARG_WITH([python],
             [AS_HELP_STRING([--with-python], [path to python])],
@@ -1635,7 +1634,8 @@ dnl===-----------------------------------------------------------------------===
 
 AC_CHECK_LIB(m,sin)
 if test "$llvm_cv_os_type" = "MingW" ; then
-  AC_CHECK_LIB(imagehlp, main)
+  dnl mingw-gcc's driver doesn't imply -lole32 by default so we may need this
+  dnl when being built with gcc for bootstrapping purposes.
   AC_CHECK_LIB(ole32, main)
   AC_CHECK_LIB(psapi, main)
   AC_CHECK_LIB(shell32, main)
@@ -1794,7 +1794,6 @@ dnl Generally we're looking for POSIX headers.
 AC_HEADER_DIRENT
 AC_HEADER_MMAP_ANONYMOUS
 AC_HEADER_STAT
-AC_HEADER_SYS_WAIT
 AC_HEADER_TIME
 
 AC_LANG_PUSH([C++])
@@ -1806,7 +1805,6 @@ AC_LANG_POP([C++])
 
 AC_CHECK_HEADERS([dlfcn.h execinfo.h fcntl.h inttypes.h link.h])
 AC_CHECK_HEADERS([malloc.h setjmp.h signal.h stdint.h termios.h unistd.h])
-AC_CHECK_HEADERS([utime.h])
 AC_CHECK_HEADERS([sys/mman.h sys/param.h sys/resource.h sys/time.h sys/uio.h])
 AC_CHECK_HEADERS([sys/ioctl.h malloc/malloc.h mach/mach.h])
 AC_CHECK_HEADERS([valgrind/valgrind.h])
@@ -1884,10 +1882,9 @@ AC_CHECK_FUNCS([isatty mkdtemp mkstemp ])
 AC_CHECK_FUNCS([mktemp posix_spawn pread realpath sbrk setrlimit ])
 AC_CHECK_FUNCS([strerror strerror_r setenv ])
 AC_CHECK_FUNCS([strtoll strtoq sysconf malloc_zone_statistics ])
-AC_CHECK_FUNCS([setjmp longjmp sigsetjmp siglongjmp writev])
+AC_CHECK_FUNCS([setjmp longjmp writev])
 AC_CHECK_FUNCS([futimes futimens])
 AC_C_PRINTF_A
-AC_FUNC_RAND48
 
 dnl Check for arc4random accessible via AC_INCLUDES_DEFAULT.
 AC_CHECK_DECLS([arc4random])

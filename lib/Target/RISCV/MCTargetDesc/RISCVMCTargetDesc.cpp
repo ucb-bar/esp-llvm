@@ -44,7 +44,7 @@ static MCInstrInfo *createRISCVMCInstrInfo() {
   return X;
 }
 
-static MCRegisterInfo *createRISCVMCRegisterInfo(StringRef TT) {
+static MCRegisterInfo *createRISCVMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
   InitRISCVMCRegisterInfo(X, RISCV::sp);
   return X;
@@ -53,12 +53,10 @@ static MCRegisterInfo *createRISCVMCRegisterInfo(StringRef TT) {
 static MCSubtargetInfo *createRISCVMCSubtargetInfo(const Triple &TT,
                                                      StringRef CPU,
                                                      StringRef FS) {
-  MCSubtargetInfo *X = new MCSubtargetInfo();
-  InitRISCVMCSubtargetInfo(X, TT, CPU, FS);
-  return X;
+  return createRISCVMCSubtargetInfoImpl(TT, CPU, FS);
 }
 
-static MCCodeGenInfo *createRISCVMCCodeGenInfo(StringRef TT, Reloc::Model RM,
+static MCCodeGenInfo *createRISCVMCCodeGenInfo(const Triple &TT, Reloc::Model RM,
                                                  CodeModel::Model CM,
                                                  CodeGenOpt::Level OL) {
   MCCodeGenInfo *X = new MCCodeGenInfo();

@@ -1449,6 +1449,7 @@ bool RegisterCoalescer::joinCopy(MachineInstr *CopyMI, bool &Again) {
                    << format("%04X", S.LaneMask) << ")\n");
       LIS->shrinkToUses(S, LI.reg);
     }
+    LI.removeEmptySubRanges();
   }
   if (ShrinkMainRange) {
     LiveInterval &LI = LIS->getInterval(CP.getDstReg());
@@ -1529,6 +1530,14 @@ bool RegisterCoalescer::joinReservedPhysReg(CoalescerPair &CP) {
       if (MI->readsRegister(DstReg, TRI)) {
         DEBUG(dbgs() << "\t\tInterference (read): " << *MI);
         return false;
+      }
+
+      // We must also check for clobbers caused by regmasks.
+      for (const auto &MO : MI->operands()) {
+        if (MO.isRegMask() && MO.clobbersPhysReg(DstReg)) {
+          DEBUG(dbgs() << "\t\tInterference (regmask clobber): " << *MI);
+          return false;
+        }
       }
     }
 
@@ -1813,7 +1822,7 @@ public:
 
   /// Removes subranges starting at copies that get removed. This sometimes
   /// happens when undefined subranges are copied around. These ranges contain
-  /// no usefull information and can be removed.
+  /// no useful information and can be removed.
   void pruneSubRegValues(LiveInterval &LI, unsigned &ShrinkMask);
 
   /// Erase any machine instructions that have been coalesced away.
@@ -2401,7 +2410,7 @@ void JoinVals::pruneSubRegValues(LiveInterval &LI, unsigned &ShrinkMask)
         continue;
       }
       // If a subrange ends at the copy, then a value was copied but only
-      // partially used later. Shrink the subregister range apropriately.
+      // partially used later. Shrink the subregister range appropriately.
       if (Q.valueIn() != nullptr && Q.valueOut() == nullptr) {
         DEBUG(dbgs() << "\t\tDead uses at sublane "
                      << format("%04X", S.LaneMask) << " at " << Def << "\n");
@@ -2790,7 +2799,7 @@ bool RegisterCoalescer::applyTerminalRule(const MachineInstr &Copy) const {
       !isTerminalReg(DstReg, Copy, MRI))
     return false;
 
-  // DstReg is a terminal node. Check if it inteferes with any other
+  // DstReg is a terminal node. Check if it interferes with any other
   // copy involving SrcReg.
   const MachineBasicBlock *OrigBB = Copy.getParent();
   const LiveInterval &DstLI = LIS->getInterval(DstReg);

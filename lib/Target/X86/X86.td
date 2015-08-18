@@ -181,6 +181,11 @@ def FeatureSlowDivide64 : SubtargetFeature<"idivq-to-divw",
 def FeaturePadShortFunctions : SubtargetFeature<"pad-short-functions",
                                      "PadShortFunctions", "true",
                                      "Pad short functions">;
+// TODO: This feature ought to be renamed.
+// What it really refers to are CPUs for which certain instructions
+// (which ones besides the example below?) are microcoded.
+// The best examples of this are the memory forms of CALL and PUSH
+// instructions, which should be avoided in favor of a MOV + register CALL/PUSH.
 def FeatureCallRegIndirect : SubtargetFeature<"call-reg-indirect",
                                      "CallRegIndirect", "true",
                                      "Call register indirect">;
@@ -302,6 +307,7 @@ def : WestmereProc<"westmere">;
 class SandyBridgeProc<string Name> : ProcessorModel<Name, SandyBridgeModel, [
                                        FeatureAVX,
                                        FeatureCMPXCHG16B,
+                                       FeatureSlowBTMem,
                                        FeatureFastUAMem,
                                        FeatureSlowUAMem32,
                                        FeaturePOPCNT,
@@ -314,6 +320,7 @@ def : SandyBridgeProc<"corei7-avx">; // Legacy alias.
 class IvyBridgeProc<string Name> : ProcessorModel<Name, SandyBridgeModel, [
                                      FeatureAVX,
                                      FeatureCMPXCHG16B,
+                                     FeatureSlowBTMem,
                                      FeatureFastUAMem,
                                      FeatureSlowUAMem32,
                                      FeaturePOPCNT,
@@ -329,6 +336,7 @@ def : IvyBridgeProc<"core-avx-i">; // Legacy alias.
 class HaswellProc<string Name> : ProcessorModel<Name, HaswellModel, [
                                    FeatureAVX2,
                                    FeatureCMPXCHG16B,
+                                   FeatureSlowBTMem,
                                    FeatureFastUAMem,
                                    FeaturePOPCNT,
                                    FeatureAES,
@@ -351,6 +359,7 @@ def : HaswellProc<"core-avx2">; // Legacy alias.
 class BroadwellProc<string Name> : ProcessorModel<Name, HaswellModel, [
                                      FeatureAVX2,
                                      FeatureCMPXCHG16B,
+                                     FeatureSlowBTMem,
                                      FeatureFastUAMem,
                                      FeaturePOPCNT,
                                      FeatureAES,
@@ -385,11 +394,12 @@ def : KnightsLandingProc<"knl">;
 class SkylakeProc<string Name> : ProcessorModel<Name, HaswellModel,
                      [FeatureAVX512, FeatureCDI,
                       FeatureDQI, FeatureBWI, FeatureVLX,
-                      FeatureCMPXCHG16B, FeatureFastUAMem, FeaturePOPCNT,
-                      FeatureAES, FeaturePCLMUL, FeatureRDRAND, FeatureF16C,
-                      FeatureFSGSBase, FeatureMOVBE, FeatureLZCNT, FeatureBMI,
-                      FeatureBMI2, FeatureFMA, FeatureRTM, FeatureHLE,
-                      FeatureSlowIncDec, FeatureMPX]>;
+                      FeatureCMPXCHG16B, FeatureSlowBTMem, FeatureFastUAMem,
+                      FeaturePOPCNT, FeatureAES, FeaturePCLMUL, FeatureRDRAND,
+                      FeatureF16C, FeatureFSGSBase, FeatureMOVBE, FeatureLZCNT,
+                      FeatureBMI, FeatureBMI2, FeatureFMA, FeatureRTM,
+                      FeatureHLE, FeatureADX, FeatureRDSEED, FeatureSlowIncDec,
+                      FeatureMPX]>;
 def : SkylakeProc<"skylake">;
 def : SkylakeProc<"skx">; // Legacy alias.
 

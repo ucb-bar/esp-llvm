@@ -375,8 +375,7 @@ void MachODumper::printSections(const MachOObjectFile *Obj) {
     DataRefImpl DR = Section.getRawDataRefImpl();
 
     StringRef Name;
-    if (error(Section.getName(Name)))
-      Name = "";
+    error(Section.getName(Name));
 
     ArrayRef<char> RawName = Obj->getSectionRawName(DR);
     StringRef SegmentName = Obj->getSectionFinalSegmentName(DR);
@@ -419,8 +418,7 @@ void MachODumper::printSections(const MachOObjectFile *Obj) {
       bool IsBSS = Section.isBSS();
       if (!IsBSS) {
         StringRef Data;
-        if (error(Section.getContents(Data)))
-          break;
+        error(Section.getContents(Data));
 
         W.printBinaryBlock("SectionData", Data);
       }
@@ -434,8 +432,7 @@ void MachODumper::printRelocations() {
   std::error_code EC;
   for (const SectionRef &Section : Obj->sections()) {
     StringRef Name;
-    if (error(Section.getName(Name)))
-      continue;
+    error(Section.getName(Name));
 
     bool PrintedGroup = false;
     for (const RelocationRef &Reloc : Section.relocations()) {
@@ -461,12 +458,9 @@ void MachODumper::printRelocation(const RelocationRef &Reloc) {
 
 void MachODumper::printRelocation(const MachOObjectFile *Obj,
                                   const RelocationRef &Reloc) {
-  uint64_t Offset;
+  uint64_t Offset = Reloc.getOffset();
   SmallString<32> RelocName;
-  if (error(Reloc.getOffset(Offset)))
-    return;
-  if (error(Reloc.getTypeName(RelocName)))
-    return;
+  Reloc.getTypeName(RelocName);
 
   DataRefImpl DR = Reloc.getRawDataRefImpl();
   MachO::any_relocation_info RE = Obj->getRelocation(DR);
@@ -477,14 +471,14 @@ void MachODumper::printRelocation(const MachOObjectFile *Obj,
   if (IsExtern) {
     symbol_iterator Symbol = Reloc.getSymbol();
     if (Symbol != Obj->symbol_end()) {
-      if (error(Symbol->getName(TargetName)))
-        return;
+      ErrorOr<StringRef> TargetNameOrErr = Symbol->getName();
+      error(TargetNameOrErr.getError());
+      TargetName = *TargetNameOrErr;
     }
   } else if (!IsScattered) {
     section_iterator SecI = Obj->getRelocationSection(DR);
     if (SecI != Obj->section_end()) {
-      if (error(SecI->getName(TargetName)))
-        return;
+      error(SecI->getName(TargetName));
     }
   }
   if (TargetName.empty())
@@ -541,15 +535,17 @@ void MachODumper::printDynamicSymbols() {
 
 void MachODumper::printSymbol(const SymbolRef &Symbol) {
   StringRef SymbolName;
-  if (Symbol.getName(SymbolName))
-    SymbolName = "";
+  if (ErrorOr<StringRef> SymbolNameOrErr = Symbol.getName())
+    SymbolName = *SymbolNameOrErr;
 
   MachOSymbol MOSymbol;
   getSymbol(Obj, Symbol.getRawDataRefImpl(), MOSymbol);
 
   StringRef SectionName = "";
-  section_iterator SecI(Obj->section_begin());
-  if (!error(Symbol.getSection(SecI)) && SecI != Obj->section_end())
+  ErrorOr<section_iterator> SecIOrErr = Symbol.getSection();
+  error(SecIOrErr.getError());
+  section_iterator SecI = *SecIOrErr;
+  if (SecI != Obj->section_end())
     error(SecI->getName(SectionName));
 
   DictScope D(W, "Symbol");

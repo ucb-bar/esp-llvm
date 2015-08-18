@@ -168,7 +168,7 @@ class MachineFrameInfo {
   /// SP then OffsetAdjustment is zero; if FP is used, OffsetAdjustment is set
   /// to the distance between the initial SP and the value in FP.  For many
   /// targets, this value is only used when generating debug info (via
-  /// TargetRegisterInfo::getFrameIndexOffset); when generating code, the
+  /// TargetRegisterInfo::getFrameIndexReference); when generating code, the
   /// corresponding adjustments are performed directly.
   int OffsetAdjustment;
 
@@ -229,9 +229,9 @@ class MachineFrameInfo {
   /// Whether the "realign-stack" option is on.
   bool RealignOption;
 
-  /// True if the function includes inline assembly that adjusts the stack
-  /// pointer.
-  bool HasInlineAsmWithSPAdjust;
+  /// True if the function dynamically adjusts the stack pointer through some
+  /// opaque mechanism like inline assembly or Win32 EH.
+  bool HasOpaqueSPAdjustment;
 
   /// True if the function contains a call to the llvm.vastart intrinsic.
   bool HasVAStart;
@@ -269,7 +269,7 @@ public:
     LocalFrameSize = 0;
     LocalFrameMaxAlign = 0;
     UseLocalStackAllocationBlock = false;
-    HasInlineAsmWithSPAdjust = false;
+    HasOpaqueSPAdjustment = false;
     HasVAStart = false;
     HasMustTailInVarArgFunc = false;
     Save = nullptr;
@@ -337,14 +337,14 @@ public:
   }
 
   /// Get the local offset mapping for a for an object.
-  std::pair<int, int64_t> getLocalFrameObjectMap(int i) {
+  std::pair<int, int64_t> getLocalFrameObjectMap(int i) const {
     assert (i >= 0 && (unsigned)i < LocalFrameObjects.size() &&
             "Invalid local object reference!");
     return LocalFrameObjects[i];
   }
 
   /// Return the number of objects allocated into the local object block.
-  int64_t getLocalFrameObjectCount() { return LocalFrameObjects.size(); }
+  int64_t getLocalFrameObjectCount() const { return LocalFrameObjects.size(); }
 
   /// Set the size of the local object blob.
   void setLocalFrameSize(int64_t sz) { LocalFrameSize = sz; }
@@ -361,7 +361,9 @@ public:
 
   /// Get whether the local allocation blob should be allocated together or
   /// let PEI allocate the locals in it directly.
-  bool getUseLocalStackAllocationBlock() {return UseLocalStackAllocationBlock;}
+  bool getUseLocalStackAllocationBlock() const {
+    return UseLocalStackAllocationBlock;
+  }
 
   /// setUseLocalStackAllocationBlock - Set whether the local allocation blob
   /// should be allocated together or let PEI allocate the locals in it
@@ -468,9 +470,9 @@ public:
   bool hasCalls() const { return HasCalls; }
   void setHasCalls(bool V) { HasCalls = V; }
 
-  /// Returns true if the function contains any stack-adjusting inline assembly.
-  bool hasInlineAsmWithSPAdjust() const { return HasInlineAsmWithSPAdjust; }
-  void setHasInlineAsmWithSPAdjust(bool B) { HasInlineAsmWithSPAdjust = B; }
+  /// Returns true if the function contains opaque dynamic stack adjustments.
+  bool hasOpaqueSPAdjustment() const { return HasOpaqueSPAdjustment; }
+  void setHasOpaqueSPAdjustment(bool B) { HasOpaqueSPAdjustment = B; }
 
   /// Returns true if the function calls the llvm.va_start intrinsic.
   bool hasVAStart() const { return HasVAStart; }
@@ -539,6 +541,14 @@ public:
     assert(unsigned(ObjectIdx+NumFixedObjects) < Objects.size() &&
            "Invalid Object Idx!");
     return Objects[ObjectIdx+NumFixedObjects].Size == ~0ULL;
+  }
+
+  /// Returns true if the specified index corresponds to a variable sized
+  /// object.
+  bool isVariableSizedObjectIndex(int ObjectIdx) const {
+    assert(unsigned(ObjectIdx + NumFixedObjects) < Objects.size() &&
+           "Invalid Object Idx!");
+    return Objects[ObjectIdx + NumFixedObjects].Size == 0;
   }
 
   /// Create a new statically sized stack object, returning

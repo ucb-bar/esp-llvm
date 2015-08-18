@@ -393,7 +393,7 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
     SDValue imm = CurDAG->getTargetConstant(0, DL, Subtarget.isRV64() ? MVT::i64 : MVT::i32);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     SDValue TFI =
-        CurDAG->getTargetFrameIndex(FI, getTargetLowering()->getPointerTy());
+        CurDAG->getTargetFrameIndex(FI, getTargetLowering()->getPointerTy(CurDAG->getDataLayout()));
     unsigned Opc = Subtarget.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     EVT VT = Subtarget.isRV64() ? MVT::i64 : MVT::i32;
     

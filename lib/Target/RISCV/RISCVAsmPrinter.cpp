@@ -51,7 +51,7 @@ EmitMachineConstantPoolValue(MachineConstantPoolValue *MCPV) {
       getSymbol(RVCPV->getGlobalValue()),
       getModifierVariantKind(RVCPV->getModifier()), OutContext);
   uint64_t Size =
-      TM.getDataLayout()->getTypeAllocSize(RVCPV->getType());
+      getDataLayout().getTypeAllocSize(RVCPV->getType());
 
   OutStreamer->EmitValue(Expr, Size);
 }
@@ -131,12 +131,12 @@ void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
       OutStreamer->SwitchSection(TLOFELF.getDataRelSection());
-      const DataLayout *TD = TM.getDataLayout();
+      const DataLayout TD = getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {
         OutStreamer->EmitLabel(Stubs[i].first);
         OutStreamer->EmitSymbolValue(Stubs[i].second.getPointer(),
-                                    TD->getPointerSize(0), 0);
+                                    TD.getPointerSize(0), 0);
       }
       Stubs.clear();
     }

@@ -144,7 +144,6 @@ class ELFObjectWriter : public MCObjectWriter {
       Renames.clear();
       Relocations.clear();
       StrTabBuilder.clear();
-      SymtabShndxSectionIndex = 0;
       SectionTable.clear();
       MCObjectWriter::reset();
     }
@@ -866,6 +865,9 @@ void ELFObjectWriter::computeSymbolTable(
     else
       ExternalSymbolData.push_back(MSD);
   }
+
+  // This holds the .symtab_shndx section index.
+  unsigned SymtabShndxSectionIndex = 0;
 
   if (HasLargeSectionIndex) {
     MCSectionELF *SymtabShndxSection =

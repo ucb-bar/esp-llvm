@@ -156,8 +156,10 @@ public:
 } // End of anonymous namespace
 
 TargetIRAnalysis AMDGPUTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis(
-      [this](Function &F) { return TargetTransformInfo(AMDGPUTTIImpl(this)); });
+  return TargetIRAnalysis([this](Function &F) {
+    return TargetTransformInfo(
+        AMDGPUTTIImpl(this, F.getParent()->getDataLayout()));
+  });
 }
 
 void AMDGPUPassConfig::addIRPasses() {
@@ -170,6 +172,8 @@ void AMDGPUPassConfig::addIRPasses() {
   // functions, then we will generate code for the first function
   // without ever running any passes on the second.
   addPass(createBarrierNoopPass());
+  // Handle uses of OpenCL image2d_t, image3d_t and sampler_t arguments.
+  addPass(createAMDGPUOpenCLImageTypeLoweringPass());
   TargetPassConfig::addIRPasses();
 }
 
@@ -269,6 +273,7 @@ void GCNPassConfig::addPreRegAlloc() {
     // also need extra copies to the address operand to be eliminated.
     initializeSILoadStoreOptimizerPass(*PassRegistry::getPassRegistry());
     insertPass(&MachineSchedulerID, &SILoadStoreOptimizerID);
+    insertPass(&MachineSchedulerID, &RegisterCoalescerID);
   }
   addPass(createSIShrinkInstructionsPass(), false);
   addPass(createSIFixSGPRLiveRangesPass(), false);
@@ -280,10 +285,10 @@ void GCNPassConfig::addPostRegAlloc() {
 }
 
 void GCNPassConfig::addPreSched2() {
-  addPass(createSIInsertWaits(*TM), false);
 }
 
 void GCNPassConfig::addPreEmitPass() {
+  addPass(createSIInsertWaits(*TM), false);
   addPass(createSILowerControlFlowPass(*TM), false);
 }
 

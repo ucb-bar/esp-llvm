@@ -198,6 +198,7 @@ namespace {
     SDNode *Select(SDNode *N) override;
     SDNode *SelectGather(SDNode *N, unsigned Opc);
     SDNode *SelectAtomicLoadArith(SDNode *Node, MVT NVT);
+    SDNode *SelectAndWithSExtImmediate(SDNode *Node, MVT NVT);
 
     bool FoldOffsetIntoAddress(uint64_t Offset, X86ISelAddressMode &AM);
     bool MatchLoadInAddress(LoadSDNode *N, X86ISelAddressMode &AM);
@@ -246,8 +247,9 @@ namespace {
                                    SDValue &Index, SDValue &Disp,
                                    SDValue &Segment) {
       Base = (AM.BaseType == X86ISelAddressMode::FrameIndexBase)
-                 ? CurDAG->getTargetFrameIndex(AM.Base_FrameIndex,
-                                               TLI->getPointerTy())
+                 ? CurDAG->getTargetFrameIndex(
+                       AM.Base_FrameIndex,
+                       TLI->getPointerTy(CurDAG->getDataLayout()))
                  : AM.Base_Reg;
       Scale = getI8Imm(AM.Scale, DL);
       Index = AM.IndexReg;
@@ -280,6 +282,82 @@ namespace {
         Segment = AM.Segment;
       else
         Segment = CurDAG->getRegister(0, MVT::i32);
+    }
+
+    // Utility function to determine whether we should avoid selecting
+    // immediate forms of instructions for better code size or not.
+    // At a high level, we'd like to avoid such instructions when
+    // we have similar constants used within the same basic block
+    // that can be kept in a register.
+    //
+    bool shouldAvoidImmediateInstFormsForSize(SDNode *N) const {
+      uint32_t UseCount = 0;
+
+      // Do not want to hoist if we're not optimizing for size.
+      // TODO: We'd like to remove this restriction.
+      // See the comment in X86InstrInfo.td for more info.
+      if (!OptForSize)
+        return false;
+
+      // Walk all the users of the immediate.
+      for (SDNode::use_iterator UI = N->use_begin(),
+           UE = N->use_end(); (UI != UE) && (UseCount < 2); ++UI) {
+
+        SDNode *User = *UI;
+
+        // This user is already selected. Count it as a legitimate use and
+        // move on.
+        if (User->isMachineOpcode()) {
+          UseCount++;
+          continue;
+        }
+
+        // We want to count stores of immediates as real uses.
+        if (User->getOpcode() == ISD::STORE &&
+            User->getOperand(1).getNode() == N) {
+          UseCount++;
+          continue;
+        }
+
+        // We don't currently match users that have > 2 operands (except
+        // for stores, which are handled above)
+        // Those instruction won't match in ISEL, for now, and would
+        // be counted incorrectly.
+        // This may change in the future as we add additional instruction
+        // types.
+        if (User->getNumOperands() != 2)
+          continue;
+        
+        // Immediates that are used for offsets as part of stack
+        // manipulation should be left alone. These are typically
+        // used to indicate SP offsets for argument passing and
+        // will get pulled into stores/pushes (implicitly).
+        if (User->getOpcode() == X86ISD::ADD ||
+            User->getOpcode() == ISD::ADD    ||
+            User->getOpcode() == X86ISD::SUB ||
+            User->getOpcode() == ISD::SUB) {
+
+          // Find the other operand of the add/sub.
+          SDValue OtherOp = User->getOperand(0);
+          if (OtherOp.getNode() == N)
+            OtherOp = User->getOperand(1);
+
+          // Don't count if the other operand is SP.
+          RegisterSDNode *RegNode;
+          if (OtherOp->getOpcode() == ISD::CopyFromReg &&
+              (RegNode = dyn_cast_or_null<RegisterSDNode>(
+                 OtherOp->getOperand(1).getNode())))
+            if ((RegNode->getReg() == X86::ESP) ||
+                (RegNode->getReg() == X86::RSP))
+              continue;
+        }
+
+        // ... otherwise, count this and move on.
+        UseCount++;
+      }
+
+      // If we have more than 1 use, then recommend for hoisting.
+      return (UseCount > 1);
     }
 
     /// getI8Imm - Return a target constant with the specified value, of type
@@ -461,7 +539,7 @@ static bool isCalleeLoad(SDValue Callee, SDValue &Chain, bool HasCallSeq) {
 
 void X86DAGToDAGISel::PreprocessISelDAG() {
   // OptForSize is used in pattern predicates that isel is matching.
-  OptForSize = MF->getFunction()->hasFnAttribute(Attribute::OptimizeForSize);
+  OptForSize = MF->getFunction()->optForSize();
 
   for (SelectionDAG::allnodes_iterator I = CurDAG->allnodes_begin(),
        E = CurDAG->allnodes_end(); I != E; ) {
@@ -581,11 +659,12 @@ void X86DAGToDAGISel::PreprocessISelDAG() {
 void X86DAGToDAGISel::EmitSpecialCodeForMain() {
   if (Subtarget->isTargetCygMing()) {
     TargetLowering::ArgListTy Args;
+    auto &DL = CurDAG->getDataLayout();
 
     TargetLowering::CallLoweringInfo CLI(*CurDAG);
     CLI.setChain(CurDAG->getRoot())
         .setCallee(CallingConv::C, Type::getVoidTy(*CurDAG->getContext()),
-                   CurDAG->getExternalSymbol("__main", TLI->getPointerTy()),
+                   CurDAG->getExternalSymbol("__main", TLI->getPointerTy(DL)),
                    std::move(Args), 0);
     const TargetLowering &TLI = CurDAG->getTargetLoweringInfo();
     std::pair<SDValue, SDValue> Result = TLI.LowerCallTo(CLI);
@@ -1025,7 +1104,7 @@ bool X86DAGToDAGISel::MatchAddressRecursively(SDValue N, X86ISelAddressMode &AM,
 
   switch (N.getOpcode()) {
   default: break;
-  case ISD::FRAME_ALLOC_RECOVER: {
+  case ISD::LOCAL_RECOVER: {
     if (!AM.hasSymbolicDisplacement() && AM.Disp == 0)
       if (const auto *ESNode = dyn_cast<MCSymbolSDNode>(N.getOperand(0))) {
         // Use the symbol and don't prefix it.
@@ -1638,7 +1717,8 @@ bool X86DAGToDAGISel::TryFoldLoad(SDNode *P, SDValue N,
 ///
 SDNode *X86DAGToDAGISel::getGlobalBaseReg() {
   unsigned GlobalBaseReg = getInstrInfo()->getGlobalBaseReg(MF);
-  return CurDAG->getRegister(GlobalBaseReg, TLI->getPointerTy()).getNode();
+  auto &DL = MF->getDataLayout();
+  return CurDAG->getRegister(GlobalBaseReg, TLI->getPointerTy(DL)).getNode();
 }
 
 /// Atomic opcode table
@@ -2129,6 +2209,57 @@ SDNode *X86DAGToDAGISel::SelectGather(SDNode *Node, unsigned Opc) {
   return ResNode;
 }
 
+// Try to shrink the encoding of an AND by setting additional bits in the mask.
+// It is only correct to do so if we know a priori that the other operand of the
+// AND already has those bits set to zero.
+SDNode *X86DAGToDAGISel::SelectAndWithSExtImmediate(SDNode *Node, MVT NVT) {
+  SDValue N0 = Node->getOperand(0);
+  SDValue N1 = Node->getOperand(1);
+
+  if (NVT != MVT::i32 && NVT != MVT::i64)
+    return nullptr;
+
+  auto *Cst = dyn_cast<ConstantSDNode>(N1);
+  if (!Cst)
+    return nullptr;
+
+  // As a heuristic, skip over negative constants.  It turns out not to be
+  // productive to widen the mask.
+  int64_t Val = Cst->getSExtValue();
+  if (Val <= 0)
+    return nullptr;
+
+  // Limit ourselves to constants which already have sign bits to save on
+  // compile time.
+  if ((int8_t)Val >= 0)
+    return nullptr;
+
+  unsigned Opc;
+  switch (NVT.SimpleTy) {
+  default:
+    llvm_unreachable("Unsupported VT!");
+  case MVT::i32:
+    Opc = X86::AND32ri8;
+    break;
+  case MVT::i64:
+    Opc = X86::AND64ri8;
+    break;
+  }
+
+  APInt Op0Zero, Op0One;
+  CurDAG->computeKnownBits(N0, Op0Zero, Op0One);
+  // Grow the mask using the known zero bits.
+  Op0Zero |= Val;
+  // See if the mask can be efficiently encoded using at most NumBits.
+  if (!Op0Zero.isSignedIntN(8))
+    return nullptr;
+
+  SDLoc DL(Node);
+  SDValue NewCst =
+      CurDAG->getTargetConstant(Op0Zero.getSExtValue(), DL, MVT::i8);
+  return CurDAG->getMachineNode(Opc, DL, NVT, N0, NewCst);
+}
+
 SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
   MVT NVT = Node->getSimpleValueType(0);
   unsigned Opc, MOpc;
@@ -2144,7 +2275,8 @@ SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
   }
 
   switch (Opcode) {
-  default: break;
+  default:
+    break;
   case ISD::INTRINSIC_W_CHAIN: {
     unsigned IntNo = cast<ConstantSDNode>(Node->getOperand(1))->getZExtValue();
     switch (IntNo) {
@@ -2219,7 +2351,13 @@ SDNode *X86DAGToDAGISel::Select(SDNode *Node) {
       return RetVal;
     break;
   }
-  case ISD::AND:
+  case ISD::AND: {
+    if (SDNode *NewNode = SelectAndWithSExtImmediate(Node, NVT)) {
+      ReplaceUses(SDValue(Node, 0), SDValue(NewNode, 0));
+      return nullptr;
+    }
+    // FALLTHROUGH
+  }
   case ISD::OR:
   case ISD::XOR: {
     // For operations of the form (x << C1) op C2, check if we can use a smaller

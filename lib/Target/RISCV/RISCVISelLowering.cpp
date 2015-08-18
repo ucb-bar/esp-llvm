@@ -57,7 +57,7 @@ void RISCVTargetObjectFile::Initialize(MCContext &Ctx, const TargetMachine &TM) 
 RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm, 
                                          const RISCVSubtarget &STI)
     : TargetLowering(tm), Subtarget(STI), IsRV32(Subtarget.isRV32()) {
-  MVT PtrVT = getPointerTy();
+  MVT PtrVT = Subtarget.isRV64() ? MVT::i64 : MVT::i32;
   // Set up the register classes.
   addRegisterClass(MVT::i32,  &RISCV::GR32BitRegClass);
   if(Subtarget.isRV64())
@@ -422,7 +422,7 @@ bool RISCVTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
 //===----------------------------------------------------------------------===//
 
 TargetLowering::ConstraintType
-RISCVTargetLowering::getConstraintType(const std::string &Constraint) const {
+RISCVTargetLowering::getConstraintType(StringRef Constraint) const {
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'a': // Address register
@@ -514,7 +514,7 @@ getSingleConstraintMatchWeight(AsmOperandInfo &info,
 }
 
 std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
-getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, const std::string &Constraint, MVT VT) const {
+getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, StringRef Constraint, MVT VT) const {
   if (Constraint.size() == 1) {
     // GCC Constraint Letters
     switch (Constraint[0]) {
@@ -741,9 +741,9 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                                       VA.getLocMemOffset(), true);
 
       // Create load nodes to retrieve arguments from the stack
-      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy());
+      SDValue FIN = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
       InVals.push_back(DAG.getLoad(ValVT, DL, Chain, FIN,
-                                   MachinePointerInfo::getFixedStack(FI),
+                                   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), FI),
                                    false, false, false, 0));
     }
   }
@@ -777,7 +777,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
       unsigned Reg = addLiveIn(MF, ArgRegs[I], RC);
       SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, RegTy);
       FI = MFI->CreateFixedObject(RegSize, VaArgOffset, true);
-      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy());
+      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
       SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
                                    MachinePointerInfo(), false, false, 0);
       cast<StoreSDNode>(Store.getNode())
@@ -798,7 +798,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
 }
 
 SDValue RISCVTargetLowering::getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) const {
-  EVT Ty = getPointerTy();
+  EVT Ty = getPointerTy(DAG.getDataLayout());
 
   if (GlobalAddressSDNode *N = dyn_cast<GlobalAddressSDNode>(Op))
     return DAG.getTargetGlobalAddress(N->getGlobal(), SDLoc(Op), Ty, 0, Flag);
@@ -819,7 +819,7 @@ SDValue RISCVTargetLowering::getTargetNode(SDValue Op, SelectionDAG &DAG, unsign
 
 SDValue RISCVTargetLowering::getAddrNonPIC(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
-  EVT Ty = getPointerTy();
+  EVT Ty = getPointerTy(DAG.getDataLayout());
   SDValue Hi = getTargetNode(Op, DAG, RISCVII::MO_ABS_HI);
   SDValue Lo = getTargetNode(Op, DAG, RISCVII::MO_ABS_LO);
   SDValue ResHi = DAG.getNode(RISCVISD::Hi, DL, Ty, Hi);
@@ -847,7 +847,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
   MachineFunction &MF = DAG.getMachineFunction();
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
   // RISCV target does not yet support tail call optimization.
   isTailCall = false;
@@ -896,7 +896,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         unsigned RegBegin, RegEnd;
         CCInfo.getInRegsParamInfo(CurByValIdx, RegBegin, RegEnd);
 
-        EVT PtrVT = DAG.getTargetLoweringInfo().getPointerTy();
+        EVT PtrVT = DAG.getTargetLoweringInfo().getPointerTy(DAG.getDataLayout());
         unsigned int i, j;
         for (i = 0, j = RegBegin; j < RegEnd; i++, j++) {
           SDValue Const = DAG.getConstant(4*i, DL, MVT::i32);//TODO:should this i32 be ptrTy
@@ -1082,7 +1082,7 @@ lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(Op);
   EVT Ty = Op.getOperand(0).getValueType();
   SDValue Cond = DAG.getNode(ISD::SETCC, DL,
-                             getSetCCResultType(*DAG.getContext(), Ty),
+                             getSetCCResultType(DAG.getDataLayout(),*DAG.getContext(), Ty),
                              Op.getOperand(0), Op.getOperand(1),
                              Op.getOperand(4));
 
@@ -1116,7 +1116,7 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
       return getAddrNonPIC(Op,DAG);
   }
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Op)) {
-    Op = DAG.getTargetGlobalAddress(G->getGlobal(), SDLoc(Op), getPointerTy());
+    Op = DAG.getTargetGlobalAddress(G->getGlobal(), SDLoc(Op), getPointerTy(DAG.getDataLayout()));
     return Op;
   }
   llvm_unreachable("invalid global addresses to lower");
@@ -1130,7 +1130,7 @@ SDValue RISCVTargetLowering::lowerGlobalTLSAddress(GlobalAddressSDNode *GA,
 
   SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
 
@@ -1162,7 +1162,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
                                                  SelectionDAG &DAG) const {
   const BlockAddress *BA = Node->getBlockAddress();
   int64_t Offset = Node->getOffset();
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
   SDValue Result = DAG.getTargetBlockAddress(BA, PtrVT, Offset);
   return Result;
@@ -1171,7 +1171,7 @@ SDValue RISCVTargetLowering::lowerBlockAddress(BlockAddressSDNode *Node,
 SDValue RISCVTargetLowering::lowerJumpTable(JumpTableSDNode *JT,
                                               SelectionDAG &DAG) const {
   SDLoc DL(JT);
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
   SDValue Result = DAG.getTargetJumpTable(JT->getIndex(), PtrVT);
 
   // Use LARL to load the address of the table.
@@ -1180,7 +1180,7 @@ SDValue RISCVTargetLowering::lowerJumpTable(JumpTableSDNode *JT,
 
 SDValue RISCVTargetLowering::lowerConstantPool(ConstantPoolSDNode *CP,
                                                  SelectionDAG &DAG) const {
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
   SDValue Result;
   if (CP->isMachineConstantPoolEntry())
@@ -1202,7 +1202,7 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op,
   MachineFunction &MF = DAG.getMachineFunction();
   RISCVFunctionInfo *FuncInfo =
     MF.getInfo<RISCVFunctionInfo>();
-  EVT PtrVT = getPointerTy();
+  EVT PtrVT = getPointerTy(DAG.getDataLayout());
 
   SDValue Chain   = Op.getOperand(0);
   SDValue Addr    = Op.getOperand(1);

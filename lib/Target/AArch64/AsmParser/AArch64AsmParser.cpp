@@ -117,7 +117,7 @@ public:
   };
   AArch64AsmParser(MCSubtargetInfo &STI, MCAsmParser &Parser,
                    const MCInstrInfo &MII, const MCTargetOptions &Options)
-      : MCTargetAsmParser(), STI(STI) {
+      : MCTargetAsmParser(Options), STI(STI) {
     MCAsmParserExtension::Initialize(Parser);
     MCStreamer &S = getParser().getStreamer();
     if (S.getTargetStreamer() == nullptr)
@@ -699,6 +699,25 @@ public:
     const MCConstantExpr *CE = cast<MCConstantExpr>(Expr);
     return CE->getValue() >= 0 && CE->getValue() <= 0xfff;
   }
+  bool isAddSubImmNeg() const {
+    if (!isShiftedImm() && !isImm())
+      return false;
+
+    const MCExpr *Expr;
+
+    // An ADD/SUB shifter is either 'lsl #0' or 'lsl #12'.
+    if (isShiftedImm()) {
+      unsigned Shift = ShiftedImm.ShiftAmount;
+      Expr = ShiftedImm.Val;
+      if (Shift != 0 && Shift != 12)
+        return false;
+    } else
+      Expr = getImm();
+
+    // Otherwise it should be a real negative immediate in range:
+    const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(Expr);
+    return CE != nullptr && CE->getValue() < 0 && -CE->getValue() <= 0xfff;
+  }
   bool isCondCode() const { return Kind == k_CondCode; }
   bool isSIMDImmType10() const {
     if (!isImm())
@@ -1217,6 +1236,18 @@ public:
       addExpr(Inst, getImm());
       Inst.addOperand(MCOperand::createImm(0));
     }
+  }
+
+  void addAddSubImmNegOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 2 && "Invalid number of operands!");
+
+    const MCExpr *MCE = isShiftedImm() ? getShiftedImmVal() : getImm();
+    const MCConstantExpr *CE = cast<MCConstantExpr>(MCE);
+    int64_t Val = -CE->getValue();
+    unsigned ShiftAmt = isShiftedImm() ? ShiftedImm.ShiftAmount : 0;
+
+    Inst.addOperand(MCOperand::createImm(Val));
+    Inst.addOperand(MCOperand::createImm(ShiftAmt));
   }
 
   void addCondCodeOperands(MCInst &Inst, unsigned N) const {
@@ -3898,6 +3929,8 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
 
   // If that fails, try against the alternate table containing long-form NEON:
   // "fadd v0.2s, v1.2s, v2.2s"
+  // But first, save the ErrorInfo: we can use it in case this try also fails.
+  uint64_t ShortFormNEONErrorInfo = ErrorInfo;
   if (MatchResult != Match_Success)
     MatchResult =
         MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm, 0);
@@ -3935,6 +3968,14 @@ bool AArch64AsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return showMatchError(IDLoc, MatchResult);
   case Match_InvalidOperand: {
     SMLoc ErrorLoc = IDLoc;
+
+    // If the long-form match failed on the mnemonic suffix token operand,
+    // the short-form match failure is probably more relevant: use it instead.
+    if (ErrorInfo == 1 &&
+        ((AArch64Operand &)*Operands[1]).isToken() &&
+        ((AArch64Operand &)*Operands[1]).isTokenSuffix())
+      ErrorInfo = ShortFormNEONErrorInfo;
+
     if (ErrorInfo != ~0ULL) {
       if (ErrorInfo >= Operands.size())
         return Error(IDLoc, "too few operands for instruction");

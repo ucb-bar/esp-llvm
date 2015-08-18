@@ -290,10 +290,9 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
   MBB.erase(I);
 }
 
-void RISCVFrameLowering::
-processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
+void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                                      RegScavenger *RS) const {
-  MachineRegisterInfo &MRI = MF.getRegInfo();
+  TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
   MachineFrameInfo *MFI = MF.getFrameInfo();
   RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
   const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
@@ -301,7 +300,7 @@ processFunctionBeforeCalleeSavedScan(MachineFunction &MF,
 
   // Mark $fp as used if function has dedicated frame pointer.
   if (hasFP(MF))
-    MRI.setPhysRegUsed(FP);
+    SavedRegs.set(FP);
 
   // Create spill slots for eh data registers if function calls eh_return.
   if (RISCVFI->getCallsEhReturn())

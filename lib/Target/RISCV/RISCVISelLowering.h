@@ -102,10 +102,10 @@ public:
   explicit RISCVTargetLowering(const TargetMachine &TM, const RISCVSubtarget &STI);
 
   // Override TargetLowering.
-  MVT getScalarShiftAmountTy(EVT LHSTy) const override {
+  MVT getScalarShiftAmountTy(const DataLayout &, EVT LHSTy) const override {
     return LHSTy.getSizeInBits() <= 32 ? MVT::i32 : MVT::i64;
   }
-  EVT getSetCCResultType(LLVMContext &Context, EVT VT) const override {
+  EVT getSetCCResultType(const DataLayout &, LLVMContext &, EVT VT) const override {
     return MVT::i32;
   }
   bool isFMAFasterThanFMulAndFAdd(EVT) const override {
@@ -116,10 +116,10 @@ public:
   const char *getTargetNodeName(unsigned Opcode) const override;
   std::pair<unsigned, const TargetRegisterClass *>
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
-                               const std::string &Constraint,
+                               StringRef Constraint,
                                MVT VT) const override;
   TargetLowering::ConstraintType
-  getConstraintType(const std::string &Constraint) const override;
+  getConstraintType(StringRef Constraint) const override;
   TargetLowering::ConstraintWeight
   getSingleConstraintMatchWeight(AsmOperandInfo &info,
                                  const char *constraint) const override;

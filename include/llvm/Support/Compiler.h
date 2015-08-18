@@ -69,7 +69,7 @@
 #if !defined(_MSC_VER) || defined(__clang__) || LLVM_MSC_PREREQ(1900)
 #define LLVM_NOEXCEPT noexcept
 #else
-#define LLVM_NOEXCEPT
+#define LLVM_NOEXCEPT throw()
 #endif
 
 /// \brief Does the compiler support ref-qualifiers for *this?
@@ -172,19 +172,6 @@
 #else
 #define LLVM_LIKELY(EXPR) (EXPR)
 #define LLVM_UNLIKELY(EXPR) (EXPR)
-#endif
-
-// C++ doesn't support 'extern template' of template specializations.  GCC does,
-// but requires __extension__ before it.  In the header, use this:
-//   EXTERN_TEMPLATE_INSTANTIATION(class foo<bar>);
-// in the .cpp file, use this:
-//   TEMPLATE_INSTANTIATION(class foo<bar>);
-#ifdef __GNUC__
-#define EXTERN_TEMPLATE_INSTANTIATION(X) __extension__ extern template X
-#define TEMPLATE_INSTANTIATION(X) template X
-#else
-#define EXTERN_TEMPLATE_INSTANTIATION(X)
-#define TEMPLATE_INSTANTIATION(X)
 #endif
 
 /// LLVM_ATTRIBUTE_NOINLINE - On compilers where we have a directive to do so,

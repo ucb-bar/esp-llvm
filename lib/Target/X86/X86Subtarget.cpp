@@ -44,9 +44,8 @@ X86EarlyIfConv("x86-early-ifcvt", cl::Hidden,
                cl::desc("Enable early if-conversion on X86"));
 
 
-/// ClassifyBlockAddressReference - Classify a blockaddress reference for the
-/// current subtarget according to how we should reference it in a non-pcrel
-/// context.
+/// Classify a blockaddress reference for the current subtarget according to how
+/// we should reference it in a non-pcrel context.
 unsigned char X86Subtarget::ClassifyBlockAddressReference() const {
   if (isPICStyleGOT())    // 32-bit ELF targets.
     return X86II::MO_GOTOFF;
@@ -58,9 +57,8 @@ unsigned char X86Subtarget::ClassifyBlockAddressReference() const {
   return X86II::MO_NO_FLAG;
 }
 
-/// ClassifyGlobalReference - Classify a global variable reference for the
-/// current subtarget according to how we should reference it in a non-pcrel
-/// context.
+/// Classify a global variable reference for the current subtarget according to
+/// how we should reference it in a non-pcrel context.
 unsigned char X86Subtarget::
 ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
   // DLLImport only exists on windows, it is implemented as a load from a
@@ -68,7 +66,7 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
   if (GV->hasDLLImportStorageClass())
     return X86II::MO_DLLIMPORT;
 
-  bool isDecl = GV->isDeclarationForLinker();
+  bool isDef = GV->isStrongDefinitionForLinker();
 
   // X86-64 in PIC mode.
   if (isPICStyleRIPRel()) {
@@ -80,8 +78,7 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
       // If symbol visibility is hidden, the extra load is not needed if
       // target is x86-64 or the symbol is definitely defined in the current
       // translation unit.
-      if (GV->hasDefaultVisibility() &&
-          (isDecl || GV->isWeakForLinker()))
+      if (GV->hasDefaultVisibility() && !isDef)
         return X86II::MO_GOTPCREL;
     } else if (!isTargetWin64()) {
       assert(isTargetELF() && "Unknown rip-relative target");
@@ -107,7 +104,7 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
 
     // If this is a strong reference to a definition, it is definitely not
     // through a stub.
-    if (!isDecl && !GV->isWeakForLinker())
+    if (isDef)
       return X86II::MO_PIC_BASE_OFFSET;
 
     // Unless we have a symbol with hidden visibility, we have to go through a
@@ -117,7 +114,7 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
 
     // If symbol visibility is hidden, we have a stub for common symbol
     // references and external declarations.
-    if (isDecl || GV->hasCommonLinkage()) {
+    if (GV->isDeclarationForLinker() || GV->hasCommonLinkage()) {
       // Hidden $non_lazy_ptr reference.
       return X86II::MO_DARWIN_HIDDEN_NONLAZY_PIC_BASE;
     }
@@ -131,7 +128,7 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
 
     // If this is a strong reference to a definition, it is definitely not
     // through a stub.
-    if (!isDecl && !GV->isWeakForLinker())
+    if (isDef)
       return X86II::MO_NO_FLAG;
 
     // Unless we have a symbol with hidden visibility, we have to go through a
@@ -148,9 +145,9 @@ ClassifyGlobalReference(const GlobalValue *GV, const TargetMachine &TM) const {
 }
 
 
-/// getBZeroEntry - This function returns the name of a function which has an
-/// interface like the non-standard bzero function, if such a function exists on
-/// the current subtarget and it is considered prefereable over memset with zero
+/// This function returns the name of a function which has an interface like
+/// the non-standard bzero function, if such a function exists on the
+/// current subtarget and it is considered preferable over memset with zero
 /// passed as the second argument. Otherwise it returns null.
 const char *X86Subtarget::getBZeroEntry() const {
   // Darwin 10 has a __bzero entry point for this purpose.
@@ -167,8 +164,7 @@ bool X86Subtarget::hasSinCos() const {
     is64Bit();
 }
 
-/// IsLegalToCallImmediateAddr - Return true if the subtarget allows calls
-/// to immediate address.
+/// Return true if the subtarget allows calls to immediate address.
 bool X86Subtarget::IsLegalToCallImmediateAddr(const TargetMachine &TM) const {
   // FIXME: I386 PE/COFF supports PC relative calls using IMAGE_REL_I386_REL32
   // but WinCOFFObjectWriter::RecordRelocation cannot emit them.  Once it does,
@@ -193,11 +189,8 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
       FullFS = "+64bit,+sse2";
   }
 
-  // If feature string is not empty, parse features string.
+  // Parse features string and set the CPU.
   ParseSubtargetFeatures(CPUName, FullFS);
-
-  // Make sure the right MCSchedModel is used.
-  InitCPUSchedModel(CPUName);
 
   InstrItins = getInstrItineraryForCPU(CPUName);
 
@@ -298,9 +291,8 @@ X86Subtarget::X86Subtarget(const Triple &TT, const std::string &CPU,
                   TargetTriple.getEnvironment() != Triple::CODE16),
       In16BitMode(TargetTriple.getArch() == Triple::x86 &&
                   TargetTriple.getEnvironment() == Triple::CODE16),
-      TSInfo(*TM.getDataLayout()),
-      InstrInfo(initializeSubtargetDependencies(CPU, FS)), TLInfo(TM, *this),
-      FrameLowering(*this, getStackAlignment()) {
+      TSInfo(), InstrInfo(initializeSubtargetDependencies(CPU, FS)),
+      TLInfo(TM, *this), FrameLowering(*this, getStackAlignment()) {
   // Determine the PICStyle based on the target selected.
   if (TM.getRelocationModel() == Reloc::Static) {
     // Unless we're in PIC or DynamicNoPIC mode, set the PIC style to None.

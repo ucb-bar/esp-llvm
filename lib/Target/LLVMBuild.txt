@@ -32,6 +32,7 @@ subdirectories =
  RISCV
  Sparc
  SystemZ
+ WebAssembly
  X86
  XCore
 

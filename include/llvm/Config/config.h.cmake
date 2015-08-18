@@ -125,9 +125,6 @@
 /* Define if you have the libdl library or equivalent. */
 #cmakedefine HAVE_LIBDL ${HAVE_LIBDL}
 
-/* Define to 1 if you have the `imagehlp' library (-limagehlp). */
-#cmakedefine HAVE_LIBIMAGEHLP ${HAVE_LIBIMAGEHLP}
-
 /* Define to 1 if you have the `m' library (-lm). */
 #undef HAVE_LIBM
 
@@ -326,9 +323,6 @@
 
 /* Define to 1 if you have the <sys/uio.h> header file. */
 #cmakedefine HAVE_SYS_UIO_H ${HAVE_SYS_UIO_H}
-
-/* Define to 1 if you have <sys/wait.h> that is POSIX.1 compatible. */
-#cmakedefine HAVE_SYS_WAIT_H ${HAVE_SYS_WAIT_H}
 
 /* Define if the setupterm() function is supported this platform. */
 #cmakedefine HAVE_TERMINFO ${HAVE_TERMINFO}

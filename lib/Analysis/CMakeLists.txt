@@ -2,7 +2,6 @@ add_llvm_library(LLVMAnalysis
   AliasAnalysis.cpp
   AliasAnalysisCounter.cpp
   AliasAnalysisEvaluator.cpp
-  AliasDebugger.cpp
   AliasSetTracker.cpp
   Analysis.cpp
   AssumptionCache.cpp
@@ -19,6 +18,7 @@ add_llvm_library(LLVMAnalysis
   CodeMetrics.cpp
   ConstantFolding.cpp
   Delinearization.cpp
+  DemandedBits.cpp
   DependenceAnalysis.cpp
   DivergenceAnalysis.cpp
   DomPrinter.cpp
@@ -31,7 +31,6 @@ add_llvm_library(LLVMAnalysis
   IteratedDominanceFrontier.cpp
   LazyCallGraph.cpp
   LazyValueInfo.cpp
-  LibCallAliasAnalysis.cpp
   LibCallSemantics.cpp
   Lint.cpp
   Loads.cpp
@@ -45,6 +44,7 @@ add_llvm_library(LLVMAnalysis
   MemoryLocation.cpp
   ModuleDebugInfoPrinter.cpp
   NoAliasAnalysis.cpp
+  OrderedBasicBlock.cpp
   PHITransAddr.cpp
   PostDominators.cpp
   PtrUseVisitor.cpp

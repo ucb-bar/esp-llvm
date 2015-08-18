@@ -117,7 +117,7 @@ Delinearize("da-delinearize", cl::init(false), cl::Hidden, cl::ZeroOrMore,
 INITIALIZE_PASS_BEGIN(DependenceAnalysis, "da",
                       "Dependence Analysis", true, true)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_END(DependenceAnalysis, "da",
                     "Dependence Analysis", true, true)
@@ -133,7 +133,7 @@ FunctionPass *llvm::createDependenceAnalysisPass() {
 bool DependenceAnalysis::runOnFunction(Function &F) {
   this->F = &F;
   AA = &getAnalysis<AliasAnalysis>();
-  SE = &getAnalysis<ScalarEvolution>();
+  SE = &getAnalysis<ScalarEvolutionWrapperPass>().getSE();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   return false;
 }
@@ -146,7 +146,7 @@ void DependenceAnalysis::releaseMemory() {
 void DependenceAnalysis::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   AU.addRequiredTransitive<AliasAnalysis>();
-  AU.addRequiredTransitive<ScalarEvolution>();
+  AU.addRequiredTransitive<ScalarEvolutionWrapperPass>();
   AU.addRequiredTransitive<LoopInfoWrapperPass>();
 }
 
@@ -233,7 +233,8 @@ FullDependence::FullDependence(Instruction *Source, Instruction *Destination,
     : Dependence(Source, Destination), Levels(CommonLevels),
       LoopIndependent(PossiblyLoopIndependent) {
   Consistent = true;
-  DV = CommonLevels ? new DVEntry[CommonLevels] : nullptr;
+  if (CommonLevels)
+    DV = make_unique<DVEntry[]>(CommonLevels);
 }
 
 // The rest are simple getters that hide the implementation.
@@ -630,8 +631,8 @@ static AliasResult underlyingObjectsAlias(AliasAnalysis *AA,
                                           const Value *B) {
   const Value *AObj = GetUnderlyingObject(A, DL);
   const Value *BObj = GetUnderlyingObject(B, DL);
-  return AA->alias(AObj, AA->getTypeStoreSize(AObj->getType()),
-                   BObj, AA->getTypeStoreSize(BObj->getType()));
+  return AA->alias(AObj, DL.getTypeStoreSize(AObj->getType()),
+                   BObj, DL.getTypeStoreSize(BObj->getType()));
 }
 
 
@@ -3746,9 +3747,7 @@ DependenceAnalysis::depends(Instruction *Src, Instruction *Dst,
       return nullptr;
   }
 
-  auto Final = make_unique<FullDependence>(Result);
-  Result.DV = nullptr;
-  return std::move(Final);
+  return make_unique<FullDependence>(std::move(Result));
 }
 
 

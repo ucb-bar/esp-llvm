@@ -76,6 +76,7 @@ public:
     DILexicalBlockKind,
     DILexicalBlockFileKind,
     DINamespaceKind,
+    DIModuleKind,
     DITemplateTypeParameterKind,
     DITemplateValueParameterKind,
     DIGlobalVariableKind,
@@ -880,6 +881,7 @@ protected:
   void storeDistinctInContext();
   template <class T, class StoreT>
   static T *storeImpl(T *N, StorageType Storage, StoreT &Store);
+  template <class T> static T *storeImpl(T *N, StorageType Storage);
 
 private:
   void handleChangedOperand(void *Ref, Metadata *New);

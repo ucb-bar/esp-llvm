@@ -354,7 +354,7 @@ def S_CMP_LE_U32 : SOPC_32 <0x0000000b, "s_cmp_le_u32">;
 // SOPK Instructions
 //===----------------------------------------------------------------------===//
 
-let isReMaterializable = 1 in {
+let isReMaterializable = 1, isMoveImm = 1 in {
 defm S_MOVK_I32 : SOPK_32 <sopk<0x00>, "s_movk_i32", []>;
 } // End isReMaterializable = 1
 let Uses = [SCC] in {
@@ -438,36 +438,38 @@ def S_BRANCH : SOPP <
   let isBarrier = 1;
 }
 
-let DisableEncoding = "$scc" in {
+let Uses = [SCC] in {
 def S_CBRANCH_SCC0 : SOPP <
-  0x00000004, (ins sopp_brtarget:$simm16, SCCReg:$scc),
+  0x00000004, (ins sopp_brtarget:$simm16),
   "s_cbranch_scc0 $simm16"
 >;
 def S_CBRANCH_SCC1 : SOPP <
-  0x00000005, (ins sopp_brtarget:$simm16, SCCReg:$scc),
+  0x00000005, (ins sopp_brtarget:$simm16),
   "s_cbranch_scc1 $simm16"
 >;
-} // End DisableEncoding = "$scc"
+} // End Uses = [SCC]
 
+let Uses = [VCC] in {
 def S_CBRANCH_VCCZ : SOPP <
-  0x00000006, (ins sopp_brtarget:$simm16, VCCReg:$vcc),
+  0x00000006, (ins sopp_brtarget:$simm16),
   "s_cbranch_vccz $simm16"
 >;
 def S_CBRANCH_VCCNZ : SOPP <
-  0x00000007, (ins sopp_brtarget:$simm16, VCCReg:$vcc),
+  0x00000007, (ins sopp_brtarget:$simm16),
   "s_cbranch_vccnz $simm16"
 >;
+} // End Uses = [VCC]
 
-let DisableEncoding = "$exec" in {
+let Uses = [EXEC] in {
 def S_CBRANCH_EXECZ : SOPP <
-  0x00000008, (ins sopp_brtarget:$simm16, EXECReg:$exec),
+  0x00000008, (ins sopp_brtarget:$simm16),
   "s_cbranch_execz $simm16"
 >;
 def S_CBRANCH_EXECNZ : SOPP <
-  0x00000009, (ins sopp_brtarget:$simm16, EXECReg:$exec),
+  0x00000009, (ins sopp_brtarget:$simm16),
   "s_cbranch_execnz $simm16"
 >;
-} // End DisableEncoding = "$exec"
+} // End Uses = [EXEC]
 
 
 } // End isBranch = 1
@@ -1488,7 +1490,10 @@ defm V_AND_B32 : VOP2Inst <vop2<0x1b, 0x13>, "v_and_b32", VOP_I32_I32_I32>;
 defm V_OR_B32 : VOP2Inst <vop2<0x1c, 0x14>, "v_or_b32", VOP_I32_I32_I32>;
 defm V_XOR_B32 : VOP2Inst <vop2<0x1d, 0x15>, "v_xor_b32", VOP_I32_I32_I32>;
 
-defm V_MAC_F32 : VOP2Inst <vop2<0x1f, 0x16>, "v_mac_f32", VOP_F32_F32_F32>;
+let Constraints = "$dst = $src2", DisableEncoding="$src2",
+    isConvertibleToThreeAddress = 1 in {
+defm V_MAC_F32 : VOP2Inst <vop2<0x1f, 0x16>, "v_mac_f32", VOP_MAC>;
+}
 } // End isCommutable = 1
 
 defm V_MADMK_F32 : VOP2MADK <vop2<0x20, 0x17>, "v_madmk_f32">;
@@ -1545,6 +1550,12 @@ defm V_WRITELANE_B32 : VOP2SI_3VI_m <
 // These instructions only exist on SI and CI
 let SubtargetPredicate = isSICI in {
 
+let isCommutable = 1 in {
+defm V_MAC_LEGACY_F32 : VOP2InstSI <vop2<0x6>, "v_mac_legacy_f32",
+  VOP_F32_F32_F32
+>;
+} // End isCommutable = 1
+
 defm V_MIN_LEGACY_F32 : VOP2InstSI <vop2<0xd>, "v_min_legacy_f32",
   VOP_F32_F32_F32, AMDGPUfmin_legacy
 >;
@@ -1558,12 +1569,6 @@ defm V_ASHR_I32 : VOP2InstSI <vop2<0x17>, "v_ashr_i32", VOP_I32_I32_I32>;
 defm V_LSHL_B32 : VOP2InstSI <vop2<0x19>, "v_lshl_b32", VOP_I32_I32_I32>;
 } // End isCommutable = 1
 } // End let SubtargetPredicate = SICI
-
-let isCommutable = 1 in {
-defm V_MAC_LEGACY_F32 : VOP2_VI3_Inst <vop23<0x6, 0x28e>, "v_mac_legacy_f32",
-  VOP_F32_F32_F32
->;
-} // End isCommutable = 1
 
 defm V_BFM_B32 : VOP2_VI3_Inst <vop23<0x1e, 0x293>, "v_bfm_b32",
   VOP_I32_I32_I32
@@ -2069,83 +2074,55 @@ def : Pat <
 // SMRD Patterns
 //===----------------------------------------------------------------------===//
 
-multiclass SMRD_Pattern <SMRD Instr_IMM, SMRD Instr_SGPR, ValueType vt> {
+multiclass SMRD_Pattern <string Instr, ValueType vt> {
 
-  // 1. SI-CI: Offset as 8bit DWORD immediate
+  // 1. IMM offset
   def : Pat <
-    (constant_load (add i64:$sbase, (i64 IMM8bitDWORD:$offset))),
-    (vt (Instr_IMM $sbase, (as_dword_i32imm $offset)))
+    (constant_load (SMRDImm i64:$sbase, i32:$offset)),
+    (vt (!cast<SMRD>(Instr#"_IMM") $sbase, $offset))
   >;
 
-  // 2. Offset loaded in an 32bit SGPR
+  // 2. SGPR offset
   def : Pat <
-    (constant_load (add i64:$sbase, (i64 IMM32bit:$offset))),
-    (vt (Instr_SGPR $sbase, (S_MOV_B32 (i32 (as_i32imm $offset)))))
+    (constant_load (SMRDSgpr i64:$sbase, i32:$offset)),
+    (vt (!cast<SMRD>(Instr#"_SGPR") $sbase, $offset))
   >;
 
-  // 3. No offset at all
   def : Pat <
-    (constant_load i64:$sbase),
-    (vt (Instr_IMM $sbase, 0))
-  >;
+    (constant_load (SMRDImm32 i64:$sbase, i32:$offset)),
+    (vt (!cast<SMRD>(Instr#"_IMM_ci") $sbase, $offset))
+  > {
+    let Predicates = [isCIOnly];
+  }
 }
 
-multiclass SMRD_Pattern_vi <SMRD Instr_IMM, SMRD Instr_SGPR, ValueType vt> {
+defm : SMRD_Pattern <"S_LOAD_DWORD", i32>;
+defm : SMRD_Pattern <"S_LOAD_DWORDX2", v2i32>;
+defm : SMRD_Pattern <"S_LOAD_DWORDX4", v4i32>;
+defm : SMRD_Pattern <"S_LOAD_DWORDX8", v32i8>;
+defm : SMRD_Pattern <"S_LOAD_DWORDX8", v8i32>;
+defm : SMRD_Pattern <"S_LOAD_DWORDX16", v16i32>;
 
-  // 1. VI: Offset as 20bit immediate in bytes
-  def : Pat <
-    (constant_load (add i64:$sbase, (i64 IMM20bit:$offset))),
-    (vt (Instr_IMM $sbase, (as_i32imm $offset)))
-  >;
-
-  // 2. Offset loaded in an 32bit SGPR
-  def : Pat <
-    (constant_load (add i64:$sbase, (i64 IMM32bit:$offset))),
-    (vt (Instr_SGPR $sbase, (S_MOV_B32 (i32 (as_i32imm $offset)))))
-  >;
-
-  // 3. No offset at all
-  def : Pat <
-    (constant_load i64:$sbase),
-    (vt (Instr_IMM $sbase, 0))
-  >;
-}
-
-let Predicates = [isSICI] in {
-defm : SMRD_Pattern <S_LOAD_DWORD_IMM, S_LOAD_DWORD_SGPR, f32>;
-defm : SMRD_Pattern <S_LOAD_DWORD_IMM, S_LOAD_DWORD_SGPR, i32>;
-defm : SMRD_Pattern <S_LOAD_DWORDX2_IMM, S_LOAD_DWORDX2_SGPR, v2i32>;
-defm : SMRD_Pattern <S_LOAD_DWORDX4_IMM, S_LOAD_DWORDX4_SGPR, v4i32>;
-defm : SMRD_Pattern <S_LOAD_DWORDX8_IMM, S_LOAD_DWORDX8_SGPR, v32i8>;
-defm : SMRD_Pattern <S_LOAD_DWORDX8_IMM, S_LOAD_DWORDX8_SGPR, v8i32>;
-defm : SMRD_Pattern <S_LOAD_DWORDX16_IMM, S_LOAD_DWORDX16_SGPR, v16i32>;
-} // End Predicates = [isSICI]
-
-let Predicates = [isVI] in {
-defm : SMRD_Pattern_vi <S_LOAD_DWORD_IMM, S_LOAD_DWORD_SGPR, f32>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORD_IMM, S_LOAD_DWORD_SGPR, i32>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORDX2_IMM, S_LOAD_DWORDX2_SGPR, v2i32>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORDX4_IMM, S_LOAD_DWORDX4_SGPR, v4i32>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORDX8_IMM, S_LOAD_DWORDX8_SGPR, v32i8>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORDX8_IMM, S_LOAD_DWORDX8_SGPR, v8i32>;
-defm : SMRD_Pattern_vi <S_LOAD_DWORDX16_IMM, S_LOAD_DWORDX16_SGPR, v16i32>;
-} // End Predicates = [isVI]
-
-let Predicates = [isSICI] in {
-
-// 1. Offset as 8bit DWORD immediate
+// 1. Offset as an immediate
 def : Pat <
-  (SIload_constant v4i32:$sbase, IMM8bitDWORD:$offset),
-  (S_BUFFER_LOAD_DWORD_IMM $sbase, (as_dword_i32imm $offset))
+  (SIload_constant v4i32:$sbase, (SMRDBufferImm i32:$offset)),
+  (S_BUFFER_LOAD_DWORD_IMM $sbase, $offset)
 >;
-
-} // End Predicates = [isSICI]
 
 // 2. Offset loaded in an 32bit SGPR
 def : Pat <
-  (SIload_constant v4i32:$sbase, imm:$offset),
-  (S_BUFFER_LOAD_DWORD_SGPR $sbase, (S_MOV_B32 imm:$offset))
+  (SIload_constant v4i32:$sbase, (SMRDBufferSgpr i32:$offset)),
+  (S_BUFFER_LOAD_DWORD_SGPR $sbase, $offset)
 >;
+
+let Predicates = [isCI] in {
+
+def : Pat <
+  (SIload_constant v4i32:$sbase, (SMRDBufferImm32 i32:$offset)),
+  (S_BUFFER_LOAD_DWORD_IMM_ci $sbase, $offset)
+>;
+
+} // End Predicates = [isCI]
 
 //===----------------------------------------------------------------------===//
 // SOP1 Patterns
@@ -2204,6 +2181,15 @@ def : Pat <
 def : Pat <
   (i32 (select i1:$src0, i32:$src1, i32:$src2)),
   (V_CNDMASK_B32_e64 $src2, $src1, $src0)
+>;
+
+// Pattern for V_MAC_F32
+def : Pat <
+  (fmad  (VOP3NoMods0 f32:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omod),
+         (VOP3NoMods f32:$src1, i32:$src1_modifiers),
+         (VOP3NoMods f32:$src2, i32:$src2_modifiers)),
+  (V_MAC_F32_e64 $src0_modifiers, $src0, $src1_modifiers, $src1,
+                 $src2_modifiers, $src2, $clamp, $omod)
 >;
 
 /********** ======================= **********/
@@ -2898,9 +2884,6 @@ defm : MUBUFLoad_Pattern <BUFFER_LOAD_SBYTE_ADDR64, i32, sextloadi8_constant>;
 defm : MUBUFLoad_Pattern <BUFFER_LOAD_UBYTE_ADDR64, i32, az_extloadi8_constant>;
 defm : MUBUFLoad_Pattern <BUFFER_LOAD_SSHORT_ADDR64, i32, sextloadi16_constant>;
 defm : MUBUFLoad_Pattern <BUFFER_LOAD_USHORT_ADDR64, i32, az_extloadi16_constant>;
-defm : MUBUFLoad_Pattern <BUFFER_LOAD_DWORD_ADDR64, i32, constant_load>;
-defm : MUBUFLoad_Pattern <BUFFER_LOAD_DWORDX2_ADDR64, v2i32, constant_load>;
-defm : MUBUFLoad_Pattern <BUFFER_LOAD_DWORDX4_ADDR64, v4i32, constant_load>;
 } // End Predicates = [isSICI]
 
 class MUBUFScratchLoadPat <MUBUF Instr, ValueType vt, PatFrag ld> : Pat <
@@ -3261,13 +3244,13 @@ def : Pat <
   (f64 (fadd (f64 (VOP3Mods f64:$x, i32:$mods)),
              (f64 (fneg (f64 (ffloor (f64 (VOP3Mods f64:$x, i32:$mods)))))))),
   (V_CNDMASK_B64_PSEUDO
-      $x,
       (V_MIN_F64
           SRCMODS.NONE,
           (V_FRACT_F64_e64 $mods, $x, DSTCLAMP.NONE, DSTOMOD.NONE),
           SRCMODS.NONE,
           (V_MOV_B64_PSEUDO 0x3fefffffffffffff),
           DSTCLAMP.NONE, DSTOMOD.NONE),
+      $x,
       (V_CMP_CLASS_F64_e64 SRCMODS.NONE, $x, 3/*NaN*/))
 >;
 
@@ -3279,13 +3262,13 @@ def : Pat <
       $x,
       SRCMODS.NEG,
       (V_CNDMASK_B64_PSEUDO
-         $x,
          (V_MIN_F64
              SRCMODS.NONE,
              (V_FRACT_F64_e64 $mods, $x, DSTCLAMP.NONE, DSTOMOD.NONE),
              SRCMODS.NONE,
              (V_MOV_B64_PSEUDO 0x3fefffffffffffff),
              DSTCLAMP.NONE, DSTOMOD.NONE),
+         $x,
          (V_CMP_CLASS_F64_e64 SRCMODS.NONE, $x, 3/*NaN*/)),
       DSTCLAMP.NONE, DSTOMOD.NONE)
 >;
