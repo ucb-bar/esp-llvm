@@ -203,8 +203,7 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                MachineBasicBlock *FBB,
                                const SmallVectorImpl<MachineOperand> &Cond,
                                DebugLoc DL) const {
-  //RISCV doesn't have any two way branches, can only have FBB if it is a fall through
-  if (FBB && !MBB.isLayoutSuccessor(FBB)) {
+  if (FBB) {
     //Need to build two branches then
     //one to branch to TBB on Cond
     //and a second one immediately after to unconditionally jump to FBB
