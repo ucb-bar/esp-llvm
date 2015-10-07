@@ -1,0 +1,3 @@
+[submodule "riscv-clang"]
+	path = riscv-clang
+	url = https://github.com/riscv/riscv-clang.git
