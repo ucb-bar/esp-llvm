@@ -121,7 +121,8 @@ void RISCVAsmPrinter::printMemOperand(const MachineInstr *MI, int opNum,
 }
 
 void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
-  if (Subtarget->isTargetELF()) {
+  const Triple &TT = TM.getTargetTriple();
+  if (TT.isOSBinFormatELF()) {
     const TargetLoweringObjectFileELF &TLOFELF =
       static_cast<const TargetLoweringObjectFileELF &>(getObjFileLowering());
 
