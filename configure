@@ -4193,6 +4193,7 @@ else
   nvptx-*)                llvm_cv_target_arch="NVPTX" ;;
   s390x-*)                llvm_cv_target_arch="SystemZ" ;;
   wasm*-*)                llvm_cv_target_arch="WebAssembly" ;;
+  riscv-*)                llvm_cv_target_arch="RISCV" ;;
   *)                      llvm_cv_target_arch="Unknown" ;;
 esac
 fi
@@ -4229,6 +4230,7 @@ case $host in
   msp430-*)               host_arch="MSP430" ;;
   hexagon-*)              host_arch="Hexagon" ;;
   s390x-*)                host_arch="SystemZ" ;;
+  riscv-*)                host_arch="RISCV" ;;
   wasm*-*)                host_arch="WebAssembly" ;;
   *)                      host_arch="Unknown" ;;
 esac
@@ -5657,6 +5659,7 @@ case "$enableval" in
         amdgpu)   TARGETS_TO_BUILD="AMDGPU $TARGETS_TO_BUILD" ;;
         r600)     TARGETS_TO_BUILD="AMDGPU $TARGETS_TO_BUILD" ;;
         wasm)     TARGETS_TO_BUILD="WebAssembly $TARGETS_TO_BUILD" ;;
+        riscv)    TARGETS_TO_BUILD="RISCV $TARGETS_TO_BUILD" ;;
         host) case "$llvm_cv_target_arch" in
             x86)         TARGETS_TO_BUILD="X86 $TARGETS_TO_BUILD" ;;
             x86_64)      TARGETS_TO_BUILD="X86 $TARGETS_TO_BUILD" ;;
@@ -5671,6 +5674,7 @@ case "$enableval" in
             NVPTX)       TARGETS_TO_BUILD="NVPTX $TARGETS_TO_BUILD" ;;
             SystemZ)     TARGETS_TO_BUILD="SystemZ $TARGETS_TO_BUILD" ;;
             WebAssembly) TARGETS_TO_BUILD="WebAssembly $TARGETS_TO_BUILD" ;;
+            RISCV)       TARGETS_TO_BUILD="RISCV $TARGETS_TO_BUILD" ;;
             *)       { { echo "$as_me:$LINENO: error: Can not set target to build" >&5
 echo "$as_me: error: Can not set target to build" >&2;}
    { (exit 1); exit 1; }; } ;;

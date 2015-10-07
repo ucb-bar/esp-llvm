@@ -41,6 +41,8 @@ const char *Triple::getArchTypeName(ArchType Kind) {
   case sparc:       return "sparc";
   case sparcv9:     return "sparcv9";
   case sparcel:     return "sparcel";
+  case riscv:       return "riscv";
+  case riscv64:     return "riscv64";
   case systemz:     return "s390x";
   case tce:         return "tce";
   case thumb:       return "thumb";
@@ -100,6 +102,10 @@ const char *Triple::getArchTypePrefix(ArchType Kind) {
   case sparcv9:
   case sparcel:
   case sparc:       return "sparc";
+
+  case riscv:
+  case riscv64:     return "riscv";
+
 
   case systemz:     return "s390";
 
@@ -240,6 +246,8 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
     .Case("sparc", sparc)
     .Case("sparcel", sparcel)
     .Case("sparcv9", sparcv9)
+    .Case("riscv", riscv)
+    .Case("riscv64", riscv64)
     .Case("systemz", systemz)
     .Case("tce", tce)
     .Case("thumb", thumb)
@@ -352,6 +360,8 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("sparc", Triple::sparc)
     .Case("sparcel", Triple::sparcel)
     .Cases("sparcv9", "sparc64", Triple::sparcv9)
+    .Case("riscv", Triple::riscv)
+    .Case("riscv64", Triple::riscv64)
     .Case("tce", Triple::tce)
     .Case("xcore", Triple::xcore)
     .Case("nvptx", Triple::nvptx)
@@ -525,6 +535,8 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::amdgcn:
   case Triple::sparc:
   case Triple::sparcv9:
+  case Triple::riscv:
+  case Triple::riscv64:
   case Triple::systemz:
   case Triple::xcore:
   case Triple::ppc64le:
@@ -1007,6 +1019,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::r600:
   case llvm::Triple::sparc:
   case llvm::Triple::sparcel:
+  case llvm::Triple::riscv:
   case llvm::Triple::tce:
   case llvm::Triple::thumb:
   case llvm::Triple::thumbeb:
@@ -1032,6 +1045,7 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::ppc64:
   case llvm::Triple::ppc64le:
   case llvm::Triple::sparcv9:
+  case llvm::Triple::riscv64:
   case llvm::Triple::systemz:
   case llvm::Triple::x86_64:
   case llvm::Triple::amdil64:
@@ -1083,6 +1097,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::nvptx:
   case Triple::ppc:
   case Triple::r600:
+  case Triple::riscv:
   case Triple::sparc:
   case Triple::sparcel:
   case Triple::tce:
@@ -1101,6 +1116,7 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::nvptx64:   T.setArch(Triple::nvptx);   break;
   case Triple::ppc64:     T.setArch(Triple::ppc);     break;
   case Triple::sparcv9:   T.setArch(Triple::sparc);   break;
+  case Triple::riscv64:   T.setArch(Triple::riscv);   break;
   case Triple::x86_64:    T.setArch(Triple::x86);     break;
   case Triple::amdil64:   T.setArch(Triple::amdil);   break;
   case Triple::hsail64:   T.setArch(Triple::hsail);   break;
@@ -1146,6 +1162,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::sparcv9:
   case Triple::systemz:
   case Triple::x86_64:
+  case Triple::riscv64:
   case Triple::wasm64:
     // Already 64-bit.
     break;
@@ -1160,6 +1177,7 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::amdil:   T.setArch(Triple::amdil64);   break;
   case Triple::hsail:   T.setArch(Triple::hsail64);   break;
   case Triple::spir:    T.setArch(Triple::spir64);    break;
+  case Triple::riscv:   T.setArch(Triple::riscv64);   break;
   case Triple::wasm32:  T.setArch(Triple::wasm64);    break;
   }
   return T;
@@ -1182,6 +1200,8 @@ Triple Triple::getBigEndianArchVariant() const {
   case Triple::nvptx64:
   case Triple::nvptx:
   case Triple::r600:
+  case Triple::riscv64:
+  case Triple::riscv:
   case Triple::shave:
   case Triple::spir64:
   case Triple::spir:
@@ -1258,6 +1278,8 @@ Triple Triple::getLittleEndianArchVariant() const {
   case Triple::nvptx:
   case Triple::ppc64le:
   case Triple::r600:
+  case Triple::riscv64:
+  case Triple::riscv:
   case Triple::shave:
   case Triple::sparcel:
   case Triple::spir64:

@@ -63,6 +63,8 @@ public:
     ppc64le,    // PPC64LE: powerpc64le
     r600,       // R600: AMD GPUs HD2XXX - HD6XXX
     amdgcn,     // AMDGCN: AMD GCN GPUs
+    riscv,      // RISCV: riscv 32-bit
+    riscv64,    // RISCV: riscv 64-bit
     sparc,      // Sparc: sparc
     sparcv9,    // Sparcv9: Sparcv9
     sparcel,    // Sparc: (endianness = little). NB: 'Sparcle' is a CPU variant

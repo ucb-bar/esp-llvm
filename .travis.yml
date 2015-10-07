@@ -1,0 +1,40 @@
+language: cpp
+compiler:
+  - gcc
+sudo: false
+notifications:
+    email:
+        - colins@eecs.berkeley.edu
+cache: apt
+addons:
+  apt:
+    sources:
+      - ubuntu-toolchain-r-test
+    packages:
+    - gcc-4.9
+    - g++-4.9
+    - gperf
+    - autoconf
+    - automake
+    - autotools-dev
+    - libmpc-dev
+    - libmpfr-dev
+    - libgmp-dev
+    - gawk
+    - build-essential
+    - bison
+    - flex
+    - texinfo
+env:
+  global:
+    - RISCV="/home/travis/riscv_install"
+git:
+      submodules: true
+before_install:
+  - export CXX="g++-4.9" CC="gcc-4.9"
+  - $CXX --version
+script: 
+  - mkdir build
+  - cd build
+  - ../configure --enable-optimized --enable-targets=riscv --prefix=${RISCV} 
+  - make -j4
