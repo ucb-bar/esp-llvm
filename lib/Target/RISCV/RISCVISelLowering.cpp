@@ -1117,7 +1117,7 @@ SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
   }
   if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Op)) {
     Op = DAG.getTargetGlobalAddress(G->getGlobal(), SDLoc(Op), getPointerTy(DAG.getDataLayout()));
-    return Op;
+    return getAddrPIC(Op,DAG);
   }
   llvm_unreachable("invalid global addresses to lower");
 }
