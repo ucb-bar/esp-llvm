@@ -947,12 +947,7 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   // Accept direct calls by converting symbolic call addresses to the
   // associated Target* opcodes.
-  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    if (DAG.getTarget().getRelocationModel() == Reloc::PIC_) {
-      Callee = getAddrPIC(Callee, DAG);
-    } else
-      Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
-  } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+  if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     if (DAG.getTarget().getRelocationModel() == Reloc::PIC_) {
       Callee = getAddrPIC(DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT), DAG);
     } else
