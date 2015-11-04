@@ -67,7 +67,7 @@ The LLVM RISCV backend is built just as the normal LLVM system.
 	$ git submodule update --init
 	$ mkdir build
 	$ cd build
-	$ ../configure --prefix=/opt/riscv
+	$ ../configure --prefix=/opt/riscv --enable-targets=riscv
 	$ make
 	$ make install
 
