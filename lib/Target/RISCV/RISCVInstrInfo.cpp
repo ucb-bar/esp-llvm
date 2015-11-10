@@ -414,6 +414,32 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
+    // START Custom COPY
+  }else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_X;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  /*}else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::FP64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_F;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::FP32BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_F;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+    */
+  }else if(RISCV::VARBitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSA;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
   }else
     llvm_unreachable("Impossible reg-to-reg copy");
 
@@ -616,6 +642,7 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
   const TargetRegisterClass *RC = STI.isRV64() ?
     &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
+  unsigned LI = STI.isRV64() ? RISCV::LI64 : RISCV::LI;
 
   //create virtual reg to store immediate
   *Reg = RegInfo.createVirtualRegister(RC);
@@ -624,6 +651,6 @@ void RISCVInstrInfo::loadImmediate(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), *Reg).addReg(ZERO).addImm(Value);
   } else {
   //use LI to let assembler load immediate best
-  BuildMI(MBB, MBBI, DL, get(RISCV::LI), *Reg).addImm(Value);
+  BuildMI(MBB, MBBI, DL, get(LI), *Reg).addImm(Value);
   }
 }

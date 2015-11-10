@@ -36,6 +36,7 @@ namespace RISCVISD {
     // is the target address.  The arguments start at operand 2.
     // There is an optional glue operand at the end.
     CALL,
+    CALLV,
 
     // Jump and link to Operand 0 is the chain operand and operand 1
     // is the register to store the return address. Operand 2 is the target address
@@ -202,6 +203,8 @@ private:
   MachineBasicBlock *emitCALL(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
   MachineBasicBlock *emitSelectCC(MachineInstr *MI,
+                                MachineBasicBlock *BB) const;
+  MachineBasicBlock *emitVMSSF(MachineInstr *MI,
                                 MachineBasicBlock *BB) const;
 
 };

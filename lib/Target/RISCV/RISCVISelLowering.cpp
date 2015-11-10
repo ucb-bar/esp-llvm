@@ -19,6 +19,7 @@
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "RISCVXhwachaUtilities.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -67,7 +68,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
   }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
-
+/*
+  if(Subtarget.hasXhwacha()) {
+    addRegisterClass(MVT::i64,  &RISCV::VSRBitRegClass);
+    addRegisterClass(MVT::i64,  &RISCV::VARBitRegClass);
+  }
+  */
 
   // Set up special registers.
   if(Subtarget.isRV64()) {
@@ -669,7 +675,10 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
 		 *DAG.getContext());
 
-  CCInfo.AnalyzeFormalArguments(Ins, IsRV32 ? CC_RISCV32 : CC_RISCV64);
+  bool isOpenCLKernel = isOpenCLKernelFunction(*(MF.getFunction()));
+
+  CCInfo.AnalyzeFormalArguments(Ins, IsRV32 ? CC_RISCV32 : 
+    isOpenCLKernel ? CC_RISCVXhwacha : CC_RISCV64);
   
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -677,8 +686,10 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     if (VA.isRegLoc()) {
       EVT RegVT = VA.getLocVT();
       const TargetRegisterClass *RC;
-
-      if (RegVT == MVT::i32) {
+      
+      if (isOpenCLKernel) {
+        RC = &RISCV::VSRBitRegClass;
+      } else if (RegVT == MVT::i32) {
         RC = &RISCV::GR32BitRegClass;
         if(Subtarget.isRV64())
           RC = &RISCV::GR64BitRegClass; //promoted
@@ -856,7 +867,14 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
+  bool isOpenCLKernel = false;
+  if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
+    auto *CalleeFn = cast<Function>(E->getGlobal());
+    isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+  }
+
   CCAssignFn *CC = IsRV32 ? IsVarArg ? CC_RISCV32_VAR : CC_RISCV32 :
+                           isOpenCLKernel ? CC_RISCVXhwacha : 
                            IsVarArg ? CC_RISCV64_VAR : CC_RISCV64;
   CCInfo.AnalyzeCallOperands(Outs, CC);
   //
@@ -940,8 +958,24 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Build a sequence of copy-to-reg nodes, chained and glued together.
   SDValue Glue;
   for (unsigned I = 0, E = RegsToPass.size(); I != E; ++I) {
-    Chain = DAG.getCopyToReg(Chain, DL, RegsToPass[I].first,
+    if(isOpenCLKernel) {
+      if(RegsToPass[I].second.getSimpleValueType() == MVT::f32 ||
+         RegsToPass[I].second.getSimpleValueType() == MVT::f64) {
+        MachineRegisterInfo &MRI = MF.getRegInfo();
+        unsigned newXVirtReg = MRI.createVirtualRegister(&RISCV::GR64BitRegClass);
+        Chain = DAG.getCopyToReg(Chain, DL, newXVirtReg,
+                               RegsToPass[I].second, Glue);
+        Glue = Chain.getValue(1);
+        Chain = DAG.getCopyToReg(Chain, DL, RegsToPass[I].first,
+                               DAG.getRegister(newXVirtReg, MVT::i64), Glue);
+      } else {
+        Chain = DAG.getCopyToReg(Chain, DL, RegsToPass[I].first,
                              RegsToPass[I].second, Glue);
+      }
+    } else {
+      Chain = DAG.getCopyToReg(Chain, DL, RegsToPass[I].first,
+                             RegsToPass[I].second, Glue);
+    }
     Glue = Chain.getValue(1);
   }
 
@@ -970,7 +1004,10 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Ops.push_back(Glue);
 
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
-  Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
+  if(isOpenCLKernel)
+    Chain = DAG.getNode(RISCVISD::CALLV, DL, NodeTys, Ops);
+  else
+    Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
   Glue = Chain.getValue(1);
 
   // Mark the end of the call, which is glued to the call itself.
@@ -1339,6 +1376,7 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
   switch (Opcode) {
     OPCODE(RET_FLAG);
     OPCODE(CALL);
+    OPCODE(CALLV);
     OPCODE(PCREL_WRAPPER);
     OPCODE(Hi);
     OPCODE(Lo);
@@ -1385,6 +1423,32 @@ emitCALL(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   return BB;
 }
+/*
+MachineBasicBlock *RISCVTargetLowering::
+emitVMSSF(MachineInstr *MI, MachineBasicBlock *BB) const {
+
+  const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
+  DebugLoc DL = MI->getDebugLoc();
+
+  MachineFunction *F = BB->getParent();
+  MachineRegisterInfo &MRI = F->getRegInfo();
+  const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl(*F->getFunction())->getRegisterInfo();
+  
+  const TargetRegisterClass *RC = MI->getRegClassConstraint(1, TII, TRI);
+  unsigned newXVirtReg = MRI.createVirtualRegister(&RISCV::GR64BitRegClass);
+  if(RC == &RISCV::FP32BitRegClass) {
+    BuildMI(*BB, MI, DL, TII->get(RISCV::FMV_X_S64)).addReg(newXVirtReg).addReg(MI->getOperand(1).getReg());
+    BuildMI(*BB, MI, DL, TII->get(RISCV::VMSS_X)).addReg(MI->getOperand(0).getReg()).addReg(newXVirtReg);
+  } else if(RC == &RISCV::FP64BitRegClass) {
+    BuildMI(*BB, MI, DL, TII->get(RISCV::FMV_X_D)).addReg(newXVirtReg).addReg(MI->getOperand(1).getReg());
+    BuildMI(*BB, MI, DL, TII->get(RISCV::VMSS_X)).addReg(MI->getOperand(0).getReg()).addReg(newXVirtReg);
+  } else {
+    llvm_unreachable("VMSS_F with non floating point src");
+  }
+  MI->eraseFromParent();   // The pseudo instruction is gone now.
+  return BB;
+}
+*/
 
 MachineBasicBlock *RISCVTargetLowering::
 emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
@@ -1504,6 +1568,8 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   case RISCV::CALL64:
   case RISCV::CALLREG64:
       return emitCALL(MI, MBB);
+  /*case RISCV::VMSS_F:
+      return emitVMSSF(MI,MBB);*/
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }

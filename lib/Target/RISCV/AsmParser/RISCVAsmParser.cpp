@@ -9,9 +9,11 @@
 
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetAsmParser.h"
@@ -46,7 +48,11 @@ public:
     FP64Reg,
     PairFP64Reg,
     PairFP128Reg,
-    FP128Reg
+    FP128Reg,
+    VSRReg,
+    VARReg,
+    VPRReg,
+    VVRReg
   };
 
 private:
@@ -70,6 +76,7 @@ private:
   struct RegOp {
     RegisterKind Kind;
     unsigned Num;
+    const MCRegisterInfo *TRI;
   };
 
   // Base + Disp + Index, where Base and Index are LLVM registers or 0.
@@ -111,10 +118,11 @@ public:
     return Op;
   }
   static std::unique_ptr<RISCVOperand>
-  createReg(RegisterKind Kind, unsigned Num, SMLoc StartLoc, SMLoc EndLoc) {
+  createReg(RegisterKind Kind, unsigned Num, SMLoc StartLoc, SMLoc EndLoc, const MCRegisterInfo *TRI) {
     auto Op = make_unique<RISCVOperand>(KindReg, StartLoc, EndLoc);
     Op->Reg.Kind = Kind;
     Op->Reg.Num = Num;
+    Op->Reg.TRI = TRI;
     return Op;
   }
   static std::unique_ptr<RISCVOperand> createImm(const MCExpr *Expr,
@@ -199,6 +207,10 @@ public:
     addExpr(Inst, getImm());
   }
 
+  bool isRegClass(unsigned RCID) const {
+    return Reg.TRI->getRegClass(RCID).contains(getReg());
+  }
+
   // Used by the TableGen code to check for particular operand types.
   bool isPCReg() const { return isReg(PCReg); }
   bool isPCRReg() const { return isReg(PCRReg); }
@@ -213,6 +225,10 @@ public:
   bool isPairFP64() const { return isReg(PairFP64Reg); }
   bool isPairFP128() const { return isReg(PairFP128Reg); }
   bool isFP128() const { return isReg(FP128Reg); }
+  bool isVSR() const { return isReg() && isRegClass(RISCV::VSRBitRegClassID); }
+  bool isVAR() const { return isReg() && isRegClass(RISCV::VARBitRegClassID); }
+  bool isVPR() const { return isReg() && isRegClass(RISCV::VPRBitRegClassID); }
+  bool isVVR() const { return isReg() && isRegClass(RISCV::VVRBitRegClassID); }
   bool isU4Imm() const { return isImm(0, 15); }
   bool isU12Imm() const { return isImm(0, 4096); }
   bool isS12Imm() const { return isImm(-2048, 2047); }
@@ -299,13 +315,14 @@ static const unsigned PCR64Regs[] = {
 
 class RISCVAsmParser : public MCTargetAsmParser {
 #define GET_ASSEMBLER_HEADER
+#define GET_REGISTER_MATCHER
 #include "RISCVGenAsmMatcher.inc"
 
 private:
   MCSubtargetInfo &STI;
   MCAsmParser &Parser;
   struct Register {
-    char Prefix;
+    StringRef Prefix;
     unsigned Number;
     SMLoc StartLoc, EndLoc;
   };
@@ -313,11 +330,11 @@ private:
   bool parseRegister(Register &Reg);
   bool parseParenSuffix(StringRef Name, OperandVector &Operands);
 
-  OperandMatchResultTy parseRegister(Register &Reg, char Prefix,
+  OperandMatchResultTy parseRegister(Register &Reg, StringRef Prefix,
                                      const unsigned *Regs,
                                      bool IsAddress = false);
 
-  OperandMatchResultTy parseRegister(OperandVector &Operands, char Prefix,
+  OperandMatchResultTy parseRegister(OperandVector &Operands, StringRef Prefix,
                                      const unsigned *Regs,
                                      RISCVOperand::RegisterKind Kind,
                                      bool IsAddress = false);
@@ -351,43 +368,59 @@ public:
 
   // Used by the TableGen code to parse particular operand types.
   OperandMatchResultTy parseGR32(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', GR32Regs, RISCVOperand::GR32Reg);
+    return parseRegister(Operands, StringRef("x"), GR32Regs, RISCVOperand::GR32Reg);
   }
 
   OperandMatchResultTy parseGR64(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', GR64Regs, RISCVOperand::GR64Reg);
+    return parseRegister(Operands, StringRef("x"), GR64Regs, RISCVOperand::GR64Reg);
   }
 
   OperandMatchResultTy parsePairGR64(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', PairGR64Regs,
+    return parseRegister(Operands, StringRef("x"), PairGR64Regs,
                          RISCVOperand::PairGR64Reg);
   }
 
   OperandMatchResultTy parsePairGR128(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', PairGR128Regs,
+    return parseRegister(Operands, StringRef("x"), PairGR128Regs,
                          RISCVOperand::PairGR128Reg);
   }
 
   OperandMatchResultTy parsePCReg(OperandVector &Operands) {
-    return parseRegister(Operands, 'p', PCReg, RISCVOperand::PCReg);
+    return parseRegister(Operands, StringRef("p"), PCReg, RISCVOperand::PCReg);
   }
 
   OperandMatchResultTy parseFP32(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', FP32Regs, RISCVOperand::FP32Reg);
+    return parseRegister(Operands, StringRef("f"), FP32Regs, RISCVOperand::FP32Reg);
   }
 
   OperandMatchResultTy parseFP64(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', FP64Regs, RISCVOperand::FP64Reg);
+    return parseRegister(Operands, StringRef("f"), FP64Regs, RISCVOperand::FP64Reg);
   }
 
   OperandMatchResultTy parsePairFP64(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', PairFP64Regs,
+    return parseRegister(Operands, StringRef("f"), PairFP64Regs,
                          RISCVOperand::PairFP64Reg);
   }
 
   OperandMatchResultTy parsePairFP128(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', PairFP128Regs,
+    return parseRegister(Operands, StringRef("f"), PairFP128Regs,
                          RISCVOperand::PairFP128Reg);
+  }
+
+  OperandMatchResultTy parseVSR(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("vs"), FP64Regs, RISCVOperand::VSRReg);
+  }
+
+  OperandMatchResultTy parseVAR(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("va"), FP64Regs, RISCVOperand::VARReg);
+  }
+
+  OperandMatchResultTy parseVPR(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("vp"), FP64Regs, RISCVOperand::VPRReg);
+  }
+
+  OperandMatchResultTy parseVVR(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("vv"), FP64Regs, RISCVOperand::VVRReg);
   }
 
   OperandMatchResultTy parsePCRReg(OperandVector &Operands) {
@@ -399,45 +432,46 @@ public:
         const AsmToken Tok = Parser.getTok();
         if(Tok.is(AsmToken::Identifier)) {
           std::unique_ptr<RISCVOperand> op;
+          const MCRegisterInfo *TRI = getContext().getRegisterInfo();
           //TODO: make this a tablegen or something
           if(Tok.getIdentifier().equals_lower("PCR_K0"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::sup0,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::sup0,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_K1"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::sup1,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::sup1,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_EPC"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::epc,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::epc,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_badvaddr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::badvaddr,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::badvaddr,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::ptbr,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::ptbr,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::ptbr,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::ptbr,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_asid"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::asid,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::asid,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_count"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::count,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::count,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_compare"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::compare,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::compare,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_evec"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::evec,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::evec,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_cause"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::cause,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::cause,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_status"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::status,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::status,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_hartid"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::hartid,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::hartid,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_impl"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::impl,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::impl,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_fatc"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::fatc,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::fatc,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_send_ipi"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::send_ipi,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::send_ipi,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_clear_ipi"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::clear_ipi,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::clear_ipi,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_tohost"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::tohost,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::tohost,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_fromhost"))
-            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::fromhost,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCRReg,RISCV::fromhost,S, Tok.getLoc(), TRI);
           else
             return MatchOperand_ParseFail;
 
@@ -455,7 +489,7 @@ public:
       return MatchOperand_NoMatch;
     }
     //fallback
-    return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
+    return parseRegister(Operands, StringRef("p"), PCRRegs, RISCVOperand::PCRReg);
   }
 
   OperandMatchResultTy
@@ -468,45 +502,46 @@ public:
         const AsmToken Tok = Parser.getTok();
         if(Tok.is(AsmToken::Identifier)) {
           std::unique_ptr<RISCVOperand> op;
+          const MCRegisterInfo *TRI = getContext().getRegisterInfo();
           //TODO: make this a tablegen or something
           if(Tok.getIdentifier().equals_lower("PCR_K0"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup0_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup0_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_K1"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup1_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::sup1_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_EPC"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::epc_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::epc_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_badvaddr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::badvaddr_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::badvaddr_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_ptbr"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::ptbr_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_asid"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::asid_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::asid_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_count"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::count_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::count_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_compare"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::compare_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::compare_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_evec"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::evec_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::evec_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_cause"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::cause_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::cause_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_status"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::status_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::status_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_hartid"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::hartid_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::hartid_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_impl"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::impl_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::impl_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_fatc"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fatc_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fatc_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_send_ipi"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::send_ipi_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::send_ipi_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_clear_ipi"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::clear_ipi_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::clear_ipi_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_tohost"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::tohost_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::tohost_64,S, Tok.getLoc(), TRI);
           else if(Tok.getIdentifier().equals_lower("PCR_fromhost"))
-            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fromhost_64,S, Tok.getLoc());
+            op = RISCVOperand::createReg(RISCVOperand::PCR64Reg,RISCV::fromhost_64,S, Tok.getLoc(), TRI);
           else
             return MatchOperand_ParseFail;
 
@@ -524,7 +559,7 @@ public:
       return MatchOperand_NoMatch;
     }
     //fallback
-    return parseRegister(Operands, 'p', PCR64Regs, RISCVOperand::PCR64Reg);
+    return parseRegister(Operands, StringRef("p"), PCR64Regs, RISCVOperand::PCR64Reg);
   }
 
 };
@@ -541,22 +576,27 @@ void RISCVOperand::print(raw_ostream &OS) const {
 
 // Parse one register of the form %<prefix><number>.
 bool RISCVAsmParser::parseRegister(Register &Reg) {
-  Reg.StartLoc = Parser.getTok().getLoc();
+  const AsmToken Tok = Parser.getTok();
+  Reg.StartLoc = Tok.getLoc();
 
   // Expect a register name.
-  if (Parser.getTok().isNot(AsmToken::Identifier))
+  if (Tok.isNot(AsmToken::Identifier))
     return true;
 
   // Check the prefix.
-  StringRef Name = Parser.getTok().getString();
-  if (Name.size() < 2)
-    return true;
-  Reg.Prefix = Name[0];
-
-  // Treat the rest of the register name as a register number.
-  if (Name.substr(1).getAsInteger(10, Reg.Number))
-    return true;
-
+  StringRef Name = Tok.getString();
+  if(Name[0] == 'v') {
+    Reg.Prefix = Name.substr(0,2);
+    if(Name.substr(2).getAsInteger(10, Reg.Number))
+      return true;
+  } else {
+    if (Name.size() < 2)
+      return true;
+    Reg.Prefix = Name.substr(0,1);
+    // Treat the rest of the register name as a register number.
+    if (Name.substr(1).getAsInteger(10, Reg.Number))
+      return true;
+  }
   Reg.EndLoc = Parser.getTok().getLoc();
   Parser.Lex();
   return false;
@@ -598,11 +638,11 @@ bool RISCVAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
 // entries indicating an invalid register.  IsAddress says whether the
 // register appears in an address context.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
+RISCVAsmParser::parseRegister(Register &Reg, StringRef Prefix,
                                 const unsigned *Regs, bool IsAddress) {
   if (parseRegister(Reg))
     return MatchOperand_NoMatch;
-  if (Reg.Prefix != Prefix || Reg.Number > 31 || Regs[Reg.Number] == 0) {
+  if (!Reg.Prefix.equals_lower(Prefix) || Reg.Number > 255 || Regs[Reg.Number] == 0) {
     Error(Reg.StartLoc, "invalid register");
     return MatchOperand_ParseFail;
   }
@@ -620,14 +660,15 @@ RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
 // register represented by Regs and IsAddress says whether the register is
 // being parsed in an address context, meaning that %r0 evaluates as 0.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseRegister(OperandVector &Operands, char Prefix,
+RISCVAsmParser::parseRegister(OperandVector &Operands, StringRef Prefix,
                               const unsigned *Regs,
                               RISCVOperand::RegisterKind Kind, bool IsAddress) {
   Register Reg;
   OperandMatchResultTy Result = parseRegister(Reg, Prefix, Regs, IsAddress);
   if (Result == MatchOperand_Success)
     Operands.push_back(RISCVOperand::createReg(Kind, Reg.Number,
-                                                 Reg.StartLoc, Reg.EndLoc));
+                                                 Reg.StartLoc, Reg.EndLoc,
+                                                 getContext().getRegisterInfo()));
   return Result;
 }
 
@@ -654,7 +695,7 @@ RISCVAsmParser::parseAddress(OperandVector &Operands, const unsigned *Regs,
 
     // Parse the first register.
     Register Reg;
-    OperandMatchResultTy Result = parseRegister(Reg, 'x', GR32Regs, true);
+    OperandMatchResultTy Result = parseRegister(Reg, StringRef("x"), GR32Regs, true);
     if (Result != MatchOperand_Success)
       return Result;
 
@@ -669,7 +710,7 @@ RISCVAsmParser::parseAddress(OperandVector &Operands, const unsigned *Regs,
       }
 
       Index = Reg.Number;
-      Result = parseRegister(Reg, 'x', GR32Regs, true);
+      Result = parseRegister(Reg, StringRef("x"), GR32Regs, true);
       if (Result != MatchOperand_Success)
         return Result;
     }
@@ -695,12 +736,21 @@ bool RISCVAsmParser::ParseDirective(AsmToken DirectiveID) {
 bool RISCVAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
                                      SMLoc &EndLoc) {
   Register Reg;
+  const MCRegisterInfo *TRC = getContext().getRegisterInfo();
   if (parseRegister(Reg))
     return Error(Reg.StartLoc, "register expected");
-  if (Reg.Prefix == 'x' && Reg.Number < 32)
+  if (Reg.Prefix.equals_lower("x") && Reg.Number < 32)
     RegNo = GR32Regs[Reg.Number];
-  else if (Reg.Prefix == 'f' && Reg.Number < 32)
+  else if (Reg.Prefix.equals_lower("f") && Reg.Number < 32)
     RegNo = FP32Regs[Reg.Number];
+  else if (Reg.Prefix.equals_lower("vs") && Reg.Number < 64)
+    RegNo = TRC->getRegClass(RISCV::VSRBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("va") && Reg.Number < 32)
+    RegNo = TRC->getRegClass(RISCV::VARBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("vp") && Reg.Number < 16)
+    RegNo = TRC->getRegClass(RISCV::VPRBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("vv") && Reg.Number < 256)
+    RegNo = TRC->getRegClass(RISCV::VVRBitRegClassID).getRegister(Reg.Number);
   else
     return Error(Reg.StartLoc, "invalid register");
   StartLoc = Reg.StartLoc;

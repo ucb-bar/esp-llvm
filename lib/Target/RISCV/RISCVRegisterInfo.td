@@ -37,13 +37,13 @@ let Namespace = "RISCV" in {
 // Define a register class that contains values of type TYPE and an
 // associated operand called NAME.  SIZE is the size and alignment
 // of the registers and REGLIST is the list of individual registers.
-multiclass RISCVRegClass<string name, ValueType type, int size, dag regList, bit allocatable> {
+multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable> {
   def AsmOperand : AsmOperandClass {
     let Name = name;
     let ParserMethod = "parse"##name;
     let RenderMethod = "addRegOperands";
   }
-  def Bit : RegisterClass<"RISCV", [type], size, regList> {
+  def Bit : RegisterClass<"RISCV", types, size, regList> {
     let Size = size;
     let isAllocatable = allocatable;
   }
@@ -104,7 +104,7 @@ def t5   : GPR32<30,"x30">, DwarfRegNum<[30]>;
 def t6   : GPR32<31,"x31">, DwarfRegNum<[31]>;
 
 //All regs are 32bit
-defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
+defm GR32 : RISCVRegClass<"GR32", [i32], 32, (add
   zero, ra, sp, gp, tp,
   t0, t1, t2,
   fp, s0, s1,
@@ -125,7 +125,7 @@ def a1_p64 : PairGPR64<1, "x12", [a2, a3]>;
 def a2_p64 : PairGPR64<2, "x14", [a4, a5]>;
 def a3_p64 : PairGPR64<3, "x16", [a6, a7]>;
 
-defm PairGR64 : RISCVRegClass<"PairGR64", i64, 64, (add
+defm PairGR64 : RISCVRegClass<"PairGR64", [i64], 64, (add
   a0_p64, a1_p64, a2_p64, a3_p64), 1>;
 
 //RV64 general purpose regs
@@ -177,7 +177,7 @@ def t5_64   : GPR64<30,"x30", [t5]  >, DwarfRegNum<[30]>;
 def t6_64   : GPR64<31,"x31", [t6]  >, DwarfRegNum<[31]>;
 
 //All regs are 32bit
-defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
+defm GR64 : RISCVRegClass<"GR64", [i64], 64, (add
   zero_64, ra_64, sp_64, gp_64, tp_64,
   t0_64, t1_64, t2_64,
   fp_64, s0_64, s1_64,
@@ -198,7 +198,7 @@ def a1_p128 : PairGPR64<1, "x12", [a2_64, a3_64]>;
 def a2_p128 : PairGPR64<2, "x14", [a4_64, a5_64]>;
 def a3_p128 : PairGPR64<3, "x16", [a6_64, a7_64]>;
 
-defm PairGR128 : RISCVRegClass<"PairGR128", i128, 128, (add
+defm PairGR128 : RISCVRegClass<"PairGR128", [i128], 128, (add
   a0_p128, a1_p128, a2_p128, a3_p128), 1>;
 
 //===----------------------------------------------------------------------===//
@@ -252,7 +252,7 @@ def ft10: FPR32<30,"f30">, DwarfRegNum<[30]>;
 def ft11: FPR32<31,"f31">, DwarfRegNum<[31]>;
 
 //all fp regs are 32bit
-defm FP32  : RISCVRegClass<"FP32", f32, 32, (add
+defm FP32  : RISCVRegClass<"FP32", [f32], 32, (add
   ft0, ft1, ft2, ft3, ft4, ft5, ft6, ft7,
   fs0, fs1, 
   fa0, fa1, fa2, fa3, fa4, fa5, fa6, fa7,
@@ -273,7 +273,7 @@ def fa1_p64 : PairFPR64<1, "f12", [fa2, fa3]>;
 def fa2_p64 : PairFPR64<2, "f14", [fa4, fa5]>;
 def fa3_p64 : PairFPR64<3, "f16", [fa6, fa7]>;
 
-defm PairFP64 : RISCVRegClass<"PairFP64", f64, 64, (add
+defm PairFP64 : RISCVRegClass<"PairFP64", [f64], 64, (add
   fa0_p64, fa1_p64, fa2_p64, fa3_p64), 1>;
 
 // Lower 32 bits of one of the 16 64-bit floating-point registers
@@ -324,7 +324,7 @@ def ft10_64: FPR64<30,"f30", [ft10] >, DwarfRegNum<[30]>;
 def ft11_64: FPR64<31,"f31", [ft11] >, DwarfRegNum<[31]>;
 
 //all fp regs are 32bit
-defm FP64  : RISCVRegClass<"FP64", f64, 64, (add
+defm FP64  : RISCVRegClass<"FP64", [f64], 64, (add
   ft0_64, ft1_64, ft2_64, ft3_64, ft4_64, ft5_64, ft6_64, ft7_64,
   fs0_64, fs1_64, 
   fa0_64, fa1_64, fa2_64, fa3_64, fa4_64, fa5_64, fa6_64, fa7_64,
@@ -345,7 +345,7 @@ def fa1_p128 : PairFPR128<1, "f12", [fa2_64, fa3_64]>;
 def fa2_p128 : PairFPR128<2, "f14", [fa4_64, fa5_64]>;
 def fa3_p128 : PairFPR128<3, "f16", [fa6_64, fa7_64]>;
 
-defm PairFP128 : RISCVRegClass<"PairFP128", f128, 128, (add
+defm PairFP128 : RISCVRegClass<"PairFP128", [f128], 128, (add
   fa0_p128, fa1_p128, fa2_p128, fa3_p128), 1>;
 
 //===----------------------------------------------------------------------===//
@@ -407,7 +407,7 @@ def tohost   : PCR<30,"cr30">;
 def fromhost : PCR<31,"cr31">;
 
 //PCRs 
-defm PCRReg : RISCVRegClass<"PCRReg", i32, 32, (add
+defm PCRReg : RISCVRegClass<"PCRReg", [i32], 32, (add
   //read/write
   status, epc, evec, ptbr, asid, count, compare, sup0, sup1, tohost, fromhost,
   //read only
@@ -471,7 +471,7 @@ def tohost_64   : PCR64<30,"cr30">;
 def fromhost_64 : PCR64<31,"cr31">;
 
 //PCRs (64-bit)
-defm PCR64Reg : RISCVRegClass<"PCR64Reg", i64, 64, (add
+defm PCR64Reg : RISCVRegClass<"PCR64Reg", [i64], 64, (add
   //read/write
   status_64, epc_64, evec_64, ptbr_64, asid_64, count_64, compare_64, 
   sup0_64, sup1_64, tohost_64, fromhost_64,
@@ -487,6 +487,12 @@ defm PCR64Reg : RISCVRegClass<"PCR64Reg", i64, 64, (add
 
 // PC register
 def PC : RISCVReg<"pc">;
-defm PCReg : RISCVRegClass<"PCReg", i32, 32,(add PC), 0>;
+defm PCReg : RISCVRegClass<"PCReg", [i32], 32,(add PC), 0>;
 //FP status register
 def FCSR : RISCVReg<"fcsr">;
+
+//===----------------------------------------------------------------------===//
+// Extension registers
+//===----------------------------------------------------------------------===//
+
+include "RISCVRegisterInfoXhwacha.td"

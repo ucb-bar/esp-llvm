@@ -152,6 +152,10 @@ def imm64zx20 : Immediate<i64, [{
 def imm64sxu32 : Immediate<i64, [{
   return isUInt<32>(N->getSExtValue());
 }], NOOP_SDNodeXForm, "U32Imm">;
+//sign-extended 32bit immediate for vector instructions
+def imm64sx32 : Immediate<i64, [{
+  return isInt<32>(N->getSExtValue());
+}], NOOP_SDNodeXForm, "U32Imm">;
 
 def simm64 : Immediate<i64, [{}], SIMM64, "S64Imm">;
 def uimm64 : Immediate<i64, [{}], UIMM64, "U64Imm">;
@@ -291,3 +295,5 @@ def disp12imm64 : Operand<i64>;
 // 20-bit displacement operands.
 def disp20imm32 : Operand<i32>;
 def disp20imm64 : Operand<i64>;
+
+// Custom Operands

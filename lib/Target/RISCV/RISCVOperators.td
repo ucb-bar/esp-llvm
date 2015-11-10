@@ -44,6 +44,9 @@ def r_retflag           : SDNode<"RISCVISD::RET_FLAG", SDTNone,
 def r_call              : SDNode<"RISCVISD::CALL", SDT_RCall,
                                  [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                                   SDNPVariadic]>;
+def r_callv             : SDNode<"RISCVISD::CALLV", SDT_RCall,
+                                 [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                                  SDNPVariadic]>;
 def r_jal               : SDNode<"RISCVISD::JAL", SDT_RJAL,
                                  [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                                   SDNPVariadic]>;

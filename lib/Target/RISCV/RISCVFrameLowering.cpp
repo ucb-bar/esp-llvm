@@ -297,10 +297,13 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &Sa
   RISCVFunctionInfo *RISCVFI = MF.getInfo<RISCVFunctionInfo>();
   const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
+  unsigned S0 = STI.isRV64() ? RISCV::s0_64 : RISCV::s0;
 
   // Mark $fp as used if function has dedicated frame pointer.
-  if (hasFP(MF))
+  if (hasFP(MF)) {
+    SavedRegs.reset(S0); // Don't double save s0/fp
     SavedRegs.set(FP);
+  }
 
   // Create spill slots for eh data registers if function calls eh_return.
   if (RISCVFI->getCallsEhReturn())
