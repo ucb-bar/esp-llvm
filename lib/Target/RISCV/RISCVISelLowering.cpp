@@ -1033,6 +1033,21 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
   }
 
+  if(isOpenCLKernel) {
+    SmallVector<SDValue, 8> vsetcfgOps;
+    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
+    vsetcfgOps.push_back(Chain);
+    vsetcfgOps.push_back(Glue);
+    Chain = SDValue(DAG.getMachineNode(RISCV::VSETCFG, DL, MVT::Other, MVT::Glue,
+          vsetcfgOps), 0);
+    Glue = Chain.getValue(1);
+    //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
+    Chain = SDValue(DAG.getMachineNode(RISCV::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
+        DAG.getConstant(0, DL, MVT::i64, true), Chain, Glue), 1);// take the chain as res
+    Glue = Chain.getValue(2);
+  }
+
   // The first call operand is the chain and the second is the target address.
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(Chain);
@@ -1049,7 +1064,10 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Ops.push_back(Glue);
 
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
-  Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
+  if(isOpenCLKernel) {
+    Chain = DAG.getNode(RISCVISD::CALLV, DL, NodeTys, Ops);
+  } else
+    Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
   Glue = Chain.getValue(1);
 
   // Mark the end of the call, which is glued to the call itself.

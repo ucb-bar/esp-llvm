@@ -71,6 +71,11 @@ namespace RISCVISD {
 
     FENCE,
 
+    // vector instructions we need to have in the dag for calls
+    CALLV,
+    VSETCFG,
+    VSETVL,
+
     // Wrappers around the inner loop of an 8- or 16-bit ATOMIC_SWAP or
     // ATOMIC_LOAD_<op>.
     //
