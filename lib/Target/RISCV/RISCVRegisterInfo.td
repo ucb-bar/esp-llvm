@@ -37,7 +37,7 @@ let Namespace = "RISCV" in {
 // Define a register class that contains values of type TYPE and an
 // associated operand called NAME.  SIZE is the size and alignment
 // of the registers and REGLIST is the list of individual registers.
-multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable> {
+multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable, int copyCost = 1> {
   def AsmOperand : AsmOperandClass {
     let Name = name;
     let ParserMethod = "parse"##name;
@@ -46,6 +46,7 @@ multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regLi
   def Bit : RegisterClass<"RISCV", types, size, regList> {
     let Size = size;
     let isAllocatable = allocatable;
+    let CopyCost = copyCost;
   }
   def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
     let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");

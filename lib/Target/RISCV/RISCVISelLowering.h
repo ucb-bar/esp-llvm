@@ -36,7 +36,6 @@ namespace RISCVISD {
     // is the target address.  The arguments start at operand 2.
     // There is an optional glue operand at the end.
     CALL,
-    CALLV,
 
     // Jump and link to Operand 0 is the chain operand and operand 1
     // is the register to store the return address. Operand 2 is the target address
@@ -71,6 +70,11 @@ namespace RISCVISD {
     SELECT_CC,
 
     FENCE,
+
+    // vector instructions we need to have in the dag for calls
+    CALLV,
+    VSETCFG,
+    VSETVL,
 
     // Wrappers around the inner loop of an 8- or 16-bit ATOMIC_SWAP or
     // ATOMIC_LOAD_<op>.

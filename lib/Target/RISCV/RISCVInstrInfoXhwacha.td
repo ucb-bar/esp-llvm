@@ -39,11 +39,11 @@ multiclass InstVR<string name, SDPatternOperator op> {
 // Control Thread Instructions
 
 //configure vector unit
-let isCodeGenOnly = 1 in {
+let isCodeGenOnly = 1, isPseudo = 1 in {
   def VSETCFG : InstV< (outs), (ins imm64:$xregs, imm64:$pregs),
-                "vsetcfg\t$xregs,$pregs", []>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
+                "vsetcfg\t$xregs,$pregs", [(r_vsetcfg imm64:$xregs, imm64:$pregs)]>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
   def VSETVL  : InstV< (outs GR64:$res), (ins GR64:$goal), 
-                "vsetvl\t$res,$goal", []>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
+                "vsetvl\t$res,$goal", [(set GR64:$res, (r_vsetvl GR64:$goal))]>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
 }
 
 let isCall = 1, isCodeGenOnly = 1 in {
@@ -101,4 +101,9 @@ let isPseudo = 1 in {
   //def VAND64 : InstR<"vand" , ?, ?, and   , VR64, VR64>, Requires<[HasXhwacha]>;
   //def VMUL64 : InstR<"vmul", ?, ?, mul   , VR64, VR64>, Requires<[HasXhwacha]>;
   defm VFMUL_S_RDY : InstVR<"vfmul.s", fmul>, Requires<[HasXhwacha]>;
+
+  //Predicate Instructions
+  def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset\t$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
 }
+
+

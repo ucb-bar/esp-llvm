@@ -13,6 +13,7 @@
 #include "RISCVInstrInfo.h"
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
+#include "RISCVXhwachaUtilities.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
@@ -92,6 +93,10 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MB
   unsigned FP = STI.isRV64() ? RISCV::fp_64 : RISCV::fp;
   unsigned ZERO = STI.isRV64() ? RISCV::zero_64 : RISCV::zero;
   unsigned ADDu = STI.isRV64() ? RISCV::ADD64 : RISCV::ADD;
+
+  bool isOpenCLKernel = isOpenCLKernelFunction(*(MF.getFunction()));
+  if(isOpenCLKernel)
+    BuildMI(MBB, MBBI, dl, TII.get(RISCV::VPSET), RISCV::vp0);
 
   // First, compute final stack size.
   uint64_t StackSize = MFI->getStackSize();

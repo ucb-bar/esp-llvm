@@ -194,3 +194,11 @@ RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
       (Subtarget.isRV64() ? RISCV::fp_64 : RISCV::fp) : 
       (Subtarget.isRV64() ? RISCV::sp_64 : RISCV::sp);
 }
+
+const TargetRegisterClass *
+RISCVRegisterInfo::getCrossCopyRegClass(const TargetRegisterClass *RC) const {
+  if(RC == &RISCV::VSRBitRegClass ||
+     RC == &RISCV::VARBitRegClass)
+    return &RISCV::GR64BitRegClass;
+  return RC;
+}

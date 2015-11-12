@@ -26,6 +26,10 @@ def SDT_RFence              : SDTypeProfile<0, 2,[SDTCisVT<0, i32>,
                                                   SDTCisVT<1, i32>]>;
 def SDT_RFence64            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>]>;
+def SDT_RVSETCFG            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>]>;
+def SDT_RVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>]>;
 
 //===----------------------------------------------------------------------===//
 // Node definitions
@@ -56,6 +60,9 @@ def r_select_cc         : SDNode<"RISCVISD::SELECT_CC", SDT_RSelectCC,
 
 def r_fence             : SDNode<"RISCVISD::FENCE", SDT_RFence, [SDNPHasChain, SDNPSideEffect]>;
 def r_fence64           : SDNode<"RISCVISD::FENCE", SDT_RFence64, [SDNPHasChain, SDNPSideEffect]>;
+
+def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
+def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
 
 //global addr
 def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;

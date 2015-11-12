@@ -484,7 +484,20 @@ RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 bool
 RISCVInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   switch (MI->getOpcode()) {
-
+    case RISCV::VSETCFG :
+      {
+      //size_t numRegs = MI->getParent()->getParent()->getRegInfo().getUsedPhysRegsMask().count();
+      // FIXME: count the number of allocated regs
+      size_t numRegs = 4;
+      MI->getOperand(0).setImm(numRegs);
+      MI->getOperand(1).setImm(1);
+      return true;
+      }
+    case RISCV::VSETVL :
+    {
+      BuildMI(*(MI->getParent()), MI, MI->getDebugLoc(), get(RISCV::LI), MI->getOperand(0).getReg()).addImm(4);
+      MI->getOperand(1).ChangeToRegister(MI->getOperand(0).getReg(),false);
+    }
   default:
     return false;
   }

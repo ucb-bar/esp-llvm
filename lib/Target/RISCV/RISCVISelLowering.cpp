@@ -988,6 +988,21 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
   }
 
+  if(isOpenCLKernel) {
+    SmallVector<SDValue, 8> vsetcfgOps;
+    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
+    vsetcfgOps.push_back(Chain);
+    vsetcfgOps.push_back(Glue);
+    Chain = SDValue(DAG.getMachineNode(RISCV::VSETCFG, DL, MVT::Other, MVT::Glue,
+          vsetcfgOps), 0);
+    Glue = Chain.getValue(1);
+    //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
+    Chain = SDValue(DAG.getMachineNode(RISCV::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
+        DAG.getConstant(0, DL, MVT::i64, true), Chain, Glue), 1);// take the chain as res
+    Glue = Chain.getValue(2);
+  }
+
   // The first call operand is the chain and the second is the target address.
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(Chain);
@@ -1004,9 +1019,9 @@ RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Ops.push_back(Glue);
 
   SDVTList NodeTys = DAG.getVTList(MVT::Other, MVT::Glue);
-  if(isOpenCLKernel)
+  if(isOpenCLKernel) {
     Chain = DAG.getNode(RISCVISD::CALLV, DL, NodeTys, Ops);
-  else
+  } else
     Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
   Glue = Chain.getValue(1);
 
@@ -1423,32 +1438,6 @@ emitCALL(MachineInstr *MI, MachineBasicBlock *BB) const {
 
   return BB;
 }
-/*
-MachineBasicBlock *RISCVTargetLowering::
-emitVMSSF(MachineInstr *MI, MachineBasicBlock *BB) const {
-
-  const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
-  DebugLoc DL = MI->getDebugLoc();
-
-  MachineFunction *F = BB->getParent();
-  MachineRegisterInfo &MRI = F->getRegInfo();
-  const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl(*F->getFunction())->getRegisterInfo();
-  
-  const TargetRegisterClass *RC = MI->getRegClassConstraint(1, TII, TRI);
-  unsigned newXVirtReg = MRI.createVirtualRegister(&RISCV::GR64BitRegClass);
-  if(RC == &RISCV::FP32BitRegClass) {
-    BuildMI(*BB, MI, DL, TII->get(RISCV::FMV_X_S64)).addReg(newXVirtReg).addReg(MI->getOperand(1).getReg());
-    BuildMI(*BB, MI, DL, TII->get(RISCV::VMSS_X)).addReg(MI->getOperand(0).getReg()).addReg(newXVirtReg);
-  } else if(RC == &RISCV::FP64BitRegClass) {
-    BuildMI(*BB, MI, DL, TII->get(RISCV::FMV_X_D)).addReg(newXVirtReg).addReg(MI->getOperand(1).getReg());
-    BuildMI(*BB, MI, DL, TII->get(RISCV::VMSS_X)).addReg(MI->getOperand(0).getReg()).addReg(newXVirtReg);
-  } else {
-    llvm_unreachable("VMSS_F with non floating point src");
-  }
-  MI->eraseFromParent();   // The pseudo instruction is gone now.
-  return BB;
-}
-*/
 
 MachineBasicBlock *RISCVTargetLowering::
 emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
@@ -1568,8 +1557,6 @@ EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
   case RISCV::CALL64:
   case RISCV::CALLREG64:
       return emitCALL(MI, MBB);
-  /*case RISCV::VMSS_F:
-      return emitVMSSF(MI,MBB);*/
   default:
     llvm_unreachable("Unexpected instr type to insert");
   }

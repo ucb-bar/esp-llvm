@@ -437,11 +437,6 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
   return false;
 }
 void RISCVDAGToDAGISel::processOpenCLKernel(MachineFunction &MF) {
-  // Move all arguments to vs registers FIXME: should this be a calling conv
-  //for(Function::arg_iterator AI = MF.getFunction()->arg_begin(),
-      //AE = MF.getFunction()->arg_end(); AI != AE; ++AI) {
-  //}
-
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();

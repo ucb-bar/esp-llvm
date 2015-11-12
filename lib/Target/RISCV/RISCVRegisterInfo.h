@@ -44,6 +44,9 @@ public:
                            RegScavenger *RS) const override;
   unsigned getFrameRegister(const MachineFunction &MF) const override;
 
+  const TargetRegisterClass *
+  getCrossCopyRegClass(const TargetRegisterClass *RC) const override;
+
 private:
   virtual void eliminateFI(MachineBasicBlock::iterator II, unsigned OpNo,
                            int FrameIndex, uint64_t StackSize,
