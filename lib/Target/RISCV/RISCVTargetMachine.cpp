@@ -11,6 +11,8 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
+#include "llvm/CodeGen/MachineProgramDependenceGraph.h"
+#include "llvm/CodeGen/MachineProgramDependenceGraphPrinter.h"
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
@@ -92,6 +94,7 @@ public:
 
   bool addInstSelector() override;
   void addPreEmitPass() override;
+  void addPreRegAlloc() override;
 };
 } // end anonymous namespace
 
@@ -102,6 +105,11 @@ bool RISCVPassConfig::addInstSelector() {
 
 void RISCVPassConfig::addPreEmitPass(){
   addPass(createRISCVBranchSelectionPass());
+}
+
+void RISCVPassConfig::addPreRegAlloc(){
+  addPass(createMachineProgramDependenceGraphPass());
+  addPass(createMachineProgramDependenceGraphPrinterPass());
 }
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
