@@ -12,6 +12,7 @@
 #include "llvm/Analysis/DOTGraphTraitsPass.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraph.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraphPrinter.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -28,24 +29,78 @@ struct DOTGraphTraits<MachineProgramDependenceGraph*> : public DefaultDOTGraphTr
   static std::string getGraphName(const MachineProgramDependenceGraph *DT) {
     return "Program Dependence Graph";
   }
+  static std::string getGraphProperties(MachineProgramDependenceGraph *MachinePDG) {
+    return "colorscheme=set19";
+  }
 
-  std::string getNodeLabel(const MachineBasicBlock *Node, MachineProgramDependenceGraph *PDG){
+  std::string getEdgeSourceLabel(const MachinePDGNode *Node, MachinePDGChildIterator itr){
+    MachineProgramDependenceGraph::CDSet condSet = (*itr)->cds;
+    for(MachineProgramDependenceGraph::CDSet::iterator citr = condSet.begin(), cend = condSet.end(); citr != cend; ++citr){
+      if(citr->first == Node->bb)
+        return itr.cond() ? "T" : "F";
+    }
+    return "ERR";
+  }
+
+  std::string getNodeDescription(const MachinePDGNode *Node, MachineProgramDependenceGraph *MachinePDG){
     std::string Str;
     raw_string_ostream OS(Str);
 
-    OS << "BB#" << Node->getNumber();
-    if (const BasicBlock *BB = Node->getBasicBlock())
-      OS << ": " << BB->getName();
+    /*
+    MachineLoop *L = MachinePDG->LI->getLoopFor(Node->bb);
+    if(L){
+      if(L->getHeader()==Node->bb) OS << "Header ";
+      if(L->getLoopPreheader()==Node->bb) OS << "PreHeader ";
+      if(L->getLoopLatch() == Node->bb) OS << "Latch ";
+      SmallVector<MachineBasicBlock *, 8> Blocks;
+      L->getExitingBlocks(Blocks);
+      for(unsigned i = 0, e = Blocks.size(); i != e; ++i)
+        if(Blocks[i] == Node->bb) OS << "Exiting ";
+    }*/
+
+    if(isSimple()) return OS.str();
+
     OS << "\n";
-    MachineProgramDependenceGraph::CDSet cdSet;
-    if(PDG->BBtoCDS.find(Node) != PDG->BBtoCDS.end())
-      cdSet = PDG->BBtoCDS.find(Node)->second;
-    if(!cdSet.empty())
-      OS << "Control dependent on\n";
+    MachineProgramDependenceGraph::CDSet cdSet = Node->cds;
     for(MachineProgramDependenceGraph::CDSet::iterator itr = cdSet.begin(); itr != cdSet.end(); itr++){
-      OS << "(" << itr->first->getName().str() << ", " << (itr->second ? "F" : "T") << ")\n";
+      OS << "(" << itr->first->getName().str() << ", " << (itr->second ? "T" : "F") << ")";
     }
     return OS.str();
+  }
+
+  std::string getNodeLabel(const MachinePDGNode *Node, MachineProgramDependenceGraph *MachinePDG){
+    std::string Str;
+    raw_string_ostream OS(Str);
+
+    MachineProgramDependenceGraph::CDSet cdSet = Node->cds;
+    for(MachineProgramDependenceGraph::CDSet::iterator itr = cdSet.begin(); itr != cdSet.end(); itr++){
+      OS << "(" << itr->first->getName().str() << ", " << (itr->second ? "T" : "F") << ")";
+    }
+
+    //std::string name = DOTGraphTraits<const llvm::MachineFunction*>::getSimpleNodeLabel(Node->bb, MachinePDG->MF);
+
+    std::string name;
+    raw_string_ostream nOS(name);
+    nOS << "BB#" << Node->bb->getNumber();
+    if (const MachineBasicBlock *BB = Node->bb)
+      nOS << ": " << BB->getName();
+    
+    return nOS.str();
+  }
+
+  std::string getNodeAttributes(const MachinePDGNode *Node, MachineProgramDependenceGraph *MachinePDG){
+    /*
+    Loop *L = MachinePDG->LI->getLoopFor(Node->bb);
+    if(L){
+      if(L->getHeader()==Node->bb) return "color=1";
+      if(L->getLoopPreheader()==Node->bb) return "color=2";
+      if(L->getLoopLatch() == Node->bb) return "color=3";
+      SmallVector<MachineBasicBlock *, 8> Blocks;
+      L->getExitingBlocks(Blocks);
+      for(unsigned i = 0, e = Blocks.size(); i != e; ++i)
+        if(Blocks[i] == Node->bb) return "color=4";
+    }*/
+    return "";
   }
 
 };
