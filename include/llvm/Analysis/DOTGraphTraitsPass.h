@@ -17,6 +17,9 @@
 #include "llvm/Analysis/CFGPrinter.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineFunctionAnalysis.h"
+#include "llvm/CodeGen/MachineFunctionPass.h"
 
 namespace llvm {
 
@@ -85,6 +88,44 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesAll();
+    AU.addRequired<AnalysisT>();
+  }
+
+private:
+  std::string Name;
+};
+
+template <
+    typename AnalysisT, bool IsSimple, typename GraphT = AnalysisT *,
+    typename AnalysisGraphTraitsT = DefaultAnalysisGraphTraits<AnalysisT> >
+class DOTGraphTraitsMachinePrinter : public MachineFunctionPass {
+public:
+  DOTGraphTraitsMachinePrinter(StringRef GraphName, char &ID)
+      : MachineFunctionPass(ID), Name(GraphName) {}
+
+  bool runOnMachineFunction(MachineFunction &F) override {
+    GraphT Graph = AnalysisGraphTraitsT::getGraph(&getAnalysis<AnalysisT>());
+    std::string Filename = Name + "." + F.getName().str() + ".dot";
+    std::error_code EC;
+
+    errs() << "Writing '" << Filename << "'...";
+
+    raw_fd_ostream File(Filename, EC, sys::fs::F_Text);
+    std::string GraphName = DOTGraphTraits<GraphT>::getGraphName(Graph);
+    std::string Title = GraphName + " for '" + F.getName().str() + "' function";
+
+    if (!EC)
+      WriteGraph(File, Graph, IsSimple, Title);
+    else
+      errs() << "  error opening file for writing!";
+    errs() << "\n";
+
+    return false;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.setPreservesAll();
+    AU.addRequired<MachineFunctionAnalysis>();
     AU.addRequired<AnalysisT>();
   }
 

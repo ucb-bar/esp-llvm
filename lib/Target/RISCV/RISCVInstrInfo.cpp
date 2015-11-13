@@ -142,6 +142,12 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
     if (Cond.empty()) {
       // FIXME: add X86-style branch swap
       FBB = TBB;
+      //Find the fallthrough block
+      for(MachineBasicBlock *fall : MBB.successors()) {
+        //We only have two sucessors in RISCV
+        if(ThisTarget->getMBB() != fall)
+          FBB = fall;
+      }
       TBB = ThisTarget->getMBB();
       Cond.push_back(MachineOperand::CreateImm(ThisCond[0].getImm()));
       //push remaining operands

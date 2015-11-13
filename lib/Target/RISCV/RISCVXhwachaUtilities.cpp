@@ -21,11 +21,13 @@ bool llvm::isOpenCLKernelFunction(const Function &F) {
 
   for (unsigned i = 0, e = oclKernels->getNumOperands(); i != e; ++i) {
     llvm::MDNode *kernel_iter = oclKernels->getOperand(i);
-    llvm::ValueAsMetadata* vam = dyn_cast<llvm::ValueAsMetadata>(kernel_iter->getOperand(0));
-    llvm::Function *kernel_prototype =
-      llvm::cast<llvm::Function>(vam->getValue());
-    if(kernel_prototype->getName().equals(F.getName()))
-      return true;
+    if(isa<llvm::ValueAsMetadata>(kernel_iter->getOperand(0))) {
+      llvm::ValueAsMetadata* vam = dyn_cast<llvm::ValueAsMetadata>(kernel_iter->getOperand(0));
+      llvm::Function *kernel_prototype =
+        llvm::cast<llvm::Function>(vam->getValue());
+      if(kernel_prototype->getName().equals(F.getName()))
+        return true;
+    }
   }
   return false;
 }

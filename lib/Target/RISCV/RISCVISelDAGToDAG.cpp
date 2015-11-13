@@ -538,7 +538,8 @@ void RISCVDAGToDAGISel::processOpenCLKernel(MachineFunction &MF) {
           I->RemoveOperand(0);
           break;
         default:
-          printf("Unable to handle Opcode in OpenCL kernel\n");
+          printf("Unable to handle Opcode:%u in OpenCL kernel\n", I->getOpcode());
+          I->dump();
       }
     }
   }
