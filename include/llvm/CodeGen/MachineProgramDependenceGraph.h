@@ -18,6 +18,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachinePostDominators.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
 #include <map>
 #include <set>
 #include <utility>
@@ -27,9 +28,7 @@ namespace llvm {
 class MachineProgramDependenceGraph;
 MachineFunctionPass *createMachineProgramDependenceGraphPass();
 
-//class raw_ostream;
-//class Loop;
-//class LoopInfo;
+class MachinePDGNode;
 
 //===----------------------------------------------------------------------===//
 /// @brief Analysis that detects all canonical Regions.
@@ -40,7 +39,7 @@ MachineFunctionPass *createMachineProgramDependenceGraphPass();
 class MachineProgramDependenceGraph : public MachineFunctionPass {
 public:
   typedef std::set<std::pair<const MachineBasicBlock*, bool> > CDSet;
-  typedef std::map<const MachineBasicBlock*, CDSet > BBtoCDSMap;
+  typedef std::map<const MachineBasicBlock*, MachinePDGNode* > BBtoCDSMap;
   /// Map every BB to the set of control dependencies it has
   BBtoCDSMap BBtoCDS;
 private:
@@ -50,7 +49,6 @@ private:
 
   MachineDominatorTree *DT;
   MachinePostDominatorTree *PDT;
-
 
   // Calculate - detecte all regions in function and build the region tree.
   void Calculate(MachineFunction& F);
@@ -62,6 +60,7 @@ public:
   }
 
   MachineFunction *MF;
+  const MachineLoopInfo *LI;
 
   bool runOnMachineFunction(MachineFunction &F) override;
 
@@ -73,15 +72,162 @@ public:
   ~MachineProgramDependenceGraph();
 };
 
-template <> struct GraphTraits<MachineProgramDependenceGraph*> :
-  public GraphTraits<const MachineBasicBlock*> {
-    static NodeType *getEntryNode(const MachineProgramDependenceGraph *PDG) {return &PDG->MF->front();}
+class MachinePDGNode {
+public:
+  const MachineBasicBlock *bb;
+  MachineProgramDependenceGraph::CDSet cds;
+  std::set<std::pair<MachinePDGNode*,bool> > children;
+  MachineProgramDependenceGraph *parent;
 
-    // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
-    typedef MachineFunction::const_iterator nodes_iterator;
-    static nodes_iterator nodes_begin(MachineProgramDependenceGraph *PDG) { return PDG->MF->begin(); }
-    static nodes_iterator nodes_end  (MachineProgramDependenceGraph *PDG) { return PDG->MF->end(); }
-    static unsigned       size       (MachineProgramDependenceGraph *PDG) { return PDG->MF->size(); }
-  };
+  MachinePDGNode(const MachineBasicBlock *bb, MachineProgramDependenceGraph::CDSet cds, 
+      MachineProgramDependenceGraph *parent):
+    bb(bb), cds(cds), parent(parent) {}
+  void addChild(std::pair<MachinePDGNode*,bool> kid){
+    children.insert(kid);
+  }
+};
+
+class MachinePDGChildIterator: public std::iterator<std::forward_iterator_tag, MachinePDGNode, ptrdiff_t>
+{
+  typedef std::iterator<std::forward_iterator_tag, MachinePDGNode, ptrdiff_t> super;
+
+  MachinePDGNode* Node;
+
+  // The inner iterator.
+  std::set<std::pair<MachinePDGNode*,bool> >::iterator BItor;
+
+
+public:
+  typedef MachinePDGChildIterator Self;
+
+  typedef typename super::pointer pointer;
+
+  /// @brief Create begin iterator of a RegionNode.
+  inline MachinePDGChildIterator(MachinePDGNode* node)
+    : Node(node), BItor(node->children.begin()) {}
+
+  /// @brief Create an end iterator.
+  inline MachinePDGChildIterator(MachinePDGNode* node, bool end)
+    : Node(node), BItor(node->children.end()) {}
+
+  inline bool operator==(const Self& x) const {
+    return BItor == x.BItor;
+  }
+
+  inline bool operator!=(const Self& x) const { return !operator==(x); }
+
+  inline pointer operator*() const {
+    return BItor->first;
+  }
+  inline bool cond() const {
+    return BItor->second;
+  }
+
+  inline Self& operator++() {
+    ++BItor;
+    return *this;
+  }
+
+  inline Self operator++(int) {
+    Self tmp = *this;
+    ++*this;
+    return tmp;
+  }
+
+  inline const Self &operator=(const Self &I) {
+    if (this != &I) {
+      Node = I.Node;
+      BItor = I.BItor;
+    }
+    return *this;
+  }
+};
+
+class MachinePDGNodeIterator: public std::iterator<std::forward_iterator_tag, MachinePDGNode, ptrdiff_t>
+{
+  typedef std::iterator<std::forward_iterator_tag, MachinePDGNode, ptrdiff_t> super;
+
+  MachinePDGNode* Node;
+
+  // The BBMap iterator.
+  MachineProgramDependenceGraph::BBtoCDSMap::iterator BItor;
+
+
+public:
+  typedef MachinePDGNodeIterator Self;
+
+  typedef typename super::pointer pointer;
+
+  /// @brief Create begin iterator of a RegionNode.
+  inline MachinePDGNodeIterator(MachinePDGNode* node, MachineProgramDependenceGraph *MachinePDG)
+    : Node(node), BItor(MachinePDG->BBtoCDS.begin()) {}
+
+  /// @brief Create an end iterator.
+  inline MachinePDGNodeIterator(MachinePDGNode* node, MachineProgramDependenceGraph *MachinePDG, bool)
+    : Node(node), BItor(MachinePDG->BBtoCDS.end()) {}
+
+  inline bool operator==(const Self& x) const {
+    return BItor == x.BItor;
+  }
+
+  inline bool operator!=(const Self& x) const { return !operator==(x); }
+
+  inline pointer operator*() const {
+    //return Node->parent->BBtoCDS.find(*BItor)->second;
+    return BItor->second;
+  }
+
+  inline Self& operator++() {
+    ++BItor;
+    return *this;
+  }
+
+  inline Self operator++(int) {
+    Self tmp = *this;
+    ++*this;
+    return tmp;
+  }
+
+  inline const Self &operator=(const Self &I) {
+    if (this != &I) {
+      Node = I.Node;
+      BItor = I.BItor;
+    }
+    return *this;
+  }
+};
+
+template <> struct GraphTraits<MachinePDGNode*>{
+  typedef MachinePDGNode NodeType;
+  typedef MachinePDGChildIterator ChildIteratorType;
+
+  static NodeType *getEntryNode(NodeType* N) { return N; } 
+
+  static inline ChildIteratorType child_begin(NodeType *N) { 
+    return MachinePDGChildIterator(N);
+  } 
+
+  static inline ChildIteratorType child_end(NodeType *N) { 
+    return MachinePDGChildIterator(N,true);
+  } 
+};
+
+template <> struct GraphTraits<MachineProgramDependenceGraph*>
+ : public GraphTraits<MachinePDGNode*>{
+
+  static NodeType *getEntryNode(const MachineProgramDependenceGraph *MachinePDG) {
+    return MachinePDG->BBtoCDS.begin()->second;
+  }
+
+  // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
+  typedef MachinePDGNodeIterator nodes_iterator;
+
+  static nodes_iterator nodes_begin(MachineProgramDependenceGraph *MachinePDG) {
+    return nodes_iterator(MachinePDG->BBtoCDS.begin()->second, MachinePDG); 
+  }
+  static nodes_iterator nodes_end  (MachineProgramDependenceGraph *MachinePDG) {
+    return nodes_iterator(MachinePDG->BBtoCDS.begin()->second, MachinePDG, true);
+  }
+};
 } // End llvm namespace
 #endif

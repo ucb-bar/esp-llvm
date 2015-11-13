@@ -199,6 +199,7 @@ void initializeMachineProgramDependenceGraphPass(PassRegistry&);
 void initializeMachineProgramDependenceGraphPrinterPass(PassRegistry&);
 void initializeMachineRegionInfoPassPass(PassRegistry&);
 void initializeMachineSchedulerPass(PassRegistry&);
+void initializeMachineScalarizationPass(PassRegistry&);
 void initializeMachineSinkingPass(PassRegistry&);
 void initializeMachineTraceMetricsPass(PassRegistry&);
 void initializeMachineVerifierPassPass(PassRegistry&);

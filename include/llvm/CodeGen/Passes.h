@@ -406,6 +406,9 @@ namespace llvm {
   /// MachineProgramDependenceGraph - This pass constructs a program dependence graph.
   extern char &MachineProgramDependenceGraphID;
 
+  /// MachineScalarization - This pass analyses convergence and scalarization.
+  extern char &MachineScalarizationID;
+
   /// EdgeBundles analysis - Bundle machine CFG edges.
   extern char &EdgeBundlesID;
 
