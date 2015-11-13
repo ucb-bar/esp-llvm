@@ -83,6 +83,10 @@ void ProgramDependenceGraph::Calculate(Function &F) {
   s_map s;
   //Loop over CFG
   for(Function::iterator A = F.begin(), E = F.end(); A != E; ++A){
+        std::set<std::pair<const BasicBlock*, bool> > condSet;
+        PDGNode *newNode = new PDGNode(A,condSet, this);
+        BBtoCDS.insert(std::make_pair(A,newNode));
+
     //TODO:only look at conditional terminators?
     if(isa<BranchInst>(A->getTerminator())){
       BranchInst *term = (BranchInst*)A->getTerminator();
@@ -90,7 +94,7 @@ void ProgramDependenceGraph::Calculate(Function &F) {
         BasicBlock *B = term->getSuccessor(i);
         //i==0 F branch
         //i==1 T branch
-        if(!PDT->dominates(B,A))
+        if(!PDT->properlyDominates(B,A))
           s.insert(std::make_pair(std::make_pair(A,B),i));
       }
     }
@@ -112,24 +116,83 @@ void ProgramDependenceGraph::Calculate(Function &F) {
     //A's parent as control dependent on A
     DomTreeNode *aParent = PDT->getNode(A)->getIDom();
     DomTreeNode *travel  = PDT->getNode(B);
-    Worklist.push_back(travel->getBlock());
+    Worklist.push_back(B);
     do {
       BasicBlock *BB = Worklist.pop_back_val();
       //mark travel
-      if(BBtoCDS.find(BB) == BBtoCDS.end()){
-        std::set<std::pair<const BasicBlock*, bool> > condSet;
-        condSet.insert(std::make_pair(A,cond));
-        BBtoCDS.insert(std::make_pair(BB,condSet));
-      }else{
-        if(BBtoCDS.find(BB)->second.count(std::make_pair(A,cond)) > 0)
-          continue;
-        BBtoCDS.find(BB)->second.insert(std::make_pair(A,cond));
+      if(BBtoCDS.find(BB)->second->cds.count(std::make_pair(A,cond)) > 0){
+        continue;
       }
+      BBtoCDS.find(BB)->second->cds.insert(std::make_pair(A,cond));
+      BBtoCDS.find(A)->second->addChild(std::make_pair(BBtoCDS.find(BB)->second,cond));
       //push all CFG successors to worklist
       for(succ_iterator SI = succ_begin(BB), SE = succ_end(BB); SI != SE; ++SI)
         if(*SI != aParent->getBlock())
           Worklist.push_back(*SI);
     } while (!Worklist.empty());
+  }
+  //clean up the extra children so the graph looks pretty
+  for(BBtoCDSMap::iterator bi = BBtoCDS.begin(), be = BBtoCDS.end(); bi != be; ++bi){
+    if(bi->second->cds.size() < 2)
+      continue; //empty and only one parent is fine
+    //Look at our parents and see which is closer to use.
+    //The correct has all of our control deps after adding itself
+        for(ProgramDependenceGraph::CDSet::iterator pdi =
+             bi->second->cds.begin(), pde =
+             bi->second->cds.end(); pdi != pde; ++pdi){
+          bool foundAll = true;
+          ProgramDependenceGraph::CDSet::iterator checkItr, checkEnd;
+          for( checkItr =
+               bi->second->cds.begin(), checkEnd =
+               bi->second->cds.end(); checkItr != checkEnd; ++checkItr){
+            //loop over all of our parents deps
+            bool found = (checkItr->first == pdi->first || checkItr->first == bi->first);
+            //the second part of this conditional only compares bbs because if both side of the bb terminator branch to itself it is an infinite loop
+            //bool found = false;
+            //bool found = (*checkItr == *pdi || checkItr->first == bi->first);
+            for(ProgramDependenceGraph::CDSet::iterator cdi =
+                 BBtoCDS.find(pdi->first)->second->cds.begin(), cde =
+                 BBtoCDS.find(pdi->first)->second->cds.end(); cdi != cde; ++cdi){
+                //check for our parent being the missing dep first
+              if(checkItr->first == cdi->first && checkItr->second == cdi->second) {
+              //if(checkItr == cdi)
+                found = true; break;
+              }
+            }
+            //loop over our parents children
+
+            for(PDGChildIterator ki = PDGChildIterator(BBtoCDS.find(pdi->first)->second),
+                                 ke = PDGChildIterator(BBtoCDS.find(pdi->first)->second,true); ki != ke; ++ki){
+              /*bool cond = false;
+              if(bi->second->cds.count(std::make_pair((*ki)->bb, false)) > 0)
+                cond = false;
+              if(bi->second->cds.count(std::make_pair((*ki)->bb, true)) > 0)
+                cond = true;*/
+              if(checkItr->first == (*ki)->bb &&
+                  ((*ki)->cds.count(std::make_pair(bi->second->bb,true)) > 0 ||
+                  (*ki)->cds.count(std::make_pair(bi->second->bb,false)) > 0))
+                found = true;
+
+              //if(*checkItr == std::make_pair((*ki)->bb, ki.cond()))
+                  //((ki->first)->cds.count(std::make_pair(bi->second->bb,true)) > 0 ||
+                  //(ki->first)->cds.count(std::make_pair(bi->second->bb,false)) > 0))
+            }
+
+            //if(!found) foundAll = false;
+            if(!found)foundAll = false;
+            if(!found)break;
+          }
+          if(!foundAll) {//remove bi from pdi's children
+/*
+            PDGChildIterator children = BBtoCDS.find(pdi->first)->second->children;
+            for(PDGChildIterator it = children.begin(), ie = children.end(); it != ie; ++it){
+              if(*it == bi->second)
+                children.erase(it);
+*/
+              BBtoCDS.find(pdi->first)->second->children.erase(
+              std::make_pair(bi->second, pdi->second));
+          }
+        }
   }
 }
 
@@ -138,6 +201,7 @@ bool ProgramDependenceGraph::runOnFunction(Function &F) {
 
   DT = &getAnalysis<DominatorTree>();
   PDT = &getAnalysis<PostDominatorTree>();
+  LI = &getAnalysis<LoopInfo>();
   Func = &F;
 
   Calculate(F);
@@ -149,6 +213,7 @@ void ProgramDependenceGraph::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
   AU.addRequiredTransitive<DominatorTree>();
   AU.addRequired<PostDominatorTree>();
+  AU.addRequired<LoopInfo>();
 }
 
 /*
@@ -163,6 +228,7 @@ INITIALIZE_PASS_BEGIN(ProgramDependenceGraph, "pdg",
                 "Determine the program dependence graph", true, true)
 INITIALIZE_PASS_DEPENDENCY(DominatorTree)
 INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
+INITIALIZE_PASS_DEPENDENCY(LoopInfo)
 INITIALIZE_PASS_END(ProgramDependenceGraph, "pdg",
                 "Determine the program dependence graph", true, true)
 

@@ -18,6 +18,7 @@
 namespace llvm {
   class FunctionPass;
   FunctionPass *createProgramDependenceGraphPrinterPass();
+  FunctionPass *createProgramDependenceGraphOnlyPrinterPass();
 } // End llvm namespace
 
 #endif

@@ -24,6 +24,7 @@
 namespace llvm {
 
 class ProgramDependenceGraph;
+class PDGNode;
 class raw_ostream;
 class Loop;
 class LoopInfo;
@@ -37,7 +38,7 @@ class LoopInfo;
 class ProgramDependenceGraph : public FunctionPass {
 public:
   typedef std::set<std::pair<const BasicBlock*, bool> > CDSet;
-  typedef std::map<const BasicBlock*, CDSet > BBtoCDSMap;
+  typedef std::map<const BasicBlock*, PDGNode* > BBtoCDSMap;
   /// Map every BB to the set of control dependencies it has
   BBtoCDSMap BBtoCDS;
 private:
@@ -48,7 +49,6 @@ private:
   DominatorTree *DT;
   PostDominatorTree *PDT;
 
-
   // Calculate - detecte all regions in function and build the region tree.
   void Calculate(Function& F);
 
@@ -58,6 +58,8 @@ public:
   static char ID;
   explicit ProgramDependenceGraph();
   Function *Func;
+  const LoopInfo *LI;
+
 
   ~ProgramDependenceGraph();
 
@@ -69,32 +71,163 @@ public:
   //@}
 
 };
+class PDGNode {
+public:
+  const BasicBlock *bb;
+  ProgramDependenceGraph::CDSet cds;
+  std::set<std::pair<PDGNode*,bool> > children;
+  ProgramDependenceGraph *parent;
 
-/*
+  PDGNode(const BasicBlock *bb, ProgramDependenceGraph::CDSet cds, 
+      ProgramDependenceGraph *parent):
+    bb(bb), cds(cds), parent(parent) {}
+  void addChild(std::pair<PDGNode*,bool> kid){
+    children.insert(kid);
+  }
+};
+
+class PDGChildIterator: public std::iterator<std::forward_iterator_tag, PDGNode, ptrdiff_t>
+{
+  typedef std::iterator<std::forward_iterator_tag, PDGNode, ptrdiff_t> super;
+
+  PDGNode* Node;
+
+  // The inner iterator.
+  std::set<std::pair<PDGNode*,bool> >::iterator BItor;
+
+
+public:
+  typedef PDGChildIterator Self;
+
+  typedef typename super::pointer pointer;
+
+  /// @brief Create begin iterator of a RegionNode.
+  inline PDGChildIterator(PDGNode* node)
+    : Node(node), BItor(node->children.begin()) {}
+
+  /// @brief Create an end iterator.
+  inline PDGChildIterator(PDGNode* node, bool end)
+    : Node(node), BItor(node->children.end()) {}
+
+  inline bool operator==(const Self& x) const {
+    return BItor == x.BItor;
+  }
+
+  inline bool operator!=(const Self& x) const { return !operator==(x); }
+
+  inline pointer operator*() const {
+    return BItor->first;
+  }
+  inline bool cond() const {
+    return BItor->second;
+  }
+
+  inline Self& operator++() {
+    ++BItor;
+    return *this;
+  }
+
+  inline Self operator++(int) {
+    Self tmp = *this;
+    ++*this;
+    return tmp;
+  }
+
+  inline const Self &operator=(const Self &I) {
+    if (this != &I) {
+      Node = I.Node;
+      BItor = I.BItor;
+    }
+    return *this;
+  }
+};
+
+class PDGNodeIterator: public std::iterator<std::forward_iterator_tag, PDGNode, ptrdiff_t>
+{
+  typedef std::iterator<std::forward_iterator_tag, PDGNode, ptrdiff_t> super;
+
+  PDGNode* Node;
+
+  // The BBMap iterator.
+  ProgramDependenceGraph::BBtoCDSMap::iterator BItor;
+
+
+public:
+  typedef PDGNodeIterator Self;
+
+  typedef typename super::pointer pointer;
+
+  /// @brief Create begin iterator of a RegionNode.
+  inline PDGNodeIterator(PDGNode* node, ProgramDependenceGraph *PDG)
+    : Node(node), BItor(PDG->BBtoCDS.begin()) {}
+
+  /// @brief Create an end iterator.
+  inline PDGNodeIterator(PDGNode* node, ProgramDependenceGraph *PDG, bool)
+    : Node(node), BItor(PDG->BBtoCDS.end()) {}
+
+  inline bool operator==(const Self& x) const {
+    return BItor == x.BItor;
+  }
+
+  inline bool operator!=(const Self& x) const { return !operator==(x); }
+
+  inline pointer operator*() const {
+    //return Node->parent->BBtoCDS.find(*BItor)->second;
+    return BItor->second;
+  }
+
+  inline Self& operator++() {
+    ++BItor;
+    return *this;
+  }
+
+  inline Self operator++(int) {
+    Self tmp = *this;
+    ++*this;
+    return tmp;
+  }
+
+  inline const Self &operator=(const Self &I) {
+    if (this != &I) {
+      Node = I.Node;
+      BItor = I.BItor;
+    }
+    return *this;
+  }
+};
+
+
+template <> struct GraphTraits<PDGNode*>{
+  typedef PDGNode NodeType;
+  typedef PDGChildIterator ChildIteratorType;
+
+  static NodeType *getEntryNode(NodeType* N) { return N; } 
+
+  static inline ChildIteratorType child_begin(NodeType *N) { 
+    return PDGChildIterator(N);
+  } 
+
+  static inline ChildIteratorType child_end(NodeType *N) { 
+    return PDGChildIterator(N,true);
+  } 
+};
+
 template <> struct GraphTraits<ProgramDependenceGraph*>
-  : public GraphTraits<const Function*> { 
+ : public GraphTraits<PDGNode*>{
 
-    typedef const BasicBlock NodeType;
-  static nodes_iterator nodes_begin(ProgramDependenceGraph *PDG) {
-    return GraphTraits<const Function*>::nodes_begin(PDG->Func);
+  static NodeType *getEntryNode(const ProgramDependenceGraph *PDG) {
+    return PDG->BBtoCDS.begin()->second;
   }
-
-  static nodes_iterator nodes_end(ProgramDependenceGraph *PDG) {
-    return GraphTraits<const Function*>::nodes_end(PDG->Func);
-  }
-
-  };
-  */
-
-template <> struct GraphTraits<ProgramDependenceGraph*> :
-  public GraphTraits<const BasicBlock*> {
-  static NodeType *getEntryNode(const ProgramDependenceGraph *PDG) {return &PDG->Func->getEntryBlock();}
 
   // nodes_iterator/begin/end - Allow iteration over all nodes in the graph
-  typedef Function::const_iterator nodes_iterator;
-  static nodes_iterator nodes_begin(ProgramDependenceGraph *PDG) { return PDG->Func->begin(); }
-  static nodes_iterator nodes_end  (ProgramDependenceGraph *PDG) { return PDG->Func->end(); }
-  static unsigned       size       (ProgramDependenceGraph *PDG) { return PDG->Func->size(); }
+  typedef PDGNodeIterator nodes_iterator;
+
+  static nodes_iterator nodes_begin(ProgramDependenceGraph *PDG) {
+    return nodes_iterator(PDG->BBtoCDS.begin()->second, PDG); 
+  }
+  static nodes_iterator nodes_end  (ProgramDependenceGraph *PDG) {
+    return nodes_iterator(PDG->BBtoCDS.begin()->second, PDG, true);
+  }
 };
 } // End llvm namespace
 #endif
