@@ -84,7 +84,7 @@ world:
 	$ cat hello.c
 	#include <stdio.h>
 	int main() {
-    	printf("Hello World!\n");
+	    printf("Hello World!\n");
 	}
 	$ clang -target riscv -mriscv=RV64IAMFD -S hello.c -o hello.S
 	$ riscv-64-unknown-elf-gcc -o hello.riscv hello.S
