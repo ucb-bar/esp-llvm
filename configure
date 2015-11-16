@@ -1463,7 +1463,7 @@ Optional Features:
                           target1,target2,... Valid targets are: host, x86,
                           x86_64, sparc, powerpc, arm64, arm, aarch64, mips,
                           hexagon, xcore, msp430, nvptx, systemz, r600, bpf,
-                          wasm, and cpp (default=all)
+                          wasm, riscv, and cpp (default=all)
   --enable-experimental-targets
                           Build experimental host targets: disable or
                           target1,target2,... (default=disable)
