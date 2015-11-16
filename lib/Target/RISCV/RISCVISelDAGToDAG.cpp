@@ -436,9 +436,8 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
 
 void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
 
-  for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
-       ++MFI)
-    for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
+  for (auto &MBB: MF)
+    for (auto &I: MBB) {
       //replaceUsesWithZeroReg(MRI, *I);
     }
 }
