@@ -23,6 +23,10 @@ extern "C" void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCV64TargetMachine> B(TheRISCV64Target);
 }
 
+namespace llvm {
+  MachineFunctionPass *createRISCVVectorFetchOptimizer();
+}
+
 static std::string computeDataLayout(const Triple &TT) {
   
   std::string Ret =
@@ -108,8 +112,7 @@ void RISCVPassConfig::addPreEmitPass(){
 }
 
 void RISCVPassConfig::addPreRegAlloc(){
-  addPass(createMachineProgramDependenceGraphPass());
-  addPass(createMachineProgramDependenceGraphPrinterPass());
+  addPass(createRISCVVectorFetchOptimizer());
 }
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {

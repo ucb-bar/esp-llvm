@@ -22,6 +22,10 @@ using namespace llvm;
 
 #define DEBUG_TYPE "riscv-isel"
 
+namespace llvm {
+  void initializeRISCVDAGToDAGISelPass(PassRegistry&);
+}
+
 namespace {
 // Used to build addressing modes.
 struct RISCVAddressingMode {
@@ -202,10 +206,12 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
                               uint64_t UpperVal, uint64_t LowerVal);
 
 public:
-  RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
+  explicit RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
     : SelectionDAGISel(TM, OptLevel),
       Lowering(*TM.getSubtargetImpl()->getTargetLowering()),
-      Subtarget(*TM.getSubtargetImpl()) { }
+      Subtarget(*TM.getSubtargetImpl()) {
+        initializeRISCVDAGToDAGISelPass(*PassRegistry::getPassRegistry());
+      }
 
   // Override MachineFunctionPass.
   const char *getPassName() const override {
@@ -235,6 +241,17 @@ bool RISCVDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 FunctionPass *llvm::createRISCVISelDag(RISCVTargetMachine &TM,
                                          CodeGenOpt::Level OptLevel) {
   return new RISCVDAGToDAGISel(TM, OptLevel);
+}
+
+static void initializePassOnce(PassRegistry &Registry) {
+  const char *Name = "RISCV DAG->DAG Pattern Instruction Selection";
+  PassInfo *PI = new PassInfo(Name, "riscv-codegen", &SelectionDAGISel::ID,
+                              nullptr, false, false);
+  Registry.registerPass(*PI, true);
+}
+
+void llvm::initializeRISCVDAGToDAGISelPass(PassRegistry &Registry) {
+  CALL_ONCE_INITIALIZATION(initializePassOnce);
 }
 
 // Return true if Val should be selected as a displacement for an address
@@ -451,119 +468,7 @@ SelectInlineAsmMemoryOperand(const SDValue &Op,
   }
   return false;
 }
-void RISCVDAGToDAGISel::processOpenCLKernel(MachineFunction &MF) {
-  MachineRegisterInfo &MRI = MF.getRegInfo();
-  const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
-
-  for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
-       ++MFI) {
-    // In each BB change each instruction
-    for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
-      // All inputs are vs registers and outputs are vv registers
-      switch(I->getOpcode()) {
-        case TargetOpcode::COPY :
-          // If this is physical to virt copy do nothing
-          if(TRI.isPhysicalRegister(I->getOperand(1).getReg()))
-            break;
-          MRI.setRegClass(I->getOperand(0).getReg(), 
-              MRI.getRegClass(I->getOperand(1).getReg()));
-          break;
-        case RISCV::ADD64 :
-          //FIXME: if we can have phys regs here check for that first
-          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
-            if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-              I->setDesc(TII.get(RISCV::VADD_VSS));
-            } else {
-              I->setDesc(TII.get(RISCV::VADD_VSV));
-            }
-          } else {
-            if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-              I->setDesc(TII.get(RISCV::VADD_VVS));
-            } else {
-              I->setDesc(TII.get(RISCV::VADD_VVV));
-            }
-          }
-          // Destination is always vector
-          MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
-          // Check source type
-          break;
-        case RISCV::SLLI64 :
-        {
-          // Generate two instructions
-          // 1. vaddi vstemp, vs0, imm
-          unsigned vstemp = MRI.createVirtualRegister(&RISCV::VSRBitRegClass);
-          MachineOperand &imm = I->getOperand(2);
-          BuildMI(*MFI, I, I->getDebugLoc(), TII.get(RISCV::VADDI), vstemp).addReg(RISCV::vs0).addImm(imm.getImm());
-          // 1. vsll vvdest, vssrc, vstemp
-          I->setDesc(TII.get(RISCV::VSLL_VSS));
-          // Destination is always vector
-          MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
-          I->getOperand(2).ChangeToRegister(vstemp, false);
-          break;
-        }
-        case RISCV::FLW64 :
-          I->setDesc(TII.get(RISCV::VLXW_F));
-          // Destination is always vector
-          MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
-          // Shift vector portion to second src
-          I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
-          I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
-          break;
-        case RISCV::LW64 :
-          I->setDesc(TII.get(RISCV::VLXW));
-          // Destination is always vector
-          MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
-          // Shift vector portion to second src
-          I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
-          I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
-          break;
-        case RISCV::FSW64 :
-          I->setDesc(TII.get(RISCV::VSXW_F));
-          // Shift vector portion to second src
-          I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
-          I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
-          break;
-        case RISCV::SW64 :
-          I->setDesc(TII.get(RISCV::VSXW));
-          // Shift vector portion to second src
-          I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
-          I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
-          break;
-        case RISCV::FMUL_S_RDY :
-          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
-            if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-              I->setDesc(TII.get(RISCV::VFMUL_S_RDY_VSS));
-            } else {
-              I->setDesc(TII.get(RISCV::VFMUL_S_RDY_VSV));
-            }
-          } else {
-            if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-              I->setDesc(TII.get(RISCV::VFMUL_S_RDY_VVS));
-            } else {
-              I->setDesc(TII.get(RISCV::VFMUL_S_RDY_VVV));
-            }
-          }
-          // Destination is always vector
-          MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
-          break;
-        case RISCV::RET :
-          I->setDesc(TII.get(RISCV::VSTOP));
-          I->RemoveOperand(1);
-          I->RemoveOperand(0);
-          break;
-        default:
-          printf("Unable to handle Opcode:%u in OpenCL kernel\n", I->getOpcode());
-          I->dump();
-      }
-    }
-  }
-}
 
 void RISCVDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
-
-  for (auto &MBB: MF)
-    for (auto &I: MBB) {
-      //replaceUsesWithZeroReg(MRI, *I);
-    }
+  printf("ProcessingFunctionAfterISel\n");
 }
