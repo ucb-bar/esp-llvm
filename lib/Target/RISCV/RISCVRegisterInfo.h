@@ -37,7 +37,8 @@ public:
   }
   const uint16_t *
   getCalleeSavedRegs(const MachineFunction *MF = 0) const override;
-  const uint32_t *getCallPreservedMask(CallingConv::ID) const;
+  const uint32_t *
+  getCallPreservedMask(const MachineFunction &MF, CallingConv::ID) const override;
   BitVector getReservedRegs(const MachineFunction &MF) const override;
   void eliminateFrameIndex(MachineBasicBlock::iterator MI, int SPAdj,
                            unsigned FIOperandNum,

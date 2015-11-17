@@ -44,7 +44,8 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 }
 
 const uint32_t*
-RISCVRegisterInfo::getCallPreservedMask(CallingConv::ID) const {
+RISCVRegisterInfo::getCallPreservedMask(const MachineFunction &MF,
+    CallingConv::ID) const {
   if(Subtarget.isRV64())
     if(Subtarget.hasD())
       return CSR_RV64D_RegMask;
