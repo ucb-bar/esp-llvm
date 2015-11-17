@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVFRAMELOWERING_H
-#define RISCVFRAMELOWERING_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
+#define LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
 
 #include "llvm/Target/TargetFrameLowering.h"
 

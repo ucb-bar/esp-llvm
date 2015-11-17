@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_RISCVINSTPRINTER_H
-#define LLVM_RISCVINSTPRINTER_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVINSTPRINTER_H
+#define LLVM_LIB_TARGET_RISCV_RISCVINSTPRINTER_H
 
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/Support/Compiler.h"

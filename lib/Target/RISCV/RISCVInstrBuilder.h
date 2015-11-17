@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVINSTRBUILDER_H
-#define RISCVINSTRBUILDER_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVINSTRBUILDER_H
+#define LLVM_LIB_TARGET_RISCV_RISCVINSTRBUILDER_H
 
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"

@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TARGET_RISCVINSTRINFO_H
-#define LLVM_TARGET_RISCVINSTRINFO_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVINSTRINFO_H
+#define LLVM_LIB_TARGET_RISCV_RISCVINSTRINFO_H
 
 #include "RISCV.h"
 #include "RISCVRegisterInfo.h"

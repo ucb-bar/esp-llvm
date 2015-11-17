@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVMCTARGETDESC_H
-#define RISCVMCTARGETDESC_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVMCTARGETDESC_H
+#define LLVM_LIB_TARGET_RISCV_RISCVMCTARGETDESC_H
 
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/TargetRegistry.h"

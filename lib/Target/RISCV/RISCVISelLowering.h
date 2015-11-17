@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_TARGET_RISCV_ISELLOWERING_H
-#define LLVM_TARGET_RISCV_ISELLOWERING_H
+#ifndef LLVM_LIB_TARGET_RISCV_ISELLOWERING_H
+#define LLVM_LIB_TARGET_RISCV_ISELLOWERING_H
 
 #include "RISCV.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -212,4 +212,4 @@ class RISCVTargetObjectFile : public TargetLoweringObjectFileELF {
 
 } // end namespace llvm
 
-#endif // LLVM_TARGET_RISCV_ISELLOWERING_H
+#endif
