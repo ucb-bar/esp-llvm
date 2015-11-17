@@ -1,4 +1,4 @@
-//==- RISCVInstrFormats.td - RISCV Instruction Formats --*- tablegen -*-==//
+//===- RISCVInstrFormats.td - RISCV Instruction Formats ----*- tablegen -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

@@ -1,4 +1,4 @@
-//===-- RISCVISelLowering.h - RISCV DAG lowering interface --*- C++ -*-===//
+//===-- RISCVISelLowering.h - RISCV DAG lowering interface ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

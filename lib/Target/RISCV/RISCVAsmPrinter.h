@@ -1,4 +1,4 @@
-//===-- RISCVAsmPrinter.h - RISCV LLVM assembly printer ----*- C++ -*--===//
+//===-- RISCVAsmPrinter.h - RISCV LLVM assembly printer --------*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //

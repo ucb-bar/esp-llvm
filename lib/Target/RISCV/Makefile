@@ -1,4 +1,4 @@
-##===- lib/Target/RISCV/Makefile -------------------------*- Makefile -*-===##
+##===- lib/Target/RISCV/Makefile ---------------------------*- Makefile -*-===##
 #
 #                     The LLVM Compiler Infrastructure
 #

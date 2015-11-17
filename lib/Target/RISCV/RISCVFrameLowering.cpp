@@ -1,4 +1,4 @@
-//===-- RISCVFrameLowering.cpp - Frame lowering for RISCV -------------===//
+//===-- RISCVFrameLowering.cpp - Frame lowering for RISCV -------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

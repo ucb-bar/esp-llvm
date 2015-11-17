@@ -1,4 +1,4 @@
-//==- RISCVTargetMachine.h - Define TargetMachine for RISCV ---*- C++ -*-=//
+//===- RISCVTargetMachine.h - Define TargetMachine for RISCV ----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

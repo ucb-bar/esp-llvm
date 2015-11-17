@@ -1,4 +1,4 @@
-//===-- RISCVInstPrinter.cpp - Convert RISCV MCInst to assembly syntax ===//
+//===-- RISCVInstPrinter.cpp - Convert RISCV MCInst to assembly syntax ----===//
 //
 //                     The LLVM Compiler Infrastructure
 //

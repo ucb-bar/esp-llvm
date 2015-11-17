@@ -1,4 +1,4 @@
-//==- RISCVInstPrinter.h - Convert RISCV MCInst to assembly --*- C++ -*-==//
+//===- RISCVInstPrinter.h - Convert RISCV MCInst to assembly ----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

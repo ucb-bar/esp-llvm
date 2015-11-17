@@ -1,4 +1,4 @@
-//===- RISCVConstantPoolValue.h - RISCV constant-pool value -*- C++ -*-===//
+//===- RISCVConstantPoolValue.h - RISCV constant-pool value -----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

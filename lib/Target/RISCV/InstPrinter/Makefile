@@ -1,4 +1,4 @@
-##===- lib/Target/RISCV/AsmPrinter/Makefile --------------*- Makefile -*-===##
+##===- lib/Target/RISCV/InstPrinter/Makefile ---------------*- Makefile -*-===##
 #
 #                     The LLVM Compiler Infrastructure
 #

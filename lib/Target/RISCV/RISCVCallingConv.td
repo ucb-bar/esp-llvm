@@ -1,4 +1,4 @@
-//=- RISCVCallingConv.td - Calling conventions for RISCV -*- tablegen -*-=//
+//===- RISCVCallingConv.td - Calling conventions for RISCV -*- tablegen -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

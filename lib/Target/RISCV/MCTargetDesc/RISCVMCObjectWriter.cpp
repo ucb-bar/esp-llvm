@@ -1,4 +1,4 @@
-//===-- RISCVMCObjectWriter.cpp - RISCV ELF writer --------------------===//
+//===-- RISCVMCObjectWriter.cpp - RISCV ELF writer --------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

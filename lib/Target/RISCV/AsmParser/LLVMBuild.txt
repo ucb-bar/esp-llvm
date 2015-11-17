@@ -1,4 +1,4 @@
-;===- ./lib/Target/RISCV/AsmParser/LLVMBuild.txt -------------*- Conf -*--===;
+;===- ./lib/Target/RISCV/AsmParser/LLVMBuild.txt ---------------*- Conf -*--===;
 ;
 ;                     The LLVM Compiler Infrastructure
 ;

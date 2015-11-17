@@ -1,4 +1,4 @@
-//==- RISCV.h - Top-Level Interface for RISCV representation -*- C++ -*-==//
+//===- RISCV.h - Top-Level Interface for RISCV representation ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

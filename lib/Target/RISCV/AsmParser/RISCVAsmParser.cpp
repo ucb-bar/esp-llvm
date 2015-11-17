@@ -1,4 +1,4 @@
-//===-- RISCVAsmParser.cpp - Parse RISCV assembly instructions --------===//
+//===-- RISCVAsmParser.cpp - Parse RISCV assembly instructions --*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

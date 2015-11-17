@@ -1,4 +1,4 @@
-//===-- RISCVMCFixups.h - RISCV-specific fixup entries ------*- C++ -*-===//
+//===-- RISCVMCFixups.h - RISCV-specific fixup entries ----------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

@@ -1,4 +1,4 @@
-//===-- RISCVRegisterInfo.cpp - RISCV register information ------------===//
+//===-- RISCVRegisterInfo.cpp - RISCV register information ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

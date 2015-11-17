@@ -1,4 +1,4 @@
-//===-- RISCVMCAsmBackend.cpp - RISCV assembler backend ---------------===//
+//===-- RISCVMCAsmBackend.cpp - RISCV assembler backend ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

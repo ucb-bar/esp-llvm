@@ -1,4 +1,4 @@
-//==- RISCVRegisterInfo.td - RISCV register definitions -*- tablegen -*-==//
+//===- RISCVRegisterInfo.td - RISCV register definitions ---*- tablegen -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
