@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVASMPRINTER_H
-#define RISCVASMPRINTER_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVASMPRINTER_H
+#define LLVM_LIB_TARGET_RISCV_RISCVASMPRINTER_H
 
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/AsmPrinter.h"

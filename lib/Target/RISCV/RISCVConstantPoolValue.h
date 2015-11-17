@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVCONSTANTPOOLVALUE_H
-#define RISCVCONSTANTPOOLVALUE_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVCONSTANTPOOLVALUE_H
+#define LLVM_LIB_TARGET_RISCV_RISCVCONSTANTPOOLVALUE_H
 
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/Support/ErrorHandling.h"

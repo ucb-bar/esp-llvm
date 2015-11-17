@@ -12,8 +12,8 @@
 //===----------------------------------------------------------------------===//
 
 
-#ifndef RISCVTARGETMACHINE_H
-#define RISCVTARGETMACHINE_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETMACHINE_H
+#define LLVM_LIB_TARGET_RISCV_RISCVTARGETMACHINE_H
 
 #include "RISCVSubtarget.h"
 #include "llvm/Target/TargetMachine.h"

@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVCALLINGCONV_H
-#define RISCVCALLINGCONV_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVCALLINGCONV_H
+#define LLVM_LIB_TARGET_RISCV_RISCVCALLINGCONV_H
 
 namespace llvm {
   namespace RISCV {

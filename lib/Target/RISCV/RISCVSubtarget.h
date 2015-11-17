@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVSUBTARGET_H
-#define RISCVSUBTARGET_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVSUBTARGET_H
+#define LLVM_LIB_TARGET_RISCV_RISCVSUBTARGET_H
 
 #include "RISCVFrameLowering.h"
 #include "RISCVISelLowering.h"

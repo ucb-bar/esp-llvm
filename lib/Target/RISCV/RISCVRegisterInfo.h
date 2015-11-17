@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVREGISTERINFO_H
-#define RISCVREGISTERINFO_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVREGISTERINFO_H
+#define LLVM_LIB_TARGET_RISCV_RISCVREGISTERINFO_H
 
 #include "RISCV.h"
 #include "llvm/Target/TargetRegisterInfo.h"

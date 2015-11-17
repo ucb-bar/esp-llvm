@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_RISCVMCINSTLOWER_H
-#define LLVM_RISCVMCINSTLOWER_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVMCINSTLOWER_H
+#define LLVM_LIB_TARGET_RISCV_RISCVMCINSTLOWER_H
 
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/Compiler.h"
