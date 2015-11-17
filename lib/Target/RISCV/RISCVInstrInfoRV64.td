@@ -1,4 +1,4 @@
-//==- RISCVInstrRV64.td - RISCV RV64I instructions --*- tblgen-*-==//
+//===- RISCVInstrRV64.td - RISCV RV64I instructions -----------*- tblgen-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

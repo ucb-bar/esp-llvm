@@ -1,4 +1,4 @@
-//==- RISCVInstrInfoA.td - Floating-point RISCV instructions --*- tblgen-*-==//
+//===- RISCVInstrInfoA.td - Floating-point RISCV instructions -*- tblgen-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

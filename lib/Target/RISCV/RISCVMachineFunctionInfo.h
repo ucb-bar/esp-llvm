@@ -1,4 +1,4 @@
-//==- RISCVMachineFuctionInfo.h - RISCV machine function info -*- C++ -*-=//
+//===- RISCVMachineFuctionInfo.h - RISCV machine function info --*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

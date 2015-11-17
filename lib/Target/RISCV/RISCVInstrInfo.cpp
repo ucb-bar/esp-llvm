@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfo.cpp - RISCV instruction information ------------===//
+//===-- RISCVInstrInfo.cpp - RISCV instruction information ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

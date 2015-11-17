@@ -1,4 +1,4 @@
-//===-- RISCVCallingConv.h - Calling conventions for RISCV --*- C++ -*-===//
+//===-- RISCVCallingConv.h - Calling conventions for RISCV ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

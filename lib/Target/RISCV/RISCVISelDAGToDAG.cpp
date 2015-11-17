@@ -1,4 +1,4 @@
-//===-- RISCVISelDAGToDAG.cpp - A dag to dag inst selector for RISCV --===//
+//===-- RISCVISelDAGToDAG.cpp - A dag to dag inst selector for RISCV ------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

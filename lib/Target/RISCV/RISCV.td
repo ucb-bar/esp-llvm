@@ -1,4 +1,4 @@
-//===-- RISCV.td - Describe the RISCV target machine -----*- tblgen -*-===//
+//===-- RISCV.td - Describe the RISCV target machine ---------*- tblgen -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

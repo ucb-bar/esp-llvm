@@ -1,4 +1,4 @@
-//===-- RISCVMCAsmInfo.cpp - RISCV asm properties ---------------------===//
+//===-- RISCVMCAsmInfo.cpp - RISCV asm properties ---------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

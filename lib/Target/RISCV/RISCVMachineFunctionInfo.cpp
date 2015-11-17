@@ -1,4 +1,4 @@
-//===-- RISCVMachineFunctionInfo.cpp - Private data used for RISCV ----------===//
+//===-- RISCVMachineFunctionInfo.cpp - Private data used for RISCV --------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfo.td - General RISCV instructions ----*- tblgen-*-===//
+//===-- RISCVInstrInfo.td - General RISCV instructions --------*- tblgen-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

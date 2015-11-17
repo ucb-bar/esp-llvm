@@ -1,4 +1,4 @@
-//===-- RISCVMCTargetDesc.h - RISCV target descriptions -----*- C++ -*-===//
+//===-- RISCVMCTargetDesc.h - RISCV target descriptions ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

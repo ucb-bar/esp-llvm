@@ -1,4 +1,4 @@
-//===-- RISCVBranchSelector.cpp - Emit long conditional branches ------------===//
+//===-- RISCVBranchSelector.cpp - Emit long conditional branches ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

@@ -1,4 +1,4 @@
-//===-- RISCVISelLowering.cpp - RISCV DAG lowering implementation -----===//
+//===-- RISCVISelLowering.cpp - RISCV DAG lowering implementation ---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

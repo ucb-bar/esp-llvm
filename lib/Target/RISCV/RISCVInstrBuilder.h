@@ -1,4 +1,4 @@
-//===-- RISCVInstrBuilder.h - Functions to aid building insts -*- C++ -*-===//
+//===-- RISCVInstrBuilder.h - Functions to aid building insts ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
