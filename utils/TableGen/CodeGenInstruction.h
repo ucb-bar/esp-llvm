@@ -257,6 +257,7 @@ template <typename T> class ArrayRef;
     bool isInsertSubreg : 1;
     bool isConvergent : 1;
     bool hasNoSchedulingInfo : 1;
+    bool isVariant : 1;
 
     std::string DeprecatedReason;
     bool HasComplexDeprecationPredicate;

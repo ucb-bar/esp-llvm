@@ -277,6 +277,8 @@ void initializePrintModulePassWrapperPass(PassRegistry&);
 void initializeProcessImplicitDefsPass(PassRegistry&);
 void initializeProfileSummaryInfoWrapperPassPass(PassRegistry &);
 void initializePromoteLegacyPassPass(PassRegistry &);
+void initializeProgramDependenceGraphPass(PassRegistry&);
+void initializePromotePassPass(PassRegistry&);
 void initializePruneEHPass(PassRegistry&);
 void initializeReassociateLegacyPassPass(PassRegistry&);
 void initializeRegBankSelectPass(PassRegistry &);
