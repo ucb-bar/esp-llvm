@@ -370,10 +370,10 @@ public:
   bool hasProperty(unsigned MCFlag, QueryType Type = AnyInBundle) const {
     // Inline the fast path for unbundled or bundle-internal instructions.
     if (Type == IgnoreBundle || !isBundled() || isBundledWithPred())
-      return getDesc().getFlags() & (1 << MCFlag);
+      return getDesc().getFlags() & (1ULL << MCFlag);
 
     // If this is the first instruction in a bundle, take the slow path.
-    return hasPropertyInBundle(1 << MCFlag, Type);
+    return hasPropertyInBundle(1ULL << MCFlag, Type);
   }
 
   /// Return true if this instruction can have a variable number of operands.
@@ -493,6 +493,11 @@ public:
   /// control-equivalent to their initial position.
   bool isConvergent(QueryType Type = AnyInBundle) const {
     return hasProperty(MCID::Convergent, Type);
+  }
+
+  /// Return true if this instruction is variant.
+  bool isVariant(QueryType Type = AnyInBundle) const {
+    return hasProperty(MCID::Variant, Type);
   }
 
   /// Returns true if the specified instruction has a delay slot

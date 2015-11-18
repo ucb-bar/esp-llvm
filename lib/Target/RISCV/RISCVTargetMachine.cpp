@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCVTargetMachine.h"
+#include "llvm/Pass.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraph.h"
@@ -23,7 +24,8 @@ extern "C" void LLVMInitializeRISCVTarget() {
 }
 
 namespace llvm {
-  MachineFunctionPass *createRISCVVectorFetchOptimizer();
+  ModulePass *createRISCVVectorFetchIROpt();
+  MachineFunctionPass *createRISCVVectorFetchMachOpt();
 }
 
 static std::string computeDataLayout(const Triple &TT) {
@@ -88,11 +90,16 @@ public:
     return getTM<RISCVTargetMachine>();
   }
 
+  bool addPreISel() override;
   bool addInstSelector() override;
   void addPreEmitPass() override;
   void addPreRegAlloc() override;
 };
 } // end anonymous namespace
+
+bool RISCVPassConfig::addPreISel() {
+  addPass(createRISCVVectorFetchIROpt());
+}
 
 bool RISCVPassConfig::addInstSelector() {
   addPass(createRISCVISelDag(getRISCVTargetMachine(), getOptLevel()));
@@ -104,7 +111,7 @@ void RISCVPassConfig::addPreEmitPass(){
 }
 
 void RISCVPassConfig::addPreRegAlloc(){
-  addPass(createRISCVVectorFetchOptimizer());
+  addPass(createRISCVVectorFetchMachOpt());
 }
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {

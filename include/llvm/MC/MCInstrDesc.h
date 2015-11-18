@@ -126,7 +126,8 @@ enum Flag {
   RegSequence,
   ExtractSubreg,
   InsertSubreg,
-  Convergent
+  Convergent,
+  Variant
 };
 }
 
@@ -191,13 +192,13 @@ public:
   unsigned getNumDefs() const { return NumDefs; }
 
   /// \brief Return flags of this instruction.
-  unsigned getFlags() const { return Flags; }
+  unsigned long getFlags() const { return Flags; }
 
   /// \brief Return true if this instruction can have a variable number of
   /// operands.  In this case, the variable operands will be after the normal
   /// operands but before the implicit definitions and uses (if any are
   /// present).
-  bool isVariadic() const { return Flags & (1 << MCID::Variadic); }
+  bool isVariadic() const { return Flags & (1ULL << MCID::Variadic); }
 
   /// \brief Set if this instruction has an optional definition, e.g.
   /// ARM instructions which can set condition code if 's' bit is set.
@@ -339,6 +340,12 @@ public:
   /// Convergent instructions may only be moved to locations that are
   /// control-equivalent to their original positions.
   bool isConvergent() const { return Flags & (1 << MCID::Convergent); }
+
+  /// \brief Return true if this instruction is variant across elements/threads
+  ///
+  /// Variant instructions may introduce divergence across threads/elements in 
+  /// explicityly parallel machine
+  bool isVariant() const { return Flags & (1ULL << MCID::Variant); }
 
   //===--------------------------------------------------------------------===//
   // Side Effect Analysis

@@ -321,6 +321,7 @@ CodeGenInstruction::CodeGenInstruction(Record *R)
   isExtractSubreg = R->getValueAsBit("isExtractSubreg");
   isInsertSubreg = R->getValueAsBit("isInsertSubreg");
   isConvergent = R->getValueAsBit("isConvergent");
+  isVariant = R->getValueAsBit("isVariant");
 
   bool Unset;
   mayLoad      = R->getValueAsBitOrUnset("mayLoad", Unset);

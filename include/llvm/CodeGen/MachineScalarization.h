@@ -1,4 +1,4 @@
-//===- MachineScalarization.h - PDG analysis ----------------------*- C++ -*-===//
+//===- MachineScalarization.h - Scalarization analysis ----------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,9 +6,9 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-// Generates a Scalarization depdence graph based on the Jeanne Ferrante paper
-//
+// Determines which MBB are convergent across elements and which MI are
+// element-invariant
+// Based on [Lee, CGO, 2013]
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CODEGEN_MACHINESCALARIZATION_H

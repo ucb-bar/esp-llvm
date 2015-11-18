@@ -13,6 +13,12 @@ def CC_RISCVXhwacha : CallingConv<[
   //Promote small int types to i64
   CCIfType<[i8, i16, i32], CCPromoteToType<i64>>,
 
+  CCIfByVal<CCAssignToReg<
+  [va1, va2, va3, va4, va5, va6, va7, va8,
+   va9, va10, va11, va12, va13, va14, va15, va16,
+   va17, va18, va19, va20, va21, va22, va23, va24,
+   va25, va26, va27, va28, va29, va30, va31] >>,
+
   // All arguments are passed as scalar registers for now
   CCIfType<[i64], CCAssignToReg< 
   [vs1, vs2, vs3, vs4, vs5, vs6, vs7, vs8,

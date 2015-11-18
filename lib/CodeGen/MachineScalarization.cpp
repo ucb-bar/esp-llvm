@@ -1,4 +1,4 @@
-//===- MachineScalarization.cpp - PDG analysis --------------------===//
+//===- MachineScalarization.cpp - Scalarization analysis --------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,12 +12,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/MachineScalarization.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraph.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Support/Debug.h"
 
@@ -63,12 +60,15 @@ void MachineScalarization::markAllCDChildren(const MachineBasicBlock* mbb, Small
 }
 
 void MachineScalarization::Calculate(MachineFunction &F) {
+  MachineRegisterInfo *MRI = &F.getRegInfo();
   SmallVector<const MachineInstr*, 128> worklist;
   //Initialization
   for(MachineFunction::iterator MBBI = F.begin(), MBBE = F.end(); MBBI != MBBE; ++MBBI) {
     conv.insert(std::make_pair(MBBI, true));
     for(MachineBasicBlock::iterator MII = MBBI->begin(), MIE = MBBI->end(); MII != MIE; ++MII) {
       invar.insert(std::make_pair(MII, true));
+      if(MII->isVariant())
+        worklist.push_back(MII);
       //if(MII->getOpcode() == RISCV::VEIDX) 
         //worklist.push_back(MII);
       //if(MI->getOpcode() == AMO)
@@ -78,10 +78,14 @@ void MachineScalarization::Calculate(MachineFunction &F) {
   while(!worklist.empty()) {
     const MachineInstr* MI = worklist.pop_back_val();
     invar[MI] = false;
-    for(const MachineOperand &MO : MI->uses()) {
-      const MachineInstr* user = MO.getParent();
-      if(invar[user])
-        worklist.push_back(user);
+    // Walk dataflow successors
+    // For all defs, walk uses
+    for(const MachineOperand &MO : MI->defs()) {
+      for(MachineOperand &UseMO : MRI->use_operands(MO.getReg())) {
+        const MachineInstr* user = UseMO.getParent();
+        if(invar[user])
+          worklist.push_back(user);
+      }
     }
     if(MI->isConditionalBranch()) {
       markAllCDChildren(MI->getParent(), worklist);
