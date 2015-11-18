@@ -1,4 +1,4 @@
-//===-- RISCVTargetInfo.cpp - RISCV target implementation -------------===//
+//===-- RISCVTargetInfo.cpp - RISCV target implementation -------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

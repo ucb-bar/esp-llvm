@@ -1,4 +1,4 @@
-//====-- RISCVMCAsmInfo.h - RISCV asm properties -----------*- C++ -*--===//
+//====-- RISCVMCAsmInfo.h - RISCV asm properties ---------------*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVTARGETASMINFO_H
-#define RISCVTARGETASMINFO_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETASMINFO_H
+#define LLVM_LIB_TARGET_RISCV_RISCVTARGETASMINFO_H
 
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/Compiler.h"

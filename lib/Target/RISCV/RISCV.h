@@ -1,4 +1,4 @@
-//==- RISCV.h - Top-Level Interface for RISCV representation -*- C++ -*-==//
+//===- RISCV.h - Top-Level Interface for RISCV representation ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCV_H
-#define RISCV_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCV_H
+#define LLVM_LIB_TARGET_RISCV_RISCV_H
 
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "llvm/Support/CodeGen.h"

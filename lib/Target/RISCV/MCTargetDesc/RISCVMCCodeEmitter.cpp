@@ -1,4 +1,4 @@
-//===-- RISCVMCCodeEmitter.cpp - Convert RISCV code to machine code ---===//
+//===-- RISCVMCCodeEmitter.cpp - Convert RISCV code to machine code -------===//
 //
 //                     The LLVM Compiler Infrastructure
 //

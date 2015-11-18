@@ -1,4 +1,4 @@
-//===-- RISCVMCInstLower.cpp - Lower MachineInstr to MCInst -------------===//
+//===-- RISCVMCInstLower.cpp - Lower MachineInstr to MCInst -----*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

@@ -1,4 +1,4 @@
-//===-- RISCVMCObjectWriter.cpp - RISCV ELF writer --------------------===//
+//===-- RISCVMCObjectWriter.cpp - RISCV ELF writer --------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -30,7 +30,7 @@ protected:
 } // end anonymouse namespace
 
 RISCVObjectWriter::RISCVObjectWriter(uint8_t OSABI)
-  : MCELFObjectTargetWriter(/*Is64Bit=*/true, OSABI, ELF::EM_S390,
+  : MCELFObjectTargetWriter(/*Is64Bit=*/true, OSABI, ELF::EM_RISCV,
                             /*HasRelocationAddend=*/ true) {}
 
 RISCVObjectWriter::~RISCVObjectWriter() {

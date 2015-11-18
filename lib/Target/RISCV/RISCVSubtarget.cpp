@@ -1,4 +1,4 @@
-//===-- RISCVSubtarget.cpp - RISCV subtarget information --------------===//
+//===-- RISCVSubtarget.cpp - RISCV subtarget information --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

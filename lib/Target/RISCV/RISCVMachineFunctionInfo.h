@@ -1,4 +1,4 @@
-//==- RISCVMachineFuctionInfo.h - RISCV machine function info -*- C++ -*-=//
+//===- RISCVMachineFuctionInfo.h - RISCV machine function info --*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef RISCVMACHINEFUNCTIONINFO_H
-#define RISCVMACHINEFUNCTIONINFO_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVMACHINEFUNCTIONINFO_H
+#define LLVM_LIB_TARGET_RISCV_RISCVMACHINEFUNCTIONINFO_H
 
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"

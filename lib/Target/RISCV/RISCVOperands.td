@@ -1,4 +1,4 @@
-//===-- RISCVOperands.td - RISCV instruction operands ----*- tblgen-*--===//
+//===-- RISCVOperands.td - RISCV instruction operands --------*- tblgen-*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //

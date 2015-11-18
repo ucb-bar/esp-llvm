@@ -1,4 +1,4 @@
-//==- RISCVInstrM.td - Multiply Divide RISCV instructions --*- tblgen-*-==//
+//===- RISCVInstrM.td - Multiply Divide RISCV instructions ----*- tblgen-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

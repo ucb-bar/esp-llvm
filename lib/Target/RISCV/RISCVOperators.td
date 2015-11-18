@@ -1,4 +1,4 @@
-//===-- RISCVOperators.td - RISCV-specific operators ------*- tblgen-*-===//
+//===-- RISCVOperators.td - RISCV-specific operators ----------*- tblgen-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

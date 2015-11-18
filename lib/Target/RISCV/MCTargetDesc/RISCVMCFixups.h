@@ -1,4 +1,4 @@
-//===-- RISCVMCFixups.h - RISCV-specific fixup entries ------*- C++ -*-===//
+//===-- RISCVMCFixups.h - RISCV-specific fixup entries ----------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_RISCVMCFIXUPS_H
-#define LLVM_RISCVMCFIXUPS_H
+#ifndef LLVM_LIB_TARGET_RISCV_RISCVMCFIXUPS_H
+#define LLVM_LIB_TARGET_RISCV_RISCVMCFIXUPS_H
 
 #include "llvm/MC/MCFixup.h"
 
