@@ -39,6 +39,7 @@ namespace {
     Scalarization       *MS;
     ScalarEvolution     *SE;
     std::map<Instruction *, const SCEV *> addrs;
+    std::map<Instruction *, const SCEV *> scalars;
   public:
     static char ID;
 
@@ -60,7 +61,7 @@ namespace {
     virtual CallGraphNode *processOpenCLKernel(Function *F);
     virtual CallGraphNode *VectorFetchOpt(CallGraphNode *CGN);
     virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
-        bool *found, unsigned bytewidth, const SCEV **veidx);
+        bool *found, unsigned bytewidth, const SCEV **veidx, Function *F);
   };
 
 }
@@ -148,7 +149,7 @@ CallGraphNode *RISCVVectorFetchIROpt::VectorFetchOpt(CallGraphNode *CGN) {
   return nullptr;
 }
 
-const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx) {
+const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F) {
   //psuedo code
   // recursively descend looking for eidx
   // once found, while we are coming up the tree
@@ -164,7 +165,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     SmallVector<const SCEV *, 8> newops;
     for( const SCEV *op : add->operands() ) {
       *found = false;
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx);
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
         printf("two uses of veidx: can't hoist\n");
@@ -179,17 +180,18 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
           //newops.push_back(eidxExpr);
         }
       }
-      lfound = *found;
+      lfound = lfound || *found;
     }
+    *found = lfound;
     return SE->getAddExpr(newops);
   } else if(const SCEVMulExpr *mul = dyn_cast<SCEVMulExpr>(expr)) {
     bool lfound = *found;
     SmallVector<const SCEV *, 8> newops;
     for( const SCEV *op : mul->operands() ) {
       *found = false;
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx);
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
       if(subexp == SE->getCouldNotCompute()) return subexp;
-      if(lfound && found) {
+      if(lfound && *found) {
         printf("two uses of veidx: can't hoist\n");
         return SE->getCouldNotCompute();
       }
@@ -210,8 +212,9 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
           return SE->getCouldNotCompute();
         }
       }
-      lfound = *found;
+      lfound = lfound || *found;
     }
+    *found = lfound;
     return SE->getMulExpr(newops);
   } else if(const SCEVUnknown *eidx = dyn_cast<SCEVUnknown>(expr)) {
     // Note that we found it
@@ -224,14 +227,32 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
           return SE->getConstant(expr->getType(),0);
         } else if(parent->getSCEVType() == scMulExpr) {
           return SE->getConstant(expr->getType(),1);
+        } else {
+          return SE->getCouldNotCompute(); // TODO: do we need to handle casts
         }
       }
+    } else if(isa<Argument>(eidx->getValue())) { //std::find(F->arg_begin(),F->arg_end(), eidx->getValue())) {
+      return expr; // some argument to this function
+    } else {
+      return SE->getCouldNotCompute(); // not an arugment so we can't hoist
     }
-    return expr; // just some random value TODO: maybe check that its an argument?
   } else if(isa<SCEVConstant>(expr)) {
     return expr;
-  } else
+  } else if(const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(expr)) {
+    bool lfound = *found;
+    *found = false;
+    const SCEV *op = Cast->getOperand();
+    const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
+    if(subexp == SE->getCouldNotCompute()) return subexp;
+    if(*found) {
+      printf("Cannot cast veidx: can't hoist\n");
+      return SE->getCouldNotCompute();
+    }
+    *found = lfound;
+    return expr;
+  } else {
     return SE->getCouldNotCompute();
+  }
 }
 
 CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
@@ -254,10 +275,15 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         // have base or eidx
         bool found = false;
         const SCEV *veidx;
-        const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx);
+        const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
         if(newSCEV != SE->getCouldNotCompute()){
-          // TODO: setup data structure so caller can promote value to va reg
-          addrs.insert(std::make_pair(MII, newSCEV));
+          if(found) {
+            addrs.insert(std::make_pair(MII, newSCEV));
+          } else { // entirely scalar memop so we hoist it differently
+            // TODO: Hoisting scalar stores requires checking that all values
+            // in SCEV are known at the call site
+            scalars.insert(std::make_pair(MII, newSCEV));
+          }
         }
       }
       if(isa<LoadInst>(MII)) {
@@ -277,10 +303,13 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         // have base or eidx
         bool found = false;
         const SCEV *veidx;
-        const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, MII->getType()->getPrimitiveSizeInBits()/8, &veidx);
+        const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
         if(newSCEV != SE->getCouldNotCompute()){
-          // TODO: setup data structure so caller can promote value to va reg
-          addrs.insert(std::make_pair(MII, newSCEV));
+          if(found) {
+            addrs.insert(std::make_pair(MII, newSCEV));
+          } else { // entirely scalar memop so we hoist it differently
+            scalars.insert(std::make_pair(MII, newSCEV));
+          }
         }
       }
     }
@@ -294,6 +323,10 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
       Params.push_back(it->first->getType()->getPointerTo());
     if(isa<StoreInst>(it->first))
       Params.push_back(it->first->getOperand(0)->getType()->getPointerTo());
+  }
+  for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
+    if(isa<LoadInst>(it->first))
+      Params.push_back(it->first->getType()->getPointerTo());
   }
   Type *RetTy = FTy->getReturnType();
 
@@ -353,6 +386,13 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         base = Expander.expandCodeFor(newSCEV, it->first->getType()->getPointerTo(),Call);
       if(isa<StoreInst>(it->first))
         base = Expander.expandCodeFor(newSCEV, it->first->getOperand(0)->getType()->getPointerTo(),Call);
+      Args.push_back(base);
+    }
+    for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
+      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->second, *SE, argMap);
+      Value *base;
+      if(isa<LoadInst>(it->first))
+        base = Expander.expandCodeFor(newSCEV, it->first->getType()->getPointerTo(),Call);
       Args.push_back(base);
     }
 
@@ -425,6 +465,16 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     it->first->eraseFromParent();
     ++I2;
   }
+  for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
+    Instruction *newMemOp;
+    if(isa<LoadInst>(it->first)) {
+      newMemOp = new LoadInst(I2, "vec_addr_base", it->first);
+      it->first->replaceAllUsesWith(newMemOp);
+      newMemOp->takeName(it->first);
+      it->first->eraseFromParent();
+    }
+    ++I2;
+  }
   // iterate of instruction in addr doing a few things
   // 1) add another argument for the address to be passed
   // 2) replace the memop with one that uses this new argument
@@ -471,6 +521,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
 
+  std::vector<unsigned> vregs;
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
        ++MFI) {
     // In each BB change each instruction
@@ -510,6 +561,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             }
             // Destination is always vector
             MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
           }
           break;
         case RISCV::SLLI64 :
@@ -530,18 +582,43 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             // Destination is always vector
             MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
             I->getOperand(2).ChangeToRegister(vstemp, false);
+            vregs.push_back(I->getOperand(0).getReg());
           }
           break;
         }
+        case RISCV::FLH64 :
+          //TODO: support invariant memops becoming scalar memops
+          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+            I->setDesc(TII.get(RISCV::VLH_F));
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVHBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
+          } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+            I->setDesc(TII.get(RISCV::VLSH_F));
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+          } else {
+            I->setDesc(TII.get(RISCV::VLXH_F));
+            // Destination is always vector
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVHBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
+            // Shift vector portion to second src
+            I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
+            I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+          }
+          break;
         case RISCV::FLW64 :
           //TODO: support invariant memops becoming scalar memops
           if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
             I->setDesc(TII.get(RISCV::VLW_F));
             MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
+          } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+            I->setDesc(TII.get(RISCV::VLSW_F));
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
           } else {
             I->setDesc(TII.get(RISCV::VLXW_F));
             // Destination is always vector
             MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
             // Shift vector portion to second src
             I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
             I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
@@ -552,6 +629,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
           I->setDesc(TII.get(RISCV::VLXW));
           // Destination is always vector
           MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+          vregs.push_back(I->getOperand(0).getReg());
           // Shift vector portion to second src
           I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
           I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
@@ -568,6 +646,18 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
           }
           break;
+        case RISCV::FSH64 :
+          //TODO: support invariant memops becoming scalar memops
+          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+            I->setDesc(TII.get(RISCV::VSH_F));
+            I->RemoveOperand(2);
+          } else {
+            I->setDesc(TII.get(RISCV::VSXH_F));
+            // Shift vector portion to second src
+            I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
+            I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+          }
+          break;
         case RISCV::SW64 :
         //TODO: support invariant memops becoming scalar memops
           I->setDesc(TII.get(RISCV::VSXW));
@@ -575,6 +665,54 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
           I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
           I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
           break;
+        case RISCV::FCVT_H_S_RDY :
+          {
+          const TargetRegisterClass *destClass = &RISCV::VVHBitRegClass;
+          if(MS->invar[I]) {
+            //if we were invariant but have a vector src it means there was a vector load
+            if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass) {
+              destClass = &RISCV::VVHBitRegClass;
+            } else 
+              destClass = &RISCV::VSRBitRegClass;
+          } 
+          if(destClass == &RISCV::VVHBitRegClass) {
+            if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+              I->setDesc(TII.get(RISCV::VFCVT_H_S_RDY_VS));
+            } else {
+              I->setDesc(TII.get(RISCV::VFCVT_H_S_RDY_VV));
+            }
+            // Destination is always vector
+          } else {
+            I->setDesc(TII.get(RISCV::VFCVT_H_S_RDY_SS));
+          }
+          MRI.setRegClass(I->getOperand(0).getReg(), destClass);
+          vregs.push_back(I->getOperand(0).getReg());
+          break;
+          }
+        case RISCV::FCVT_S_H_RDY :
+          {
+          const TargetRegisterClass *destClass = &RISCV::VVWBitRegClass;
+          if(MS->invar[I]) {
+            //if we were invariant but have a vector src it means there was a vector load
+            if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass) {
+              destClass = &RISCV::VVWBitRegClass;
+            } else 
+              destClass = &RISCV::VSRBitRegClass;
+          } 
+          if(destClass == &RISCV::VVWBitRegClass) {
+            if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+              I->setDesc(TII.get(RISCV::VFCVT_S_H_RDY_VS));
+            } else {
+              I->setDesc(TII.get(RISCV::VFCVT_S_H_RDY_VV));
+            }
+            // Destination is always vector
+          } else {
+            I->setDesc(TII.get(RISCV::VFCVT_S_H_RDY_SS));
+          }
+          MRI.setRegClass(I->getOperand(0).getReg(), destClass);
+          vregs.push_back(I->getOperand(0).getReg());
+          break;
+          }
         case RISCV::FADD_S_RDY :
           {
           const TargetRegisterClass *destClass = &RISCV::VVRBitRegClass;
@@ -583,10 +721,18 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass ||
                MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass) {
               destClass = &RISCV::VVRBitRegClass;
-            } else 
+            } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass ||
+                      MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWBitRegClass) {
+              destClass = &RISCV::VVWBitRegClass;
+            } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass ||
+                      MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHBitRegClass) {
+              destClass = &RISCV::VVHBitRegClass;
+            } else
               destClass = &RISCV::VSRBitRegClass;
           } 
-          if(destClass == &RISCV::VVRBitRegClass) {
+          if(destClass == &RISCV::VVRBitRegClass ||
+             destClass == &RISCV::VVWBitRegClass ||
+             destClass == &RISCV::VVHBitRegClass) {
             if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
               if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
                 I->setDesc(TII.get(RISCV::VFADD_S_RDY_VSS));
@@ -605,6 +751,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             I->setDesc(TII.get(RISCV::VFADD_S_RDY_SSS));
           }
           MRI.setRegClass(I->getOperand(0).getReg(), destClass);
+          vregs.push_back(I->getOperand(0).getReg());
           break;
           }
         case RISCV::FMUL_S_RDY :
@@ -615,10 +762,18 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass ||
                MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass) {
               destClass = &RISCV::VVRBitRegClass;
-            } else 
+            } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass ||
+                      MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWBitRegClass) {
+              destClass = &RISCV::VVWBitRegClass;
+            } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass ||
+                      MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHBitRegClass) {
+              destClass = &RISCV::VVHBitRegClass;
+            } else
               destClass = &RISCV::VSRBitRegClass;
           } 
-          if(destClass == &RISCV::VVRBitRegClass) {
+          if(destClass == &RISCV::VVRBitRegClass ||
+             destClass == &RISCV::VVWBitRegClass ||
+             destClass == &RISCV::VVHBitRegClass) {
             if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
               if(MRI.getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
                 I->setDesc(TII.get(RISCV::VFMUL_S_RDY_VSS));
@@ -637,12 +792,16 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             I->setDesc(TII.get(RISCV::VFMUL_S_RDY_SSS));
           }
           MRI.setRegClass(I->getOperand(0).getReg(), destClass);
+          vregs.push_back(I->getOperand(0).getReg());
           break;
           }
         case RISCV::RET :
           I->setDesc(TII.get(RISCV::VSTOP));
           I->RemoveOperand(1);
           I->RemoveOperand(0);
+          // add all used registers in this machine Function as imp uses
+          for(unsigned r : vregs)
+            I->addOperand(MF,MachineOperand::CreateReg(r,false,true));
           break;
         default:
           printf("Unable to handle Opcode:%u in OpenCL kernel\n", I->getOpcode());
@@ -650,4 +809,5 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
       }
     }
   }
+  MF.dump();
 }

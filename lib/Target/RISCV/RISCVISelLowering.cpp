@@ -68,12 +68,10 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
   }else if(Subtarget.hasF())
     addRegisterClass(MVT::f32,  &RISCV::FP32BitRegClass);
-/*
+
   if(Subtarget.hasXhwacha()) {
-    addRegisterClass(MVT::i64,  &RISCV::VSRBitRegClass);
-    addRegisterClass(MVT::i64,  &RISCV::VARBitRegClass);
+    addRegisterClass(MVT::i16,  &RISCV::FP16BitRegClass);
   }
-  */
 
   // Set up special registers.
   if(Subtarget.isRV64()) {
@@ -391,7 +389,9 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
   for (MVT VT : MVT::fp_valuetypes())
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::f80, Expand);
 
+  setLoadExtAction(ISD::EXTLOAD, MVT::f32,  MVT::f16, Expand);
   // Floating-point truncation and stores need to be done separately.
+  setTruncStoreAction(MVT::f32,  MVT::f16, Expand);
   setTruncStoreAction(MVT::f64,  MVT::f32, Expand);
   setTruncStoreAction(MVT::f128, MVT::f32, Expand);
   setTruncStoreAction(MVT::f128, MVT::f64, Expand);

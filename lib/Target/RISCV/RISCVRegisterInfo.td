@@ -37,7 +37,7 @@ let Namespace = "RISCV" in {
 // Define a register class that contains values of type TYPE and an
 // associated operand called NAME.  SIZE is the size and alignment
 // of the registers and REGLIST is the list of individual registers.
-multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable, int copyCost = 1> {
+multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable, int copyCost = 1, int prio = 0> {
   def AsmOperand : AsmOperandClass {
     let Name = name;
     let ParserMethod = "parse"##name;
@@ -47,6 +47,7 @@ multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regLi
     let Size = size;
     let isAllocatable = allocatable;
     let CopyCost = copyCost;
+    let AllocationPriority = prio;
   }
   def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
     let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");
@@ -348,6 +349,61 @@ def fa3_p128 : PairFPR128<3, "f16", [fa6_64, fa7_64]>;
 
 defm PairFP128 : RISCVRegClass<"PairFP128", [f128], 128, (add
   fa0_p128, fa1_p128, fa2_p128, fa3_p128), 1>;
+
+// Half prec
+
+class FPR16<bits<16> num, string n> : RISCVReg<n> {
+  let HWEncoding = num;
+}
+
+// Floating-point registers
+//ABI Names
+//FP temporary registers
+def ft0_16 : FPR16<0, "f0" >, DwarfRegNum<[0]>;
+def ft1_16 : FPR16<1, "f1" >, DwarfRegNum<[1]>;
+def ft2_16 : FPR16<2, "f2" >, DwarfRegNum<[2]>;
+def ft3_16 : FPR16<3, "f3" >, DwarfRegNum<[3]>;
+def ft4_16 : FPR16<4, "f4" >, DwarfRegNum<[4]>;
+def ft5_16 : FPR16<5, "f5" >, DwarfRegNum<[5]>;
+def ft6_16 : FPR16<6, "f6" >, DwarfRegNum<[6]>;
+def ft7_16 : FPR16<7, "f7" >, DwarfRegNum<[7]>;
+
+def fs0_16 : FPR16<8, "f8" >, DwarfRegNum<[8]>;
+def fs1_16 : FPR16<9, "f9" >, DwarfRegNum<[9]>;
+//FP arguments
+def fa0_16 : FPR16<10,"f10">, DwarfRegNum<[10]>;
+def fa1_16 : FPR16<11,"f11">, DwarfRegNum<[11]>;
+def fa2_16 : FPR16<12,"f12">, DwarfRegNum<[12]>;
+def fa3_16 : FPR16<13,"f13">, DwarfRegNum<[13]>;
+def fa4_16 : FPR16<14,"f14">, DwarfRegNum<[14]>;
+def fa5_16 : FPR16<15,"f15">, DwarfRegNum<[15]>;
+def fa6_16 : FPR16<16,"f16">, DwarfRegNum<[16]>;
+def fa7_16 : FPR16<17,"f17">, DwarfRegNum<[17]>;
+//FP saved registers
+def fs2_16 : FPR16<18,"f18">, DwarfRegNum<[18]>;
+def fs3_16 : FPR16<19,"f19">, DwarfRegNum<[19]>;
+def fs4_16 : FPR16<20,"f20">, DwarfRegNum<[20]>;
+def fs5_16 : FPR16<21,"f21">, DwarfRegNum<[21]>;
+def fs6_16 : FPR16<22,"f22">, DwarfRegNum<[22]>;
+def fs7_16 : FPR16<23,"f23">, DwarfRegNum<[23]>;
+def fs8_16 : FPR16<24,"f24">, DwarfRegNum<[24]>;
+def fs9_16 : FPR16<25,"f25">, DwarfRegNum<[25]>;
+def fs10_16: FPR16<26,"f26" >, DwarfRegNum<[26]>;
+def fs11_16: FPR16<27,"f27" >, DwarfRegNum<[27]>;
+//FP temp registers
+def ft8_16 : FPR16<28,"f28">, DwarfRegNum<[28]>;
+def ft9_16 : FPR16<29,"f29">, DwarfRegNum<[29]>;
+def ft10_16: FPR16<30,"f30" >, DwarfRegNum<[30]>;
+def ft11_16: FPR16<31,"f31" >, DwarfRegNum<[31]>;
+
+//all fp regs are 32bit
+defm FP16  : RISCVRegClass<"FP16", [i16], 16, (add
+  ft0_16, ft1_16, ft2_16, ft3_16, ft4_16, ft5_16, ft6_16, ft7_16,
+  fs0_16, fs1_16, 
+  fa0_16, fa1_16, fa2_16, fa3_16, fa4_16, fa5_16, fa6_16, fa7_16,
+  fs2_16, fs3_16, fs4_16, fs5_16, fs6_16, fs7_16, fs8_16, fs9_16, fs10_16, fs11_16,
+  ft8_16, ft9_16, ft10_16, ft11_16
+  ), 1>;
 
 //===----------------------------------------------------------------------===//
 // PCR registers (supervisor)

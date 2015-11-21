@@ -44,6 +44,7 @@ public:
     PairGR64Reg,
     PairGR128Reg,
     GR128Reg,
+    FP16Reg,
     FP32Reg,
     FP64Reg,
     PairFP64Reg,
@@ -52,7 +53,9 @@ public:
     VSRReg,
     VARReg,
     VPRReg,
-    VVRReg
+    VVRReg,
+    VVWReg,
+    VVHReg
   };
 
 private:
@@ -220,6 +223,7 @@ public:
   bool isPairGR64() const { return isReg(PairGR64Reg); }
   bool isPairGR128() const { return isReg(PairGR128Reg); }
   bool isGR128() const { return isReg(GR128Reg); }
+  bool isFP16() const { return isReg(FP16Reg); }
   bool isFP32() const { return isReg(FP32Reg); }
   bool isFP64() const { return isReg(FP64Reg); }
   bool isPairFP64() const { return isReg(PairFP64Reg); }
@@ -229,6 +233,8 @@ public:
   bool isVAR() const { return isReg() && isRegClass(RISCV::VARBitRegClassID); }
   bool isVPR() const { return isReg() && isRegClass(RISCV::VPRBitRegClassID); }
   bool isVVR() const { return isReg() && isRegClass(RISCV::VVRBitRegClassID); }
+  bool isVVW() const { return isReg() && isRegClass(RISCV::VVWBitRegClassID); }
+  bool isVVH() const { return isReg() && isRegClass(RISCV::VVHBitRegClassID); }
   bool isU4Imm() const { return isImm(0, 15); }
   bool isU12Imm() const { return isImm(0, 4096); }
   bool isS12Imm() const { return isImm(-2048, 2047); }
@@ -285,6 +291,14 @@ static const unsigned FP64Regs[] = {
   RISCV::fa0_64, RISCV::fa1_64, RISCV::fa2_64, RISCV::fa3_64, RISCV::fa4_64, RISCV::fa5_64, RISCV::fa6_64, RISCV::fa7_64,
   RISCV::fs2_64, RISCV::fs3_64, RISCV::fs4_64, RISCV::fs5_64, RISCV::fs6_64, RISCV::fs7_64, RISCV::fs8_64, RISCV::fs9_64, RISCV::fs10_64, RISCV::fs11_64,
   RISCV::ft8_64, RISCV::ft9_64, RISCV::ft10_64, RISCV::ft11_64
+};
+
+static const unsigned FP16Regs[] = {
+  RISCV::ft0_16, RISCV::ft1_16, RISCV::ft2_16, RISCV::ft3_16, RISCV::ft4_16, RISCV::ft5_16, RISCV::ft6_16, RISCV::ft7_16,
+  RISCV::fs0_16, RISCV::fs1_16, 
+  RISCV::fa0_16, RISCV::fa1_16, RISCV::fa2_16, RISCV::fa3_16, RISCV::fa4_16, RISCV::fa5_16, RISCV::fa6_16, RISCV::fa7_16,
+  RISCV::fs2_16, RISCV::fs3_16, RISCV::fs4_16, RISCV::fs5_16, RISCV::fs6_16, RISCV::fs7_16, RISCV::fs8_16, RISCV::fs9_16, RISCV::fs10_16, RISCV::fs11_16,
+  RISCV::ft8_16, RISCV::ft9_16, RISCV::ft10_16, RISCV::ft11_16
 };
 
 static const unsigned PairFP64Regs[] = {
@@ -389,6 +403,11 @@ public:
     return parseRegister(Operands, StringRef("p"), PCReg, RISCVOperand::PCReg);
   }
 
+  OperandMatchResultTy parseFP16(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("f"), FP16Regs, RISCVOperand::FP16Reg);
+  }
+
+
   OperandMatchResultTy parseFP32(OperandVector &Operands) {
     return parseRegister(Operands, StringRef("f"), FP32Regs, RISCVOperand::FP32Reg);
   }
@@ -421,6 +440,14 @@ public:
 
   OperandMatchResultTy parseVVR(OperandVector &Operands) {
     return parseRegister(Operands, StringRef("vv"), FP64Regs, RISCVOperand::VVRReg);
+  }
+
+  OperandMatchResultTy parseVVW(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("vv"), FP64Regs, RISCVOperand::VVWReg);
+  }
+
+  OperandMatchResultTy parseVVH(OperandVector &Operands) {
+    return parseRegister(Operands, StringRef("vv"), FP64Regs, RISCVOperand::VVHReg);
   }
 
   OperandMatchResultTy parsePCRReg(OperandVector &Operands) {

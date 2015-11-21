@@ -87,6 +87,7 @@ def zext16 : PatFrag<(ops node:$src), (and node:$src, 0xffff)>;
 //def zext32 : PatFrag<(ops node:$src), (zext (i32 node:$src))>;
 
 // Typed floating-point loads.
+def loadf16 : PatFrag<(ops node:$src), (f16 (load node:$src))>;
 def loadf32 : PatFrag<(ops node:$src), (f32 (load node:$src))>;
 def loadf64 : PatFrag<(ops node:$src), (f64 (load node:$src))>;
 
