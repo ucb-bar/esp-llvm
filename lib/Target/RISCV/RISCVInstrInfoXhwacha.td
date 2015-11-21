@@ -16,7 +16,18 @@ class InstV<dag outs, dag ins, string mnemonic, list<dag> pattern>
 
 }
 
-multiclass InstVR<string name, SDPatternOperator op> {
+multiclass InstVR2<string name, SDPatternOperator op> {
+  let isPseudo = 1, isCodeGenOnly = 1 in {
+  def _VV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1),
+    name#"\t$dst, $src1", [(set VVR:$dst, (op VVR:$src1))]>;
+  def _VS : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1),
+    name#"\t$dst, $src1", [(set VVR:$dst, (op VSR:$src1))]>;
+  def _SS : InstRISCV<4, (outs VSR:$dst), (ins VSR:$src1),
+    name#"\t$dst, $src1", [(set VSR:$dst, (op VSR:$src1))]>;
+  }
+}
+
+multiclass InstVR3<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
   def _VVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2),
     name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op VVR:$src1, VVR:$src2))]>;
@@ -65,12 +76,23 @@ let mayLoad = 1 in {
              "vlxw\t$dest, $src1, $src2", [(set VVR:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXW_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
              "vlxw\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXH_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
+             "vlxh\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+
+  def VLSW : InstV<(outs VSR:$dest), (ins VSR:$src1), 
+             "vlsw\t$dest, $src1", [(set VSR:$dest, (i64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLSW_F : InstV<(outs VSR:$dest), (ins VSR:$src1), 
+             "vlsw\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLSH_F : InstV<(outs VSR:$dest), (ins VSR:$src1), 
+             "vlsh\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   let isVariant = 1 in {
     def VLW : InstV<(outs VVR:$dest), (ins VAR:$src1), 
                "vlw\t$dest, $src1", [(set VVR:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLW_F : InstV<(outs VVR:$dest), (ins VAR:$src1), 
                "vlw\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLH_F : InstV<(outs VVR:$dest), (ins VAR:$src1), 
+               "vlh\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   }
 }
 let mayStore = 1 in {
@@ -78,12 +100,23 @@ let mayStore = 1 in {
              "vsxw\t $src1, $src2, $src3", [(store (i64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSXW_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
              "vsxw\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXH_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
+             "vsxh\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+
+  def VSSW : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
+             "vssw\t $src1, $src2", [(store (i64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSSW_F : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
+             "vssw\t $src1, $src2", [(store (f64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSSH_F : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
+             "vssh\t $src1, $src2", [(store (f64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   let isVariant = 1 in {
     def VSW : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
                "vsw\t $src1, $src2", [(store (i64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VSW_F : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
                "vsw\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSH_F : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
+               "vsh\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   }
   //def VSW : InstStore <"vsw"  , 0b0100011, 0b011, store, VR32, mem64>, Requires<[IsRV64]>; //vsw vx2, x2
   //def VSD : InstStore <"vsd"  , 0b0100011, 0b011, store, VR64, mem64>, Requires<[IsRV64, HasXhwacha]>;
@@ -103,8 +136,8 @@ let isCodeGenOnly = 1 in {
 //To be expanded into vfetch blocks after register allocation and scheduling
 let isPseudo = 1 in {
   //Integer arithmetic register-register
-  defm VADD : InstVR<"vadd", add>, Requires<[HasXhwacha]>;
-  defm VSLL : InstVR<"vsll", shl>, Requires<[HasXhwacha]>;
+  defm VADD : InstVR3<"vadd", add>, Requires<[HasXhwacha]>;
+  defm VSLL : InstVR3<"vsll", shl>, Requires<[HasXhwacha]>;
   //def VSUB64 : InstR<"vsub" , ?, ?, sub   , VR64, VR64>, Requires<[HasXhwacha]>;
   def VSLLI: InstI<"vslli" , ?, ?, shl, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
   def VADDI: InstI<"vaddi" , ?, ?, add, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
@@ -116,8 +149,11 @@ let isPseudo = 1 in {
   //def VOR64  : InstR<"vor"  , ?, ?, or    , VR64, VR64>, Requires<[HasXhwacha]>;
   //def VAND64 : InstR<"vand" , ?, ?, and   , VR64, VR64>, Requires<[HasXhwacha]>;
   //def VMUL64 : InstR<"vmul", ?, ?, mul   , VR64, VR64>, Requires<[HasXhwacha]>;
-  defm VFMUL_S_RDY : InstVR<"vfmul.s", fmul>, Requires<[HasXhwacha]>;
-  defm VFADD_S_RDY : InstVR<"vfadd.s", fmul>, Requires<[HasXhwacha]>;
+  defm VFMUL_S_RDY : InstVR3<"vfmul.s", fmul>, Requires<[HasXhwacha]>;
+  defm VFADD_S_RDY : InstVR3<"vfadd.s", fadd>, Requires<[HasXhwacha]>;
+
+  defm VFCVT_S_H_RDY : InstVR2<"vfcvt.s.h", fsqrt>, Requires<[HasXhwacha]>;
+  defm VFCVT_H_S_RDY : InstVR2<"vfcvt.h.s", fsqrt>, Requires<[HasXhwacha]>;
 
   //Predicate Instructions
   def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset\t$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
