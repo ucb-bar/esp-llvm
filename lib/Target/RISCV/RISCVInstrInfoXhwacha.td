@@ -151,9 +151,13 @@ let isPseudo = 1 in {
   //def VMUL64 : InstR<"vmul", ?, ?, mul   , VR64, VR64>, Requires<[HasXhwacha]>;
   defm VFMUL_S_RDY : InstVR3<"vfmul.s", fmul>, Requires<[HasXhwacha]>;
   defm VFADD_S_RDY : InstVR3<"vfadd.s", fadd>, Requires<[HasXhwacha]>;
+  defm VFMUL_D_RDY : InstVR3<"vfmul.d", fmul>, Requires<[HasXhwacha]>;
+  defm VFADD_D_RDY : InstVR3<"vfadd.d", fadd>, Requires<[HasXhwacha]>;
 
   defm VFCVT_S_H_RDY : InstVR2<"vfcvt.s.h", fsqrt>, Requires<[HasXhwacha]>;
   defm VFCVT_H_S_RDY : InstVR2<"vfcvt.h.s", fsqrt>, Requires<[HasXhwacha]>;
+  defm VFCVT_D_S_RDY : InstVR2<"vfcvt.d.s", fsqrt>, Requires<[HasXhwacha]>;
+  defm VFCVT_S_D_RDY : InstVR2<"vfcvt.s.d", fsqrt>, Requires<[HasXhwacha]>;
 
   //Predicate Instructions
   def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset\t$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
