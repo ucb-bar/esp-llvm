@@ -524,6 +524,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
   std::vector<unsigned> vregs;
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
        ++MFI) {
+    vregs.clear();
     // In each BB change each instruction
     for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
       printf("Inst:");I->dump();
@@ -624,6 +625,25 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
           }
           break;
+        case RISCV::FLD64 :
+          //TODO: support invariant memops becoming scalar memops
+          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+            I->setDesc(TII.get(RISCV::VLD_F));
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
+          } else if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+            I->setDesc(TII.get(RISCV::VLSD_F));
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+          } else {
+            I->setDesc(TII.get(RISCV::VLXD_F));
+            // Destination is always vector
+            MRI.setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+            vregs.push_back(I->getOperand(0).getReg());
+            // Shift vector portion to second src
+            I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
+            I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+          }
+          break;
         case RISCV::LW64 :
         //TODO: support invariant memops becoming scalar memops
           I->setDesc(TII.get(RISCV::VLXW));
@@ -633,6 +653,18 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
           // Shift vector portion to second src
           I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
           I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+          break;
+        case RISCV::FSD64 :
+          //TODO: support invariant memops becoming scalar memops
+          if(MRI.getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+            I->setDesc(TII.get(RISCV::VSD_F));
+            I->RemoveOperand(2);
+          } else {
+            I->setDesc(TII.get(RISCV::VSXD_F));
+            // Shift vector portion to second src
+            I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
+            I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+          }
           break;
         case RISCV::FSW64 :
           //TODO: support invariant memops becoming scalar memops
@@ -929,15 +961,18 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
           I->setDesc(TII.get(RISCV::VSTOP));
           I->RemoveOperand(1);
           I->RemoveOperand(0);
-          // add all used registers in this machine Function as imp uses
-          for(unsigned r : vregs)
-            I->addOperand(MF,MachineOperand::CreateReg(r,false,true));
           break;
         default:
           printf("Unable to handle Opcode:%u in OpenCL kernel\n", I->getOpcode());
           I->dump();
       }
+      if(I == --MFI->end()) {// last instruction of bb has imp uses of vregs defined to hack around reg alloc
+        // add all used registers in this machine Function as imp uses
+        for(unsigned r : vregs)
+          I->addOperand(MF,MachineOperand::CreateReg(r,false,true));
+      }
     }
+    //end of bb loop
   }
   MF.dump();
 }
