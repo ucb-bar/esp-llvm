@@ -74,6 +74,8 @@ def VMSA : InstV<(outs VAR:$dest), (ins GR64:$src), "vmsa\t$dest,$src",
 let mayLoad = 1 in {
   def VLXW : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
              "vlxw\t$dest, $src1, $src2", [(set VVR:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXD_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
+             "vlxd\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXW_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
              "vlxw\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXH_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2), 
@@ -81,14 +83,20 @@ let mayLoad = 1 in {
 
   def VLSW : InstV<(outs VSR:$dest), (ins VSR:$src1), 
              "vlsw\t$dest, $src1", [(set VSR:$dest, (i64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLSD_F : InstV<(outs VSR:$dest), (ins VSR:$src1), 
+             "vlsd\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLSW_F : InstV<(outs VSR:$dest), (ins VSR:$src1), 
              "vlsw\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLSH_F : InstV<(outs VSR:$dest), (ins VSR:$src1), 
              "vlsh\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   let isVariant = 1 in {
+    def VLD : InstV<(outs VVR:$dest), (ins VAR:$src1), 
+               "vld\t$dest, $src1", [(set VVR:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLW : InstV<(outs VVR:$dest), (ins VAR:$src1), 
                "vlw\t$dest, $src1", [(set VVR:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLD_F : InstV<(outs VVR:$dest), (ins VAR:$src1), 
+               "vld\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLW_F : InstV<(outs VVR:$dest), (ins VAR:$src1), 
                "vlw\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLH_F : InstV<(outs VVR:$dest), (ins VAR:$src1), 
@@ -98,6 +106,8 @@ let mayLoad = 1 in {
 let mayStore = 1 in {
   def VSXW : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
              "vsxw\t $src1, $src2, $src3", [(store (i64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXD_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
+             "vsxd\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSXW_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
              "vsxw\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSXH_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3), 
@@ -105,6 +115,8 @@ let mayStore = 1 in {
 
   def VSSW : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
              "vssw\t $src1, $src2", [(store (i64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSSD_F : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
+             "vssd\t $src1, $src2", [(store (f64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSSW_F : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
              "vssw\t $src1, $src2", [(store (f64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSSH_F : InstV<(outs), (ins VSR:$src1, VSR:$src2), 
@@ -113,6 +125,8 @@ let mayStore = 1 in {
   let isVariant = 1 in {
     def VSW : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
                "vsw\t $src1, $src2", [(store (i64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSD_F : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
+               "vsd\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VSW_F : InstV<(outs), (ins VVR:$src1, VAR:$src2), 
                "vsw\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VSH_F : InstV<(outs), (ins VVR:$src1, VAR:$src2), 

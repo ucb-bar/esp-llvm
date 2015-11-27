@@ -110,10 +110,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
     }
   }
   if(Subtarget.isRV64()){
+    setOperationAction(ISD::SETCC, MVT::i16, Promote);//only use 32bit setcc
     setOperationAction(ISD::SETCC, MVT::i32, Legal);//only use 32bit setcc
     setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
   }else {
+    setOperationAction(ISD::SETCC, MVT::i16, Promote);//only use 32bit setcc
     setOperationAction(ISD::SETCC, MVT::i32, Legal);//folds into brcond
     setOperationAction(ISD::SETCC, MVT::i64, Expand);//only use 32bit
     setOperationAction(ISD::Constant, MVT::i32, Legal);
@@ -318,7 +320,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
        I <= MVT::LAST_FP_VALUETYPE;
        ++I) {
     MVT VT = MVT::SimpleValueType(I);
-    if (isTypeLegal(VT)) {
+    if (isTypeLegal(VT) || (VT==MVT::f16 && Subtarget.hasXhwacha())) {
       // We can use FI for FRINT.
       //setOperationAction(ISD::FRINT, VT, Legal);
       setOperationAction(ISD::FADD, VT, Legal);
