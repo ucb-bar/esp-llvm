@@ -10,6 +10,7 @@ addons:
   apt:
     sources:
       - ubuntu-toolchain-r-test
+      - kubuntu-backports
     packages:
     - gcc-4.9
     - g++-4.9
@@ -25,9 +26,13 @@ addons:
     - bison
     - flex
     - texinfo
+    - cmake
 env:
   global:
     - RISCV="/home/travis/riscv_install"
+  matrix:
+    - CONFIG="../configure --enable-optimized --enable-target=riscv --prefix=${RISCV}"
+    - CONFIG="cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=RISCV -DCMAKE_INSTALL_PREFIX=${RISCV} ../"
 git:
       submodules: true
 before_install:
@@ -36,5 +41,5 @@ before_install:
 script: 
   - mkdir build
   - cd build
-  - ../configure --enable-optimized --enable-targets=riscv --prefix=${RISCV} 
+  - $CONFIG
   - make -j4
