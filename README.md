@@ -17,7 +17,7 @@ If you're writing a package for LLVM, see `docs/Packaging.rst` for our
 suggestions.
 
 
-RISC-V LLVM Support
+RISC-V LLVM Support [![Build Status](https://travis-ci.org/riscv/riscv-llvm.svg?branch=riscv-37)](https://travis-ci.org/riscv/riscv-llvm)
 --------------------------------------------------------
 
 Author  : Colin Schmidt (colins@eecs.berkeley.edu)  
