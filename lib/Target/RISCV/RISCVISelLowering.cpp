@@ -1098,8 +1098,8 @@ SDValue RISCVTargetLowering::lowerRETURNADDR(SDValue Op, SelectionDAG &DAG) cons
   MFI->setReturnAddressIsTaken(true);
 
   // Return RA, which contains the return address. Mark it an implicit live-in.
-  MF.addLiveIn(RA, getRegClassFor(VT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), RA, VT);
+  unsigned Reg = MF.addLiveIn(RA, getRegClassFor(VT));
+  return DAG.getCopyFromReg(DAG.getEntryNode(), SDLoc(Op), Reg, VT);
 }
 
 SDValue RISCVTargetLowering::lowerGlobalAddress(SDValue Op,
