@@ -11,7 +11,7 @@ exit:
 }
 
 define void @f2(i32 *%src, i32 *%dst, i32 %target, i32 %a, i32 %b) {
-  %val = load volatile i32 *%src
+  %val = load volatile i32, i32 *%src
   %cond = icmp eq i32 %target, %val
   br i1 %cond, label %then, label %else
 
