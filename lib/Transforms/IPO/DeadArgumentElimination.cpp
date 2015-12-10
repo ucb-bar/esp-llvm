@@ -1020,6 +1020,20 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
         BB.getInstList().erase(RI);
       }
 
+  auto DI = FunctionDIs.find(F);
+  if (DI != FunctionDIs.end())
+    DI->second->replaceFunction(NF);
+  //migrate all opencl named metadata
+  llvm::NamedMDNode *nmd = F->getParent()->getNamedMetadata("opencl.kernels");
+  for (unsigned i = 0, e = nmd->getNumOperands(); i != e; ++i) {
+    MDNode *kernel_iter = nmd->getOperand(i);
+    Function *k =
+      cast<Function>(
+        dyn_cast<ValueAsMetadata>(kernel_iter->getOperand(0))->getValue());
+    if (k->getName() == F->getName()) {
+      kernel_iter->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
+    }
+  }
   // Patch the pointer to LLVM function in debug info descriptor.
   NF->setSubprogram(F->getSubprogram());
 

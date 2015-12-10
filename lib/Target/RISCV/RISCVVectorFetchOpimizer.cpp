@@ -32,6 +32,8 @@ namespace llvm {
   void initializeRISCVVectorFetchIROptPass(PassRegistry&);
   MachineFunctionPass *createRISCVVectorFetchMachOpt();
   void initializeRISCVVectorFetchMachOptPass(PassRegistry&);
+  MachineFunctionPass *createRISCVVectorFetchRegFix();
+  void initializeRISCVVectorFetchRegFixPass(PassRegistry&);
 }
 
 namespace {
@@ -92,6 +94,28 @@ namespace {
 
 } // end anonymous namespace
 
+namespace {
+  struct RISCVVectorFetchRegFix : public MachineFunctionPass {
+    public:
+      static char ID;
+    RISCVVectorFetchRegFix() : MachineFunctionPass(ID) {
+      initializeRISCVVectorFetchRegFixPass(*PassRegistry::getPassRegistry());
+    }
+
+    bool runOnMachineFunction(MachineFunction &MF) override;
+
+    const char *getPassName() const override { return "RISCV Vector Fetch RegFix"; }
+
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+      MachineFunctionPass::getAnalysisUsage(AU);
+    }
+  };
+  char RISCVVectorFetchRegFix::ID = 0;
+}
+
+INITIALIZE_PASS(RISCVVectorFetchRegFix, "vfregfix", "RISCV Vector Fetch RegFix", false, false)
+
+
 char RISCVVectorFetchIROpt::ID = 0;
 INITIALIZE_PASS_BEGIN(RISCVVectorFetchIROpt, "vfiropt",
                       "RISCV Vector Fetch IROpt", false, false)
@@ -105,6 +129,7 @@ ModulePass *llvm::createRISCVVectorFetchIROpt() {
   return new RISCVVectorFetchIROpt();
 }
 bool RISCVVectorFetchIROpt::runOnModule(Module &M) {
+    M.dump();
     CallGraph& cg = getAnalysis<CallGraphWrapperPass>().getCallGraph();
 
     scc_iterator<CallGraph*> cgSccIter = scc_begin(&cg);
@@ -116,6 +141,8 @@ bool RISCVVectorFetchIROpt::runOnModule(Module &M) {
         runOnSCC(curSCC);
         ++cgSccIter;
     }
+
+    M.dump();
 
     return false;
 }
@@ -332,7 +359,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   // Create new function with additional args to replace old one
   FunctionType *NFTy = FunctionType::get(RetTy, Params, false);
-  Function *NF = Function::Create(NFTy, F->getLinkage(), F->getName());
+  Function *NF = Function::Create(NFTy, Function::InternalLinkage, F->getName());
   NF->copyAttributesFrom(F);
   for(unsigned i = 1; i <= addrs.size(); i++) {
     NF->addAttribute(FTy->getNumParams()+i, Attribute::ByVal);
@@ -968,11 +995,55 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
       }
       if(I == --MFI->end()) {// last instruction of bb has imp uses of vregs defined to hack around reg alloc
         // add all used registers in this machine Function as imp uses
-        for(unsigned r : vregs)
-          I->addOperand(MF,MachineOperand::CreateReg(r,false,true));
+        //for(unsigned r : vregs)
+          //I->addOperand(MF,MachineOperand::CreateReg(r,false,true));
       }
     }
     //end of bb loop
   }
   MF.dump();
 }
+
+bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
+  if(!isOpenCLKernelFunction(*(MF.getFunction())))
+    return false;
+
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  //We are changing vv*W and vv*H regs to vv*D regs respecting the register number ordering
+  //We assume that vv*[D,W] regs used are consecutive starting at zero
+  const TargetRegisterClass *vvD = &RISCV::VVRBitRegClass;
+  const TargetRegisterClass *vvW = &RISCV::VVWBitRegClass;
+  const TargetRegisterClass *vvH = &RISCV::VVHBitRegClass;
+  unsigned wStart = 0;
+  unsigned hStart = 0;
+  for(unsigned Reg : *vvD) {
+    if(MRI.isPhysRegUsed(Reg)){
+      wStart++;
+    }
+  }
+  for(unsigned Reg : *vvW) {
+    if(MRI.isPhysRegUsed(Reg)){
+      hStart++;
+    }
+  }
+  for (auto &MBB : MF) {
+    for (auto &MI : MBB) {
+      for (auto &MO : MI.operands()) {
+        if(MO.isReg()) {
+          // all register are physical now
+          if(vvW->contains(MO.getReg())) {
+            unsigned offset = MO.getReg()-vvW->getRegister(0);
+            MO.setReg(vvD->getRegister(wStart+offset));
+          }
+          if(vvH->contains(MO.getReg())) {
+            unsigned offset = MO.getReg()-vvH->getRegister(0);
+            MO.setReg(vvD->getRegister(hStart+offset));
+          }
+        }
+      }
+    }
+  }
+  return true;
+}
+
+MachineFunctionPass *llvm::createRISCVVectorFetchRegFix() { return new RISCVVectorFetchRegFix(); }
