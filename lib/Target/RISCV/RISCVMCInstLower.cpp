@@ -68,6 +68,9 @@ MCOperand RISCVMCInstLower::lowerOperand(const MachineOperand &MO) const {
     if (MO.isImplicit())
       return MCOperand();
     return MCOperand::createReg(MO.getReg());
+  case MachineOperand::MO_RegisterMask:
+    //Regmaks are like implicit defs.
+    return MCOperand();
 
   case MachineOperand::MO_Immediate:
     return MCOperand::createImm(MO.getImm());

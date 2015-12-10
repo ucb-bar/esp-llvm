@@ -310,11 +310,15 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &Sa
   uint64_t MaxSPOffset = MF.getInfo<RISCVFunctionInfo>()->getIncomingArgSize() +
     MFI->estimateStackSize(MF);
 
-  if (isInt<12>(MaxSPOffset))
-    return;
+  //if (isInt<12>(MaxSPOffset))
+    //return;
 
   const TargetRegisterClass *RC = &RISCV::GR32BitRegClass;
   int FI = MF.getFrameInfo()->CreateStackObject(RC->getSize(),
+                                                RC->getAlignment(), false);
+  RS->addScavengingFrameIndex(FI);
+  //add a second spill slot?
+  FI = MF.getFrameInfo()->CreateStackObject(RC->getSize(),
                                                 RC->getAlignment(), false);
   RS->addScavengingFrameIndex(FI);
 }
