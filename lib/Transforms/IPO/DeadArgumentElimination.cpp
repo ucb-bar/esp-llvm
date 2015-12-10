@@ -1082,6 +1082,17 @@ bool DAE::RemoveDeadStuffFromFunction(Function *F) {
   auto DI = FunctionDIs.find(F);
   if (DI != FunctionDIs.end())
     DI->second->replaceFunction(NF);
+  //migrate all opencl named metadata
+  llvm::NamedMDNode *nmd = F->getParent()->getNamedMetadata("opencl.kernels");
+  for (unsigned i = 0, e = nmd->getNumOperands(); i != e; ++i) {
+    MDNode *kernel_iter = nmd->getOperand(i);
+    Function *k =
+      cast<Function>(
+        dyn_cast<ValueAsMetadata>(kernel_iter->getOperand(0))->getValue());
+    if (k->getName() == F->getName()) {
+      kernel_iter->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
+    }
+  }
 
   // Now that the old function is dead, delete it.
   F->eraseFromParent();

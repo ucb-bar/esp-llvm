@@ -13,6 +13,8 @@
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraph.h"
 #include "llvm/CodeGen/MachineProgramDependenceGraphPrinter.h"
+#include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/TargetRegistry.h"
 
 using namespace llvm;
@@ -26,6 +28,7 @@ extern "C" void LLVMInitializeRISCVTarget() {
 namespace llvm {
   ModulePass *createRISCVVectorFetchIROpt();
   MachineFunctionPass *createRISCVVectorFetchMachOpt();
+  MachineFunctionPass *createRISCVVectorFetchRegFix();
 }
 
 static std::string computeDataLayout(const Triple &TT) {
@@ -96,11 +99,14 @@ public:
   bool addInstSelector() override;
   void addPreEmitPass() override;
   void addPreRegAlloc() override;
+  void addPostRegAlloc() override;
 };
 } // end anonymous namespace
 
 bool RISCVPassConfig::addPreISel() {
   addPass(createRISCVVectorFetchIROpt());
+  addPass(createDeadCodeEliminationPass());
+  addPass(createDeadArgEliminationPass());
 }
 
 bool RISCVPassConfig::addInstSelector() {
@@ -114,6 +120,10 @@ void RISCVPassConfig::addPreEmitPass(){
 
 void RISCVPassConfig::addPreRegAlloc(){
   addPass(createRISCVVectorFetchMachOpt());
+}
+
+void RISCVPassConfig::addPostRegAlloc() {
+  addPass(createRISCVVectorFetchRegFix());
 }
 
 TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
