@@ -21,7 +21,7 @@
 	fsd	f5, x8, 36
 	fsd	f5, x8, -36
 	fmadd.d	f5, f6, f7, f0
-	fsub.d	f10, f9, f13, f31
+	fmsub.d	f10, f9, f13, f31
 	fnmsub.d f22, f7, f17, f11
 	fnmadd.d f12, f18, f22, f4
 	fadd.d	f13, f12, f2
