@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV64IMAFD | FileCheck --check-prefix=CHECK64 %s
+# XFAIL:
 
 #-- test register state f0-f31
         fadd.s  f2, f1, f0

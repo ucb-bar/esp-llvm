@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV64IMAFD | FileCheck --check-prefix=CHECK64 %s
+# XFAIL:
 
 # CHECK64:	fadd.s	f2, f1, f0              # encoding: [0x53,0xf1,0x00,0x00]
 # CHECK64:	fadd.s	f5, f4, f3              # encoding: [0xd3,0x72,0x32,0x00]

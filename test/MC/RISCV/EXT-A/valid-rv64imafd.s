@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV64IMAFD
+# XFAIL:
 
 lr.w		x5, x4
 sc.w		x6, x5
