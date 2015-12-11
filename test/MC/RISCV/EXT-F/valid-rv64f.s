@@ -28,8 +28,8 @@
 	fadd.s	f0, f31, f30
 
 #-- test rv32f instructions
-	flw		f1, f0, 12
-	flw		f3, f2, -12
+	flw		f1, x0, 12
+	flw		f3, x2, -12
 	fmadd.s		f5, f4, f3, f2	
 	fmsub.s		f5, f4, f3, f2	
 	fnmsub.s	f5, f4, f3, f2	

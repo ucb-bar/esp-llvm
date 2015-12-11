@@ -15,11 +15,11 @@
         fadd.s  f29, f28, f27
         fadd.s  f0, f31, f30
 
-#-- rv32d instructions 
-	fld	f0, f1, 14	
-	fld	f0, f1, -14	
-	fsd	f5, f8, 36
-	fsd	f5, f8, -36
+#-- rv32d instructions
+	fld	f0, x1, 14
+	fld	f0, x1, -14
+	fsd	f5, x8, 36
+	fsd	f5, x8, -36
 	fmadd.d	f5, f6, f7, f0
 	fsub.d	f10, f9, f13, f31
 	fnmsub.d f22, f7, f17, f11
