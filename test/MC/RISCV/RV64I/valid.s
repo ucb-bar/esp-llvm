@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV64I | FileCheck --check-prefix=CHECK64 %s
+# XFAIL:
 
 
 # CHECK64: addi    x0, x0, 0               # encoding: [0x13,0x00,0x00,0x00]
