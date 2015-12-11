@@ -43,3 +43,4 @@ script:
   - cd build
   - $CONFIG
   - make -j4
+  - make check-llvm-codegen-riscv check-llvm-mc-riscv
