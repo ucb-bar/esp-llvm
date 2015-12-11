@@ -38,3 +38,4 @@ script:
   - cd build
   - ../configure --enable-optimized --enable-targets=riscv --prefix=${RISCV} 
   - make -j4
+  - make check-llvm-codegen-riscv check-llvm-mc-riscv
