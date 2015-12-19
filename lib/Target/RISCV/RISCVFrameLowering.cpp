@@ -122,10 +122,9 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MB
 
     // Iterate over list of callee-saved registers and emit .cfi_offset
     // directives.
-    for (std::vector<CalleeSavedInfo>::const_iterator I = CSI.begin(),
-           E = CSI.end(); I != E; ++I) {
-      int64_t Offset = MFI->getObjectOffset(I->getFrameIdx());
-      unsigned Reg = I->getReg();
+    for (const auto &I: CSI) {
+      int64_t Offset = MFI->getObjectOffset(I.getFrameIdx());
+      unsigned Reg = I.getReg();
 
       // Reg is either in CPURegs or FGR32.
       unsigned CFIIndex = MMI.addFrameInst(MCCFIInstruction::createOffset(
