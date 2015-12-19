@@ -217,9 +217,9 @@ class InstB<bits<7> op, bits<3> funct3, dag outs, dag ins, string asmstr, list<d
   : InstRISCV<4, outs, ins, asmstr, pattern> {
   field bits<32> Inst;
 
+  bits<12> IMM;
   bits<5> RS1;
   bits<5> RS2;
-  bits<12> IMM;
 
   let Inst{31-27} = IMM{11-7};
   let Inst{26-22} = RS1;

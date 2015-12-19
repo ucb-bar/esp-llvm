@@ -181,28 +181,28 @@ def fpimm0 : PatLeaf<(fpimm), [{ return N->isExactlyValue(+0.0); }]>;
 //===----------------------------------------------------------------------===//
 
 def mem : Operand<i32> {
-  let MIOperandInfo = (ops GR32, imm32sx12);
+  let MIOperandInfo = (ops imm32sx12, GR32);
   //let EncoderMethod = "getMemRegEncoding";
   let OperandType = "OPERAND_MEMORY";
   let PrintMethod = "printMemOperand";
 }
 
 def mem64 : Operand<i64> {
-  let MIOperandInfo = (ops GR64, imm64sx12);
+  let MIOperandInfo = (ops imm64sx12, GR64);
   //let EncoderMethod = "getMemRegEncoding";
   let OperandType = "OPERAND_MEMORY";
   let PrintMethod = "printMemOperand";
 }
 
 def jalrmem : Operand<i32> {
-  let MIOperandInfo = (ops GR32, imm32sx12);
+  let MIOperandInfo = (ops imm32sx12, GR32);
   //let EncoderMethod = "getMemRegEncoding";
   let OperandType = "OPERAND_MEMORY";
   let PrintMethod = "printJALRMemOperand";
 }
 
 def jalrmem64 : Operand<i64> {
-  let MIOperandInfo = (ops GR64, imm64sx12);
+  let MIOperandInfo = (ops imm64sx12, GR64);
   //let EncoderMethod = "getMemRegEncoding";
   let OperandType = "OPERAND_MEMORY";
   let PrintMethod = "printJALRMemOperand";
@@ -250,34 +250,12 @@ def pcimm64 : PCRelAddress<i64, "pcimm64"> {
 
 def pcrel32call : PCRelAddress<i32, "pcrel32call"> {
   let PrintMethod = "printCallOperand";
-  let EncoderMethod = "getPLT32DBLEncoding";
+  let EncoderMethod = "getCallEncoding";
 }
 
 def pcrel64call : PCRelAddressNoWrap<i64, "pcrel64call"> {
   let PrintMethod = "printCallOperand";
-  let EncoderMethod = "getPLT64DBLEncoding";
-}
-
-// PC-relative offsets of a basic block.  The offset is sign-extended
-// and multiplied by 2.
-def brtarget16 : Operand<OtherVT> {
-  let EncoderMethod = "getPC16DBLEncoding";
-}
-def brtarget32 : Operand<OtherVT> {
-  let EncoderMethod = "getPC32DBLEncoding";
-}
-
-// A PC-relative offset of a global value.  The offset is sign-extended
-// and multiplied by 2.
-def pcrel32 : PCRelAddress<i64, "pcrel32"> {
-  let EncoderMethod = "getPC32DBLEncoding";
-}
-
-// A PC-relative offset of a global value when the value is used as a
-// call target.  The offset is sign-extended and multiplied by 2.
-def pcrel16call : PCRelAddress<i64, "pcrel16call"> {
-  let PrintMethod = "printCallOperand";
-  let EncoderMethod = "getPLT16DBLEncoding";
+  let EncoderMethod = "getCallEncoding";
 }
 
 //===----------------------------------------------------------------------===//

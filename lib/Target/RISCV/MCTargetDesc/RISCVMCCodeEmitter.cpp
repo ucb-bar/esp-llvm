@@ -70,7 +70,12 @@ private:
     //TODO: do we need to sign extend explicitly?
     if (MO.isImm())
       return MO.getImm() << 1;
-    llvm_unreachable("Branch with no immediate field");
+    // Branch target is expr add fixup
+    Fixups.push_back(MCFixup::create(0, MO.getExpr(),
+          (MCFixupKind)RISCV::fixup_riscv_brlo));
+    Fixups.push_back(MCFixup::create(0, MO.getExpr(),
+          (MCFixupKind)RISCV::fixup_riscv_brhi));
+    return 0;
   }
 
   unsigned getPCImmEncoding(const MCInst &MI, unsigned int OpNum,
@@ -101,27 +106,9 @@ private:
                             SmallVectorImpl<MCFixup> &Fixups,
                             unsigned Kind, int64_t Offset) const;
 
-  unsigned getPC16DBLEncoding(const MCInst &MI, unsigned int OpNum,
-                              SmallVectorImpl<MCFixup> &Fixups) const {
-    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PC16DBL, 2);
-  }
-  unsigned getPC32DBLEncoding(const MCInst &MI, unsigned int OpNum,
-                              SmallVectorImpl<MCFixup> &Fixups) const {
-    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PC32DBL, 2);
-  }
-  unsigned getPLT16DBLEncoding(const MCInst &MI, unsigned int OpNum,
+  unsigned getCallEncoding(const MCInst &MI, unsigned int OpNum,
                                SmallVectorImpl<MCFixup> &Fixups) const {
-    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PLT16DBL, 2);
-  }
-  unsigned getPLT32DBLEncoding(const MCInst &MI, unsigned int OpNum,
-                               SmallVectorImpl<MCFixup> &Fixups,
-                               const MCSubtargetInfo &STI) const {
-    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PLT32DBL, 2);
-  }
-  unsigned getPLT64DBLEncoding(const MCInst &MI, unsigned int OpNum,
-                               SmallVectorImpl<MCFixup> &Fixups,
-                               const MCSubtargetInfo &STI) const {
-    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::FK_390_PLT64DBL, 2);
+    return getPCRelEncoding(MI, OpNum, Fixups, RISCV::fixup_riscv_call, 0);
   }
 };
 }

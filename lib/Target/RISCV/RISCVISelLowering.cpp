@@ -669,7 +669,9 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), ArgLocs,
 		 *DAG.getContext());
 
-  CCInfo.AnalyzeFormalArguments(Ins, IsRV32 ? CC_RISCV32 : CC_RISCV64);
+  CCInfo.AnalyzeFormalArguments(Ins,
+    IsRV32 ? IsVarArg ? CC_RISCV32_VAR : CC_RISCV32 :
+    IsVarArg ? CC_RISCV64_VAR : CC_RISCV64);
   
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -751,9 +753,9 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
   //TODO: handle ByVal
 
   if (IsVarArg){
-    const MCPhysReg *ArgRegs = IsRV32 ? RV32IntRegs : RV64IntRegs;
+    auto ArgRegs = IsRV32 ? RV32IntRegs : RV64IntRegs;
     unsigned NumRegs = llvm::RISCV::NumArgGPRs;
-    unsigned Idx = CCInfo.getFirstUnallocated(*ArgRegs);
+    unsigned Idx = CCInfo.getFirstUnallocated(ArrayRef<MCPhysReg>(ArgRegs, 8));
     unsigned RegSize = IsRV32 ? 4 : 8;
     MVT RegTy = MVT::getIntegerVT(RegSize * 8);
     const TargetRegisterClass *RC = getRegClassFor(RegTy);
