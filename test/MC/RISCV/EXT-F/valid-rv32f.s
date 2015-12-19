@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV32IMAFD | FileCheck --check-prefix=CHECK32 %s
+# XFAIL:
 
 # CHECK32:	fadd.s	f2, f1, f0              # encoding: [0x53,0xf1,0x00,0x00]
 # CHECK32:	fadd.s	f5, f4, f3              # encoding: [0xd3,0x72,0x32,0x00]
@@ -28,8 +29,8 @@
 	fadd.s	f0, f31, f30
 
 #-- test rv32f instructions
-	flw		f1, f0, 12
-	flw		f3, f2, -12
+	flw		f1, x0, 12
+	flw		f3, x2, -12
 	fmadd.s		f5, f4, f3, f2	
 	fmsub.s		f5, f4, f3, f2	
 	fnmsub.s	f5, f4, f3, f2	

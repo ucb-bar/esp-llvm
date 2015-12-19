@@ -1,6 +1,7 @@
 # Instructions that are valid
 #
 # RUN: llvm-mc %s -triple=riscv-unknown-linux -show-encoding -mcpu=RV32IMAFD | FileCheck --check-prefix=CHECK32 %s
+# XFAIL:
 
 #-- test register state f0-f31
         fadd.s  f2, f1, f0
@@ -15,13 +16,13 @@
         fadd.s  f29, f28, f27
         fadd.s  f0, f31, f30
 
-#-- rv32d instructions 
-	fld	f0, f1, 14	
-	fld	f0, f1, -14	
-	fsd	f5, f8, 36
-	fsd	f5, f8, -36
+#-- rv32d instructions
+	fld	f0, x1, 14
+	fld	f0, x1, -14
+	fsd	f5, x8, 36
+	fsd	f5, x8, -36
 	fmadd.d	f5, f6, f7, f0
-	fsub.d	f10, f9, f13, f31
+	fmsub.d	f10, f9, f13, f31
 	fnmsub.d f22, f7, f17, f11
 	fnmadd.d f12, f18, f22, f4
 	fadd.d	f13, f12, f2
