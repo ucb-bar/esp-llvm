@@ -1,5 +1,4 @@
 ; RUN: llc -march=riscv < %s
-; XFAIL: *
 
 define i8* @f1() nounwind {
 entry:
