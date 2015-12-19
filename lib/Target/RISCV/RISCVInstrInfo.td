@@ -141,6 +141,8 @@ let isCall = 1,  Defs = [ra, a0, a1, fa0, fa1, fa0_64, fa1_64] in { //after call
             let Inst{6 - 0} = 0b1100111;
           }
 }
+//simple brind pat
+def : Pat<(brind i32:$dst), (JALR 0, $dst)>, Requires<[IsRV32]>;
  
 
 //Conditional Branches

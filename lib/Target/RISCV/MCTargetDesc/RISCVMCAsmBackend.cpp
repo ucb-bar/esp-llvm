@@ -25,11 +25,9 @@ static uint64_t extractBitsForFixup(MCFixupKind Kind, uint64_t Value) {
     return Value;
 
   switch (unsigned(Kind)) {
-  case RISCV::FK_390_PC16DBL:
-  case RISCV::FK_390_PC32DBL:
-  case RISCV::FK_390_PLT16DBL:
-  case RISCV::FK_390_PLT32DBL:
-  case RISCV::FK_390_PLT64DBL:
+  case RISCV::fixup_riscv_brlo:
+  case RISCV::fixup_riscv_brhi:
+  case RISCV::fixup_riscv_jal:
     return (int64_t)Value / 2;
   }
 
@@ -75,11 +73,10 @@ public:
 const MCFixupKindInfo &
 RISCVMCAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   const static MCFixupKindInfo Infos[RISCV::NumTargetFixupKinds] = {
-    { "FK_390_PC16DBL",  0, 16, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_390_PC32DBL",  0, 32, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_390_PLT16DBL", 0, 16, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_390_PLT32DBL", 0, 32, MCFixupKindInfo::FKF_IsPCRel },
-    { "FK_390_PLT64DBL", 0, 64, MCFixupKindInfo::FKF_IsPCRel }
+    { "fixup_riscv_brlo",  10, 7, MCFixupKindInfo::FKF_IsPCRel },
+    { "fixup_riscv_brhi",  27, 5, MCFixupKindInfo::FKF_IsPCRel },
+    { "fixup_riscv_jal", 0, 20, MCFixupKindInfo::FKF_IsPCRel },
+    // target offset(0) doesn't make sense here: bits are non continuous
   };
 
   if (Kind < FirstTargetFixupKind)

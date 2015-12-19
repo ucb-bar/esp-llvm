@@ -89,17 +89,17 @@ void RISCVInstPrinter::printRegName(raw_ostream &O, unsigned RegNo) const {
 
 void RISCVInstPrinter::printMemOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
-     printOperand(MI, opNum+1, OS);
+     printOperand(MI, opNum, OS);
      OS << "(";
-     OS << getRegisterName(MI->getOperand(opNum).getReg());
+     OS << getRegisterName(MI->getOperand(opNum+1).getReg());
      OS << ")";
 }
 
 void RISCVInstPrinter::printJALRMemOperand(const MCInst *MI, int opNum, 
                                          raw_ostream &OS) {
-     OS << getRegisterName(MI->getOperand(opNum).getReg());
+     OS << getRegisterName(MI->getOperand(opNum+1).getReg());
      OS << ", ";
-     printOperand(MI, opNum+1, OS);
+     printOperand(MI, opNum, OS);
 }
 
 void RISCVInstPrinter::printBranchTarget(const MCInst *MI, int opNum, 

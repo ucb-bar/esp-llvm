@@ -137,7 +137,12 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   int64_t Offset;
 
   Offset = SPOffset + (int64_t)StackSize;
-  Offset += MI.getOperand(OpNo + 1).getImm();
+  // loads and stores have the immediate before the FI
+  // FIXME: this is a bit hacky
+  if(MI.mayLoadOrStore())
+    Offset += MI.getOperand(OpNo - 1).getImm();
+  else
+    Offset += MI.getOperand(OpNo + 1).getImm();
 
   DEBUG(errs() << "Offset     : " << Offset << "\n" << "<--------->\n");
 
@@ -162,7 +167,12 @@ void RISCVRegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   }
 
   MI.getOperand(OpNo).ChangeToRegister(FrameReg, false, false, IsKill);
-  MI.getOperand(OpNo + 1).ChangeToImmediate(Offset);
+  // loads and stores have the immediate before the FI
+  // FIXME: this is a bit hacky
+  if(MI.mayLoadOrStore())
+    MI.getOperand(OpNo - 1).ChangeToImmediate(Offset);
+  else
+    MI.getOperand(OpNo + 1).ChangeToImmediate(Offset);
 }
 
 void

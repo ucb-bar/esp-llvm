@@ -15,12 +15,12 @@
 namespace llvm {
 namespace RISCV {
   enum FixupKind {
-    // These correspond directly to R_390_* relocations.
-    FK_390_PC16DBL = FirstTargetFixupKind,
-    FK_390_PC32DBL,
-    FK_390_PLT16DBL,
-    FK_390_PLT32DBL,
-    FK_390_PLT64DBL,
+    // These correspond directly to RISCV relocations.
+    fixup_riscv_brlo = FirstTargetFixupKind,
+    fixup_riscv_brhi,
+    fixup_riscv_jal,
+    fixup_riscv_call,
+    fixup_riscv_call_plt,
 
     // Marker
     LastTargetFixupKind,

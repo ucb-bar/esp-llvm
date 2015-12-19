@@ -39,10 +39,8 @@ RISCVObjectWriter::~RISCVObjectWriter() {
 // Return the relocation type for an absolute value of MCFixupKind Kind.
 static unsigned getAbsoluteReloc(unsigned Kind) {
   switch (Kind) {
-  case FK_Data_1: return ELF::R_390_8;
-  case FK_Data_2: return ELF::R_390_16;
-  case FK_Data_4: return ELF::R_390_32;
-  case FK_Data_8: return ELF::R_390_64;
+  case FK_Data_4: return ELF::R_RISCV_32;
+  case FK_Data_8: return ELF::R_RISCV_64;
   }
   llvm_unreachable("Unsupported absolute address");
 }
@@ -51,23 +49,20 @@ static unsigned getAbsoluteReloc(unsigned Kind) {
 // Return the relocation type for a PC-relative value of MCFixupKind Kind.
 static unsigned getPCRelReloc(unsigned Kind) {
   switch (Kind) {
-  case FK_Data_2:                return ELF::R_390_PC16;
-  case FK_Data_4:                return ELF::R_390_PC32;
-  case FK_Data_8:                return ELF::R_390_PC64;
-  case RISCV::FK_390_PC16DBL:  return ELF::R_390_PC16DBL;
-  case RISCV::FK_390_PC32DBL:  return ELF::R_390_PC32DBL;
-  case RISCV::FK_390_PLT16DBL: return ELF::R_390_PLT16DBL;
-  case RISCV::FK_390_PLT32DBL: return ELF::R_390_PLT32DBL;
-  case RISCV::FK_390_PLT64DBL: return ELF::R_390_PLT64;
+  case FK_Data_4:                return ELF::R_RISCV_CALL;
+  case RISCV::fixup_riscv_brlo:  return ELF::R_RISCV_BRANCH;
+  case RISCV::fixup_riscv_brhi:  return ELF::R_RISCV_BRANCH;
+  case RISCV::fixup_riscv_jal:   return ELF::R_RISCV_JAL;
+  case RISCV::fixup_riscv_call:  return ELF::R_RISCV_CALL;
   }
   llvm_unreachable("Unsupported PC-relative address");
 }
 
-// Return the R_390_TLS_LE* relocation type for MCFixupKind Kind.
+// Return the R_RISCV_TLS* relocation type for MCFixupKind Kind.
 static unsigned getTLSLEReloc(unsigned Kind) {
   switch (Kind) {
-  case FK_Data_4: return ELF::R_390_TLS_LE32;
-  case FK_Data_8: return ELF::R_390_TLS_LE64;
+  case FK_Data_4: return ELF::R_RISCV_TLS_TPREL32;
+  case FK_Data_8: return ELF::R_RISCV_TLS_TPREL64;
   }
   llvm_unreachable("Unsupported absolute address");
 }
@@ -75,8 +70,7 @@ static unsigned getTLSLEReloc(unsigned Kind) {
 // Return the PLT relocation counterpart of MCFixupKind Kind.
 static unsigned getPLTReloc(unsigned Kind) {
   switch (Kind) {
-  case RISCV::FK_390_PC16DBL: return ELF::R_390_PLT16DBL;
-  case RISCV::FK_390_PC32DBL: return ELF::R_390_PLT32DBL;
+  case RISCV::fixup_riscv_call_plt: return ELF::R_RISCV_CALL_PLT;
   }
   llvm_unreachable("Unsupported absolute address");
 }
@@ -99,9 +93,7 @@ unsigned RISCVObjectWriter::GetRelocType(const MCValue &Target,
     return getTLSLEReloc(Kind);
 
   case MCSymbolRefExpr::VK_GOT:
-    if (IsPCRel && Kind == RISCV::FK_390_PC32DBL)
-      return ELF::R_390_GOTENT;
-    llvm_unreachable("Only PC-relative GOT accesses are supported for now");
+    llvm_unreachable("GOT accesses are not supported yet");
 
   case MCSymbolRefExpr::VK_PLT:
     assert(IsPCRel && "@PLT shouldt be PC-relative");

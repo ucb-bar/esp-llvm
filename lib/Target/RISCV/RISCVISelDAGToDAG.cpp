@@ -88,7 +88,7 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
                           SDValue &Base, SDValue &Disp, SDValue &Index);
 
   //RISCV
-  bool selectMemRegAddr(SDValue Addr, SDValue &Base, SDValue &Offset) {
+  bool selectMemRegAddr(SDValue Addr, SDValue &Offset, SDValue &Base) {
       
     EVT ValTy = Addr.getValueType();
 
@@ -345,7 +345,9 @@ void RISCVDAGToDAGISel::getAddressOperands(const RISCVAddressingMode &AM,
   else if (Base.getOpcode() == ISD::FrameIndex) {
     // Lower a FrameIndex to a TargetFrameIndex.
     int64_t FrameIndex = cast<FrameIndexSDNode>(Base)->getIndex();
-    Base = CurDAG->getTargetFrameIndex(FrameIndex, VT);
+    Offset = CurDAG->getTargetFrameIndex(FrameIndex, VT);
+    Base = CurDAG->getTargetConstant(AM.Offset, SDLoc(Base), VT);
+    return;
   } else if (Base.getValueType() != VT) {
     // Truncate values from i64 to i32, for shifts.
     assert(VT == MVT::i32 && Base.getValueType() == MVT::i64 &&

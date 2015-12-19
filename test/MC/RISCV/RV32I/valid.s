@@ -158,8 +158,8 @@
 
 #-- CONTROL TRANSFER INSTRUCTIONS
 	mv 	x2, x0
-	jal	x27
-	jal	x0			#-- unconditional jump
+	jal	x27, 8
+	jal	x0, 8			#-- unconditional jump
 	jalr	x28, x27, 8
 	beq	x28,x27, target_beq
 target_beq:
@@ -178,24 +178,24 @@ target_bgeu:
 #-- LOAD AND STORE INSTRUCTIONS	
 
 	lw x5, 0(x3)
-	sw x5, x3, 0
-	sh x6, x3, 0
-	sb x7, x3, 0
-	sw x5, x3, -4
-	sh x6, x3, -4
-	sb x7, x3, -4
-	sw x5, x3, 4
-	sh x6, x3, 4
-	sb x7, x3, 4
-	lw x5, x3, 0
-	lh x6, x3, 0
-	lb x7, x3, 0
-	lw x5, x3, -4
-	lh x6, x3, -4
-	lb x7, x3, -4
-	lw x5, x3, 4
-	lh x6, x3, 4
-	lb x7, x3, 4
+	sw x5, 0(x3)
+	sh x6, 0(x3)
+	sb x7, 0(x3)
+	sw x5, -4(x3)
+	sh x6, -4(x3)
+	sb x7, -4(x3)
+	sw x5, 4(x3)
+	sh x6, 4(x3)
+	sb x7, 4(x3)
+	lw x5, 0(x3)
+	lh x6, 0(x3)
+	lb x7, 0(x3)
+	lw x5, -4(x3)
+	lh x6, -4(x3)
+	lb x7, -4(x3)
+	lw x5, 4(x3)
+	lh x6, 4(x3)
+	lb x7, 4(x3)
 
 #-- MEMORY MODEL
 	fence

@@ -561,6 +561,11 @@ enum {
 #include "ELFRelocs/SystemZ.def"
 };
 
+// ELF Relocation types for RISCV
+enum {
+#include "ELFRelocs/RISCV.def"
+};
+
 // ELF Relocation type for Sparc.
 enum {
 #include "ELFRelocs/Sparc.def"

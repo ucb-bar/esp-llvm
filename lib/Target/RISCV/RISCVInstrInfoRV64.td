@@ -141,7 +141,7 @@ let isCall = 1, Defs = [ra_64, a0_64, a1_64, fa0, fa1, fa0_64, fa1_64] in {
           }
 }
 //simple brind pat
-def : Pat<(brind i64:$dst), (JALR64 $dst, 0)>, Requires<[IsRV64]>;
+def : Pat<(brind i64:$dst), (JALR64 0, $dst)>, Requires<[IsRV64]>;
  
 
 //Conditional Branches

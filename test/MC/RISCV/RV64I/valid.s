@@ -182,8 +182,8 @@
 
 #-- CONTROL TRANSFER INSTRUCTIONS
 	mv 	x2, x0
-	jal	x27
-	jal	x0			#-- unconditional jump
+	jal	x27, 8
+	jal	x0, 8			#-- unconditional jump
 	jalr	x28, x27, 8	
 	beq	x28,x27, target_beq
 target_beq:

@@ -571,8 +571,6 @@ bool RISCVAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
 
   if (getLexer().is(AsmToken::LParen)) {
 
-    Operands.push_back(
-      RISCVOperand::createToken("(", getLexer().getLoc()));
     Parser.Lex();
 
     if (parseOperand(Operands, Name)) {
@@ -585,8 +583,6 @@ bool RISCVAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
       Parser.eatToEndOfStatement();
       return Error(Loc, "unexpected token, expected ')'" );
     }
-    Operands.push_back(
-      RISCVOperand::createToken(")", getLexer().getLoc()) );
     Parser.Lex();
   }
 

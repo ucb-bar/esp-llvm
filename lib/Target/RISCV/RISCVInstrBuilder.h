@@ -39,7 +39,7 @@ addFrameReference(const MachineInstrBuilder &MIB, int FI) {
     MF.getMachineMemOperand(MachinePointerInfo::getFixedStack(MF, FI, Offset),
                             Flags, MFFrame->getObjectSize(FI),
                             MFFrame->getObjectAlignment(FI));
-  return MIB.addFrameIndex(FI).addImm(Offset).addMemOperand(MMO);
+  return MIB.addImm(Offset).addFrameIndex(FI).addMemOperand(MMO);
 }
 
 } // End llvm namespace

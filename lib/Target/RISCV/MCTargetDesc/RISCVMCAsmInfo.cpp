@@ -16,7 +16,7 @@ using namespace llvm;
 RISCVMCAsmInfo::RISCVMCAsmInfo() {
   PointerSize = 8;
   CalleeSaveStackSlotSize = 8;
-  IsLittleEndian = false;
+  IsLittleEndian = true;
 
   CommentString = "#";
   ZeroDirective = "\t.space\t";
