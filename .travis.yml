@@ -31,8 +31,8 @@ env:
   global:
     - RISCV="/home/travis/riscv_install"
   matrix:
-    - CONFIG="../configure --enable-optimized --enable-target=riscv --prefix=${RISCV}"
-    - CONFIG="cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=RISCV -DCMAKE_INSTALL_PREFIX=${RISCV} ../"
+    - CONFIG="../configure --enable-optimized --enable-target=riscv --prefix=${RISCV}" TEST="check LIT_ARGS=\"--filter=\\\".*RISCV.*\\\" test/\""
+    - CONFIG="cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=RISCV -DCMAKE_INSTALL_PREFIX=${RISCV} ../" TEST="check-llvm-codegen-riscv check-llvm-mc-riscv"
 git:
       submodules: true
 before_install:
@@ -43,4 +43,4 @@ script:
   - cd build
   - $CONFIG
   - make -j4
-  - make check-llvm-codegen-riscv check-llvm-mc-riscv
+  - make $TEST
