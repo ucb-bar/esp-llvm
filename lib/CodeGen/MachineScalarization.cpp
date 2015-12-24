@@ -80,7 +80,10 @@ void MachineScalarization::Calculate(MachineFunction &F) {
     invar[MI] = false;
     // Walk dataflow successors
     // For all defs, walk uses
-    for(const MachineOperand &MO : MI->defs()) {
+    // For some reason phis don't have defs iterator setup correctly so we do it the old fashion way
+    for(const MachineOperand &MO : MI->operands()) {
+      if(!(MO.isReg() && MO.isDef()))
+        continue;
       for(MachineOperand &UseMO : MRI->use_operands(MO.getReg())) {
         const MachineInstr* user = UseMO.getParent();
         if(invar[user])
