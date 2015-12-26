@@ -40,6 +40,20 @@ defm FDIV_S : FPBinOps<"fdiv.s", fdiv, 0b00011, 0b00>, Requires<[HasF]>;
 //defm FMAX_S : FPOps<"fmax.s", fmax, 0b11001, 0b00>, Requires<[HasF]>;
 
 //TODO: implement fma
+multiclass  FPTriOps<string name, bits<7> op, bits<2> fmt, SDPatternOperator op1> {
+  def _RDY : InstR4<name, op, fmt, {1,1,1}, op1, FP32, FP32>;
+  let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
+    def _RNE : InstR4<name#".rne", op, fmt, {0,0,0}, op1, FP32, FP32>;
+    def _RTZ : InstR4<name#".rtz", op, fmt, {0,0,1}, op1, FP32, FP32>;
+    def _RDN : InstR4<name#".rdn", op, fmt, {0,1,0}, op1, FP32, FP32>;
+    def _RUP : InstR4<name#".rup", op, fmt, {0,1,1}, op1, FP32, FP32>;
+    def _RMM : InstR4<name#".rmm", op, fmt, {1,0,0}, op1, FP32, FP32>;
+  }
+}
+defm FMADD_S  : FPTriOps<"fmadd.s", 0b1000011, 0b01, fma>, Requires<[HasF]>;
+//defm FMSUB_S  : FPTriOps<"fmsub.s", fma, 0b1000011, 0b01>, Requires<[HasF]>;
+//defm FNMSUB_S : FPTriOps<"fnmsub.s", fma, 0b1000011, 0b01>, Requires<[HasF]>;
+//defm FNMADD_S : FPTriOps<"fnmadd.s", fma, 0b1000011, 0b01>, Requires<[HasF]>;
 
 //Move and Conversions
 class InstConv<string mnemonic, string rmstr, bits<7> op, bits<5> funct5, bits<2> fmt, bits<3> rm,

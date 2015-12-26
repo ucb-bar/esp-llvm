@@ -40,6 +40,17 @@ defm FDIV_D : FPBinOps64<"fdiv.d", fdiv, 0b00011, 0b01>, Requires<[HasD]>;
 //defm FMAX_S : FPOps<"fmax.s", fmax, 0b11001, 0b00>, Requires<[HasD]>;
 
 //TODO: implement fma
+multiclass  FPTriOps64<string name, bits<7> op, bits<2> fmt, SDPatternOperator op1> {
+  def _RDY : InstR4<name, op, fmt, {1,1,1}, op1, FP64, FP64>;
+  let isAsmParserOnly = 1 in { //only use the dynamic version during instruction selection
+    def _RNE : InstR4<name#".rne", op, fmt, {0,0,0}, op1, FP64, FP64>;
+    def _RTZ : InstR4<name#".rtz", op, fmt, {0,0,1}, op1, FP64, FP64>;
+    def _RDN : InstR4<name#".rdn", op, fmt, {0,1,0}, op1, FP64, FP64>;
+    def _RUP : InstR4<name#".rup", op, fmt, {0,1,1}, op1, FP64, FP64>;
+    def _RMM : InstR4<name#".rmm", op, fmt, {1,0,0}, op1, FP64, FP64>;
+  }
+}
+defm FMADD_D  : FPTriOps64<"fmadd.d", 0b1000011, 0b01, fma>, Requires<[HasF]>;
 
 //Move and Conversions
 //The float to int conversions do nothing because fp_to_uint means RTZ specifically

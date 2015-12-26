@@ -21,6 +21,8 @@ bool llvm::isOpenCLKernelFunction(const Function &F) {
 
   for (unsigned i = 0, e = oclKernels->getNumOperands(); i != e; ++i) {
     llvm::MDNode *kernel_iter = oclKernels->getOperand(i);
+    if(!kernel_iter->getOperand(0))
+      continue;
     if(isa<llvm::ValueAsMetadata>(kernel_iter->getOperand(0))) {
       llvm::ValueAsMetadata* vam = dyn_cast<llvm::ValueAsMetadata>(kernel_iter->getOperand(0));
       llvm::Function *kernel_prototype =
