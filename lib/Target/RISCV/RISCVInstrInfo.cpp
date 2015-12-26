@@ -420,6 +420,40 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
+    // START Custom COPY
+  }else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_X;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  /*}else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::FP64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_F;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::VSRBitRegClass.contains(DestReg) &&
+           RISCV::FP32BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSS_F;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+    */
+  }else if(RISCV::VARBitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::VMSA;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if (RISCV::VVRBitRegClass.contains(DestReg, SrcReg) ||
+      RISCV::VVWBitRegClass.contains(DestReg, SrcReg) ||
+      RISCV::VVHBitRegClass.contains(DestReg, SrcReg) ){
+    Opcode = RISCV::VADD_VVS;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addReg(RISCV::vs0, getKillRegState(KillSrc));
+    return;
   }else
     llvm_unreachable("Impossible reg-to-reg copy");
 

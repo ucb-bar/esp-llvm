@@ -48,10 +48,10 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
 
 //R-Type
 class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, 
+            SDPatternOperator operator, RegisterOperand cls1,
             RegisterOperand cls2>
   : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, cls2:$src2),
-                mnemonic#"\t$dst, $src1, $src2", 
+                mnemonic#"\t$dst, $src1, $src2",
                 [(set cls1:$dst, (operator cls2:$src1, cls2:$src2))]> {
   field bits<32> Inst;
 
@@ -67,11 +67,35 @@ class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
   let Inst{6 - 0} = op;
 }
 
+//R4-Type
+class InstR4<string mnemonic, bits<7> op, bits<2> funct2, bits<3> funct3,
+            SDPatternOperator operator, RegisterOperand cls1,
+            RegisterOperand cls2>
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, cls2:$src2, cls2:$src3),
+                mnemonic#"\t$dst, $src1, $src2, $src3",
+
+                [(set cls1:$dst, (operator cls2:$src1, cls2:$src2, cls2:$src3))]> {
+  field bits<32> Inst;
+
+  bits<5> RD;
+  bits<5> RS1;
+  bits<5> RS2;
+  bits<5> RS3;
+
+  let Inst{31-27} = RS3;
+  let Inst{26-25} = funct2;
+  let Inst{24-20} = RS2;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = op;
+}
+
 //LR/SC
 class InstLR<string mnemonic, bits<3> funct3,
              RegisterOperand cls1, Operand cls2>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2), 
-                mnemonic#"\t$dst, $src2", 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src2),
+                mnemonic#"\t$dst, $src2",
                 []> {
   field bits<32> Inst;
 
@@ -90,8 +114,8 @@ class InstLR<string mnemonic, bits<3> funct3,
 
 class InstSC<string mnemonic, bits<3> funct3,
              RegisterOperand reg, Operand memOp>
-  : InstRISCV<4, (outs reg:$dst), (ins reg:$src2, memOp:$src1), 
-                mnemonic#"\t$dst, $src2, $src1", 
+  : InstRISCV<4, (outs reg:$dst), (ins reg:$src2, memOp:$src1),
+                mnemonic#"\t$dst, $src2, $src1",
                 []> {
   field bits<32> Inst;
 
@@ -111,10 +135,10 @@ class InstSC<string mnemonic, bits<3> funct3,
 
 //A-Type
 class InstA<string mnemonic, bits<7> op, bits<5> funct5, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, 
+            SDPatternOperator operator, RegisterOperand cls1,
             Operand cls2>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1, cls2:$src2), 
-                mnemonic#"\t$dst, $src1, $src2", 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls1:$src1, cls2:$src2),
+                mnemonic#"\t$dst, $src1, $src2",
                 [(set cls1:$dst, (operator regaddr:$src2, cls1:$src1))]> {
   field bits<32> Inst;
 
@@ -137,8 +161,8 @@ class InstLoad<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator opNode,
             RegisterOperand cls1,
             Operand memOp>
-  : InstRISCV<4, (outs cls1:$dst), (ins memOp:$addr), 
-                mnemonic#"\t$dst, $addr", 
+  : InstRISCV<4, (outs cls1:$dst), (ins memOp:$addr),
+                mnemonic#"\t$dst, $addr",
                 [(set cls1:$dst, (opNode addr:$addr))]> {
   field bits<32> Inst;
 
@@ -159,7 +183,7 @@ class InstStore<string mnemonic, bits<7> op, bits<3> funct3,
                 RegisterOperand cls1,
                 Operand memOp>
   : InstRISCV<4, (outs), (ins cls1:$src, memOp:$addr),
-              mnemonic#"\t$src, $addr", 
+              mnemonic#"\t$src, $addr",
               [(opNode cls1:$src, addr:$addr)]> {
   field bits<32> Inst;
 
@@ -179,8 +203,8 @@ class InstStore<string mnemonic, bits<7> op, bits<3> funct3,
 class InstI<string mnemonic, bits<7> op, bits<3> funct3,
             SDPatternOperator operator, RegisterOperand cls1, RegisterOperand cls2,
             Immediate imm>
-  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2), 
-                mnemonic#"\t$dst, $src1, $src2", 
+  : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, imm:$src2),
+                mnemonic#"\t$dst, $src1, $src2",
                 [(set cls1:$dst, (operator cls2:$src1, imm:$src2))]> {
   field bits<32> Inst;
 
@@ -198,8 +222,8 @@ class InstI<string mnemonic, bits<7> op, bits<3> funct3,
 //ISYS-Type
 class InstISYS<string mnemonic, bits<12> funct12,
              RegisterOperand cls1>
-  : InstRISCV<4, (outs cls1:$dst), (ins), 
-                mnemonic#"\t$dst", 
+  : InstRISCV<4, (outs cls1:$dst), (ins),
+                mnemonic#"\t$dst",
                 []> {
   field bits<32> Inst;
 

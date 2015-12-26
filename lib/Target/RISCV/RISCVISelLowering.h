@@ -125,6 +125,9 @@ public:
   unsigned
   getExceptionSelectorRegister(const Constant *PersonalityFn) const override;
 
+  bool enableAggressiveFMAFusion(EVT VT) const override {
+    return true;
+  }
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
   bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
   const char *getTargetNodeName(unsigned Opcode) const override;
