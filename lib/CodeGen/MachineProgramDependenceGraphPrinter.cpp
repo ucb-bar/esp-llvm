@@ -119,8 +119,11 @@ struct MachineProgramDependenceGraphPrinter
 char MachineProgramDependenceGraphPrinter::ID = 0;
 } //end anonymous namespace
 
-INITIALIZE_PASS(MachineProgramDependenceGraphPrinter, "dot-pdg",
-                "Print the pdf of function to 'dot' file", true, true)
+INITIALIZE_PASS_BEGIN(MachineProgramDependenceGraphPrinter, "dot-pdg",
+                "Print the pdg of function to 'dot' file", true, true)
+INITIALIZE_PASS_DEPENDENCY(MachineProgramDependenceGraph)
+INITIALIZE_PASS_END(MachineProgramDependenceGraphPrinter, "dot-pdg",
+                "Print the pdg of function to 'dot' file", true, true)
 
 MachineFunctionPass* llvm::createMachineProgramDependenceGraphPrinterPass() {
   return new MachineProgramDependenceGraphPrinter();
