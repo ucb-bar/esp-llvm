@@ -297,3 +297,5 @@ def disp20imm32 : Operand<i32>;
 def disp20imm64 : Operand<i64>;
 
 // Custom Operands
+
+def pred : PredicateOperand<i1, (ops VPR), (ops vp0)>;

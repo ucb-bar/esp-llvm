@@ -42,6 +42,32 @@ multiclass InstVR3<string name, SDPatternOperator op, RegisterOperand typ> {
   }
 }
 
+multiclass InstVR3Cmp<string name, SDPatternOperator op> {
+  let isPseudo = 1, isCodeGenOnly = 1 in {
+  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2),
+    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
+  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2),
+    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
+  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2),
+    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
+  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2),
+    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
+  }
+}
+
+multiclass InstVR3CmpSwitch<string name, SDPatternOperator op> {
+  let isPseudo = 1, isCodeGenOnly = 1 in {
+  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2),
+    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
+  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2),
+    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
+  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2),
+    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
+  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2),
+    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
+  }
+}
+
 multiclass InstVR3Int<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
   def _VVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2),
@@ -110,12 +136,12 @@ def VMSA : InstV<(outs VAR:$dest), (ins GR64:$src), "vmsa\t$dest,$src",
 
 //Vector Memory Ops
 let mayLoad = 1 in {
-  def VLXW : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxw\t$dest, $src1, $src2", [(set VVW:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXW : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxw\t$dest, $src1, $src2", [(set VVW:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXD_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2),
              "vlxd\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXW_F : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxw\t$dest, $src1, $src2", [(set VVW:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXW_F : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxw\t$dest, $src1, $src2", [(set VVW:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXH_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2),
              "vlxh\t$dest, $src1, $src2", [(set VVH:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXHU_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2),
@@ -254,11 +280,20 @@ let isPseudo = 1 in {
   defm VFSUB_RAS_RDY : InstVR3<"vfsub.s", fsub, VVR>, Requires<[HasXhwacha]>;
   def VSXW_RAS_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3),
              "vsxw\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXW_RAS_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxw\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXW_RAS_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxw\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   //Predicate Instructions
   def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset\t$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
+  def VPCLEAR  : InstV<(outs VPR:$dest), (ins), "vpclear\t$dest",[(set VPR:$dest, (i1 0))]>, Requires<[HasXhwacha]>;
+  def VPANDAND  : InstV<(outs VPR:$dest), (ins VPR:$in1, VPR:$in2, VPR:$in3), "vpandand\t$dest, $in1, $in2, $in3",[(set VPR:$dest, (and VPR:$in1, (and VPR:$in2, VPR:$in3)))]>, Requires<[HasXhwacha]>;
+
+  //compare instructions
+  defm VCMPEQ  : InstVR3Cmp<"vcmpeq",  seteq>;
+  defm VCMPLT  : InstVR3Cmp<"vcmplt",  setlt>;
+  defm VCMPLTU : InstVR3Cmp<"vcmpltu", setult>;
+  defm VCMPGT  : InstVR3CmpSwitch<"vcmplt",  setgt>;
+  defm VCMPGTU : InstVR3CmpSwitch<"vcmpltu", setugt>;
 }
 
 

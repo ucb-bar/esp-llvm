@@ -146,7 +146,7 @@ def : Pat<(brind i64:$dst), (JALR64 $dst, 0)>, Requires<[IsRV64]>;
 
 //Conditional Branches
 //TODO:refactor to class
-let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
+let isBranch = 1, isTerminator = 1 in {
   def BEQ64 : InstB<0b1100011, 0b000, (outs), 
               (ins brtarget:$target, GR64:$src1, GR64:$src2), 
               "beq\t$src1, $src2, $target", 

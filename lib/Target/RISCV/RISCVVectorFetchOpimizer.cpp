@@ -71,6 +71,7 @@ namespace {
 namespace {
   struct RISCVVectorFetchMachOpt : public MachineFunctionPass {
     MachineScalarization       *MS;
+    MachineProgramDependenceGraph *PDG;
     const RISCVInstrInfo     *TII;
   public:
     static char ID;
@@ -84,10 +85,12 @@ namespace {
     const char *getPassName() const override { return "RISCV Vector Fetch MachOpt"; }
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
+      AU.addRequired<MachineProgramDependenceGraph>();
       AU.addRequired<MachineScalarization>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
     virtual void processOpenCLKernel(MachineFunction &MF);
+    virtual void convertToPredicates(MachineFunction &MF);
   };
 
   char RISCVVectorFetchMachOpt::ID = 0;
@@ -540,10 +543,13 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
   MS = &getAnalysis<MachineScalarization>();
+  PDG = &getAnalysis<MachineProgramDependenceGraph>();
   TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
 
-  if(isOpenCLKernelFunction(*(MF.getFunction())))
+  if(isOpenCLKernelFunction(*(MF.getFunction()))) {
     processOpenCLKernel(MF);
+    convertToPredicates(MF);
+  }
 
   return Changed;
 }
@@ -554,6 +560,12 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
   const TargetRegisterInfo &TRI = *MF.getSubtarget().getRegisterInfo();
 
   std::vector<unsigned> vregs;
+  // add vpset vp0 at start of function
+  MachineBasicBlock &entryBlock = MF.front();
+  MachineBasicBlock::iterator entryBegin = entryBlock.begin();
+  DebugLoc entryDL = entryBegin != entryBlock.end() ? entryBegin->getDebugLoc() : DebugLoc();
+  unsigned defPredReg = MRI.createVirtualRegister(&RISCV::VPRBitRegClass);
+  BuildMI(entryBlock, entryBegin, entryDL, TII.get(RISCV::VPSET), defPredReg);
   for (MachineFunction::iterator MFI = MF.begin(), MFE = MF.end(); MFI != MFE;
        ++MFI) {
     vregs.clear();
@@ -1073,6 +1085,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
             // Shift vector portion to second src
             I->getOperand(2).ChangeToRegister(I->getOperand(1).getReg(), false);
             I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
+            I->addOperand(MF, MachineOperand::CreateReg(defPredReg, false));
           }
           break;
         case RISCV::FLD64 :
@@ -1677,6 +1690,77 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF) {
       }
     }
     //end of bb loop
+  }
+  MF.dump();
+}
+
+void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF) {
+  MF.dump();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  // pseudo algo
+  // 1. turn terminators into predicates (keep track of bb->pred mapping)
+  // 2. for each basic block look up cdg parent and use that predicate reg
+  // 2a. This may require a negation of the predicate
+  // 3. basic blocks with zero cds size just use vp0
+
+  std::map<const MachineBasicBlock*, unsigned> bbToPred;
+  // Terminator -> predication loop
+  for (auto &MBB : MF) {
+    auto term = MBB.getFirstTerminator();
+    if(term == MBB.end())
+      continue; // pure fall through bb needs no change
+    if(!term->isConditionalBranch())
+      continue; // only conditional terms needs change
+    unsigned opcode;
+    switch(term->getOpcode()) {
+      case RISCV::BEQ64:
+      case RISCV::BEQ:
+        opcode = RISCV::VCMPEQ_VV;
+        break;
+      case RISCV::BLT64:
+      case RISCV::BLT:
+        opcode = RISCV::VCMPLT_VV;
+        break;
+      case RISCV::BLTU64:
+      case RISCV::BLTU:
+        opcode = RISCV::VCMPLTU_VV;
+        break;
+      // Synthesized branches via lhs, rhs reversal
+      case RISCV::BGT64:
+      case RISCV::BGT:
+        opcode = RISCV::VCMPGT_VV;
+        break;
+      case RISCV::BGTU64:
+      case RISCV::BGTU:
+        opcode = RISCV::VCMPGTU_VV;
+        break;
+      // Synthesized branches via output negation
+      default:
+        continue;
+    }
+    unsigned predReg = MRI.createVirtualRegister(&RISCV::VPRBitRegClass);
+    BuildMI(MBB, term, term->getDebugLoc(), TII->get(opcode),predReg).addReg(term->getOperand(1).getReg()).addReg(term->getOperand(2).getReg());
+    // track result predicate reg
+    bbToPred.insert(std::make_pair(&MBB, predReg));
+  }
+  for (auto &MBB : MF) {
+    MachinePDGNode *res = PDG->BBtoCDS.find(&MBB)->second;
+    if(res->cds.size() > 0) {
+      // This node has a predicate
+      for(MachineProgramDependenceGraph::CDSet::iterator pdi =
+           res->cds.begin(), pde =
+           res->cds.end(); pdi != pde; ++pdi){
+        auto predItr = bbToPred.find(pdi->first);
+        if(predItr == bbToPred.end())
+          continue;// TODO: this shouldn't happen once all terminators are handled
+        unsigned predReg = predItr->second;
+        unsigned destReg = MRI.createVirtualRegister(&RISCV::VPRBitRegClass);
+        if(pdi->second)
+          BuildMI(MBB, MBB.getFirstNonPHI(),DebugLoc(),TII->get(RISCV::VPANDAND),destReg).addReg(predReg).addReg(predReg).addReg(predReg);
+        else
+          BuildMI(MBB, MBB.getFirstNonPHI(),DebugLoc(),TII->get(RISCV::VPANDAND),destReg).addReg(predReg).addReg(predReg).addReg(predReg);
+      }
+    }
   }
   MF.dump();
 }
