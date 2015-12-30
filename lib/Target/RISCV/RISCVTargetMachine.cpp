@@ -127,6 +127,8 @@ void RISCVPassConfig::addPreEmitPass(){
 }
 
 void RISCVPassConfig::addPreRegAlloc(){
+  //addPass(createMachineProgramDependenceGraphPass());
+  addPass(createMachineProgramDependenceGraphPrinterPass());
   addPass(createRISCVVectorFetchMachOpt());
 }
 

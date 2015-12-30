@@ -96,7 +96,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF, MachineBasicBlock &MB
 
   bool isOpenCLKernel = isOpenCLKernelFunction(*(MF.getFunction()));
   if(isOpenCLKernel)
-    BuildMI(MBB, MBBI, dl, TII.get(RISCV::VPSET), RISCV::vp0);
+    return;
 
   // First, compute final stack size.
   uint64_t StackSize = MFI->getStackSize();

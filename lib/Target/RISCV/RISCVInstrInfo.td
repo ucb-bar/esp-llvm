@@ -147,7 +147,7 @@ def : Pat<(brind i32:$dst), (JALR 0, $dst)>, Requires<[IsRV32]>;
 
 //Conditional Branches
 //TODO:refactor to class
-let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
+let isBranch = 1, isTerminator = 1 in {
   def BEQ : InstB<0b1100011, 0b000, (outs), 
               (ins brtarget:$target, GR32:$src1, GR32:$src2), 
               "beq\t$src1, $src2, $target", 
