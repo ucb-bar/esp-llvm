@@ -452,7 +452,8 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     Opcode = RISCV::VADD_VVS;
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc))
-      .addReg(RISCV::vs0, getKillRegState(KillSrc));
+      .addReg(RISCV::vs0, getKillRegState(KillSrc))
+      .addReg(RISCV::vp0); //TODO: do copy's need to be predicated
     return;
   }else
     llvm_unreachable("Impossible reg-to-reg copy");
