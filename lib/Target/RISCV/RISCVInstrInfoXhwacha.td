@@ -18,10 +18,10 @@ class InstV<dag outs, dag ins, string mnemonic, list<dag> pattern>
 
 multiclass InstVR2<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1),
-    name#"\t$dst, $src1", [(set VVR:$dst, (op VVR:$src1))]>;
-  def _VS : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1),
-    name#"\t$dst, $src1", [(set VVR:$dst, (op VSR:$src1))]>;
+  def _VV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1", [(set VVR:$dst, (op VVR:$src1))]>;
+  def _VS : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1", [(set VVR:$dst, (op VSR:$src1))]>;
   def _SS : InstRISCV<4, (outs VSR:$dst), (ins VSR:$src1),
     name#"\t$dst, $src1", [(set VSR:$dst, (op VSR:$src1))]>;
   }
@@ -29,14 +29,14 @@ multiclass InstVR2<string name, SDPatternOperator op> {
 
 multiclass InstVR3<string name, SDPatternOperator op, RegisterOperand typ> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VVV : InstRISCV<4, (outs typ:$dst), (ins typ:$src1, typ:$src2),
-    name#"\t$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, typ:$src2))]>;
-  def _VVS : InstRISCV<4, (outs typ:$dst), (ins typ:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, VSR:$src2))]>;
-  def _VSV : InstRISCV<4, (outs typ:$dst), (ins VSR:$src1, typ:$src2),
-    name#"\t$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, typ:$src2))]>;
-  def _VSS : InstRISCV<4, (outs typ:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, VSR:$src2))]>;
+  def _VVV : InstRISCV<4, (outs typ:$dst), (ins typ:$src1, typ:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, typ:$src2))]>;
+  def _VVS : InstRISCV<4, (outs typ:$dst), (ins typ:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, VSR:$src2))]>;
+  def _VSV : InstRISCV<4, (outs typ:$dst), (ins VSR:$src1, typ:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, typ:$src2))]>;
+  def _VSS : InstRISCV<4, (outs typ:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, VSR:$src2))]>;
   def _SSS : InstRISCV<4, (outs VSR:$dst), (ins VSR:$src1, VSR:$src2),
     name#"\t$dst, $src1, $src2", [(set VSR:$dst, (op VSR:$src1, VSR:$src2))]>;
   }
@@ -44,40 +44,40 @@ multiclass InstVR3<string name, SDPatternOperator op, RegisterOperand typ> {
 
 multiclass InstVR3Cmp<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
-  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
-  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
-  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
+  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
+  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
+  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
+  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
   }
 }
 
 multiclass InstVR3CmpSwitch<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2),
-    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
-  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2),
-    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
-  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2),
-    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
-  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
+  def _VV : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))]>;
+  def _VS : InstRISCV<4, (outs VPR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))]>;
+  def _SV : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))]>;
+  def _SS : InstRISCV<4, (outs VPR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))]>;
   }
 }
 
 multiclass InstVR3Int<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VVR:$src2)))]>;
-  def _VVS : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VSR:$src2)))]>;
-  def _VSV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VVR:$src2)))]>;
-  def _VSS : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VSR:$src2)))]>;
+  def _VVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VVR:$src2)))]>;
+  def _VVS : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VSR:$src2)))]>;
+  def _VSV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VVR:$src2)))]>;
+  def _VSS : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VSR:$src2)))]>;
   def _SSS : InstRISCV<4, (outs VSR:$dst), (ins VSR:$src1, VSR:$src2),
     name#"\t$dst, $src1, $src2", [(set VSR:$dst, (op (i64 VSR:$src1), (i64 VSR:$src2)))]>;
   }
@@ -85,22 +85,22 @@ multiclass InstVR3Int<string name, SDPatternOperator op> {
 
 multiclass InstVR4<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1 in {
-  def _VVVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VVR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VVR:$src3))]>;
-  def _VVSV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VVR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VVR:$src3))]>;
-  def _VSVV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VVR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VVR:$src3))]>;
-  def _VSSV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VVR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VVR:$src3))]>;
-  def _VVVS: InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VSR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VSR:$src3))]>;
-  def _VVSS: InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VSR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VSR:$src3))]>;
-  def _VSVS: InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VSR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VSR:$src3))]>;
-  def _VSSS: InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VSR:$src3),
-    name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VSR:$src3))]>;
+  def _VVVV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VVR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VVR:$src3))]>;
+  def _VVSV : InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VVR:$src3))]>;
+  def _VSVV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VVR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VVR:$src3))]>;
+  def _VSSV : InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VVR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VVR:$src3))]>;
+  def _VVVS: InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VSR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VSR:$src3))]>;
+  def _VVSS: InstRISCV<4, (outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VSR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VSR:$src3))]>;
+  def _VSVS: InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VSR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VSR:$src3))]>;
+  def _VSSS: InstRISCV<4, (outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VSR:$src3, pred:$p),
+    "@$p\t"#name#"\t$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VSR:$src3))]>;
   def _SSSS : InstRISCV<4, (outs VSR:$dst), (ins VSR:$src1, VSR:$src2, VSR:$src3),
     name#"\t$dst, $src1, $src2, $src3", [(set VSR:$dst, (op VSR:$src1, VSR:$src2, VSR:$src3))]>;
   }
@@ -138,17 +138,25 @@ def VMSA : InstV<(outs VAR:$dest), (ins GR64:$src), "vmsa\t$dest,$src",
 let mayLoad = 1 in {
   def VLXW : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw\t$dest, $src1, $src2", [(set VVW:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXD_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxd\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXH : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxh\t$dest, $src1, $src2", [(set VVH:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXHU : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxhu\t$dest, $src1, $src2", [(set VVH:$dest, (i64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXD_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxd\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXW_F : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw\t$dest, $src1, $src2", [(set VVW:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXH_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxh\t$dest, $src1, $src2", [(set VVH:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXHU_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2),
-             "vlxhu\t$dest, $src1, $src2", [(set VVH:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXH_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxh\t$dest, $src1, $src2", [(set VVH:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLXHU_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+             "@$p\tvlxhu\t$dest, $src1, $src2", [(set VVH:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   def VLSW : InstV<(outs VSR:$dest), (ins VSR:$src1),
              "vlsw\t$dest, $src1", [(set VSR:$dest, (i64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLSH : InstV<(outs VSR:$dest), (ins VSR:$src1),
+             "vlsh\t$dest, $src1", [(set VSR:$dest, (i64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VLSHU : InstV<(outs VSR:$dest), (ins VSR:$src1),
+             "vlshu\t$dest, $src1", [(set VSR:$dest, (i64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLSD_F : InstV<(outs VSR:$dest), (ins VSR:$src1),
              "vlsd\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLSW_F : InstV<(outs VSR:$dest), (ins VSR:$src1),
@@ -159,29 +167,33 @@ let mayLoad = 1 in {
              "vlshu\t$dest, $src1", [(set VSR:$dest, (f64 (load VSR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   let isVariant = 1 in {
-    def VLD : InstV<(outs VVR:$dest), (ins VAR:$src1),
-               "vld\t$dest, $src1", [(set VVR:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLW : InstV<(outs VVW:$dest), (ins VAR:$src1),
-               "vlw\t$dest, $src1", [(set VVW:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLD_F : InstV<(outs VVR:$dest), (ins VAR:$src1),
-               "vld\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLW_F : InstV<(outs VVW:$dest), (ins VAR:$src1),
-               "vlw\t$dest, $src1", [(set VVW:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLH_F : InstV<(outs VVH:$dest), (ins VAR:$src1),
-               "vlh\t$dest, $src1", [(set VVH:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLHU_F : InstV<(outs VVH:$dest), (ins VAR:$src1),
-               "vlhu\t$dest, $src1", [(set VVH:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLD : InstV<(outs VVR:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvld\t$dest, $src1", [(set VVR:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLW : InstV<(outs VVW:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlw\t$dest, $src1", [(set VVW:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLH : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlh\t$dest, $src1", [(set VVH:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLHU : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlhu\t$dest, $src1", [(set VVH:$dest, (i64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLD_F : InstV<(outs VVR:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvld\t$dest, $src1", [(set VVR:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLW_F : InstV<(outs VVW:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlw\t$dest, $src1", [(set VVW:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLH_F : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlh\t$dest, $src1", [(set VVH:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VLHU_F : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
+               "@$p\tvlhu\t$dest, $src1", [(set VVH:$dest, (f64 (load VAR:$src1)))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   }
 }
 let mayStore = 1 in {
-  def VSXW : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3),
-             "vsxw\t $src1, $src2, $src3", [(store (i64 VVW:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VSXD_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3),
-             "vsxd\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VSXW_F : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3),
-             "vsxw\t $src1, $src2, $src3", [(store (f64 VVW:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VSXH_F : InstV<(outs), (ins VVH:$src1, VSR:$src2, VVR:$src3),
-             "vsxh\t $src1, $src2, $src3", [(store (f64 VVH:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXW : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3, pred:$p),
+             "@$p\tvsxw\t $src1, $src2, $src3", [(store (i64 VVW:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXD_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
+             "@$p\tvsxd\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXW_F : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3, pred:$p),
+             "@$p\tvsxw\t $src1, $src2, $src3", [(store (f64 VVW:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXH_F : InstV<(outs), (ins VVH:$src1, VSR:$src2, VVR:$src3, pred:$p),
+             "@$p\tvsxh\t $src1, $src2, $src3", [(store (f64 VVH:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   def VSSW : InstV<(outs), (ins VSR:$src1, VSR:$src2),
              "vssw\t $src1, $src2", [(store (i64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -193,14 +205,14 @@ let mayStore = 1 in {
              "vssh\t $src1, $src2", [(store (f64 VSR:$src1), VSR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   let isVariant = 1 in {
-    def VSW : InstV<(outs), (ins VVW:$src1, VAR:$src2),
-               "vsw\t $src1, $src2", [(store (i64 VVW:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VSD_F : InstV<(outs), (ins VVR:$src1, VAR:$src2),
-               "vsd\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VSW_F : InstV<(outs), (ins VVW:$src1, VAR:$src2),
-               "vsw\t $src1, $src2", [(store (f64 VVW:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VSH_F : InstV<(outs), (ins VVH:$src1, VAR:$src2),
-               "vsh\t $src1, $src2", [(store (f64 VVH:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSW : InstV<(outs), (ins VVW:$src1, VAR:$src2, pred:$p),
+               "@$p\tvsw\t $src1, $src2", [(store (i64 VVW:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSD_F : InstV<(outs), (ins VVR:$src1, VAR:$src2, pred:$p),
+               "@$p\tvsd\t $src1, $src2", [(store (f64 VVR:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSW_F : InstV<(outs), (ins VVW:$src1, VAR:$src2, pred:$p),
+               "@$p\tvsw\t $src1, $src2", [(store (f64 VVW:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+    def VSH_F : InstV<(outs), (ins VVH:$src1, VAR:$src2, pred:$p),
+               "@$p\tvsh\t $src1, $src2", [(store (f64 VVH:$src1), VAR:$src2)]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   }
   //def VSW : InstStore <"vsw"  , 0b0100011, 0b011, store, VR32, mem64>, Requires<[IsRV64]>; //vsw vx2, x2
   //def VSD : InstStore <"vsd"  , 0b0100011, 0b011, store, VR64, mem64>, Requires<[IsRV64, HasXhwacha]>;
@@ -278,8 +290,8 @@ let isPseudo = 1 in {
   defm VFMUL_RAS_RDY : InstVR3<"vfmul.s", fmul, VVR>, Requires<[HasXhwacha]>;
   defm VFADD_RAS_RDY : InstVR3<"vfadd.s", fadd, VVR>, Requires<[HasXhwacha]>;
   defm VFSUB_RAS_RDY : InstVR3<"vfsub.s", fsub, VVR>, Requires<[HasXhwacha]>;
-  def VSXW_RAS_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3),
-             "vsxw\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+  def VSXW_RAS_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
+             "@$p\tvsxw\t $src1, $src2, $src3", [(store (f64 VVR:$src1), (add VSR:$src2, VVR:$src3))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXW_RAS_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw\t$dest, $src1, $src2", [(set VVR:$dest, (f64 (load (add VSR:$src1, VVR:$src2))))]>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
