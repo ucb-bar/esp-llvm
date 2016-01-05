@@ -1,5 +1,4 @@
 ; RUN: llc -march=arm64 -enable-no-nans-fp-math < %s | FileCheck %s
-; RUN: llc -march=arm64 < %s | FileCheck %s --check-prefix=CHECK-SAFE
 
 define double @test_direct(float %in) {
 ; CHECK-LABEL: test_direct:
@@ -9,7 +8,6 @@ define double @test_direct(float %in) {
   ret double %longer
 
 ; CHECK: fmax
-; CHECK-SAFE: fmax
 }
 
 define double @test_cross(float %in) {
@@ -32,7 +30,6 @@ define double @test_cross_fail_nan(float %in) {
   ret double %longer
 
 ; CHECK: fmin
-; CHECK-SAFE: fcsel d0, d1, d0, mi
 }
 
 ; This isn't a min or a max, but passes the first condition for swapping the

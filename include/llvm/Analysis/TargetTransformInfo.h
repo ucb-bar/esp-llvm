@@ -42,11 +42,13 @@ class Value;
 /// \brief Information about a load/store intrinsic defined by the target.
 struct MemIntrinsicInfo {
   MemIntrinsicInfo()
-      : ReadMem(false), WriteMem(false), Vol(false), MatchingId(0),
+      : ReadMem(false), WriteMem(false), IsSimple(false), MatchingId(0),
         NumMemRefs(0), PtrVal(nullptr) {}
   bool ReadMem;
   bool WriteMem;
-  bool Vol;
+  /// True only if this memory operation is non-volatile, non-atomic, and
+  /// unordered.  (See LoadInst/StoreInst for details on each)
+  bool IsSimple;
   // Same Id is set by the target for corresponding load/store intrinsics.
   unsigned short MatchingId;
   int NumMemRefs;
@@ -310,12 +312,17 @@ public:
                              bool HasBaseReg, int64_t Scale,
                              unsigned AddrSpace = 0) const;
 
-  /// \brief Return true if the target works with masked instruction
-  /// AVX2 allows masks for consecutive load and store for i32 and i64 elements.
-  /// AVX-512 architecture will also allow masks for non-consecutive memory
-  /// accesses.
-  bool isLegalMaskedStore(Type *DataType, int Consecutive) const;
-  bool isLegalMaskedLoad(Type *DataType, int Consecutive) const;
+  /// \brief Return true if the target supports masked load/store
+  /// AVX2 and AVX-512 targets allow masks for consecutive load and store for
+  /// 32 and 64 bit elements.
+  bool isLegalMaskedStore(Type *DataType) const;
+  bool isLegalMaskedLoad(Type *DataType) const;
+
+  /// \brief Return true if the target supports masked gather/scatter
+  /// AVX-512 fully supports gather and scatter for vectors with 32 and 64
+  /// bits scalar type.
+  bool isLegalMaskedScatter(Type *DataType) const;
+  bool isLegalMaskedGather(Type *DataType) const;
 
   /// \brief Return the cost of the scaling factor used in the addressing
   /// mode represented by AM for this target, for a load/store
@@ -331,11 +338,6 @@ public:
   /// Ty2. e.g. On x86 it's free to truncate a i32 value in register EAX to i16
   /// by referencing its sub-register AX.
   bool isTruncateFree(Type *Ty1, Type *Ty2) const;
-
-  /// \brief Return true if it's free to zero extend a value of type Ty1 to type
-  /// Ty2. e.g. on x86-64, all instructions that define 32-bit values implicit
-  /// zero-extend the result out to 64 bits.
-  bool isZExtFree(Type *Ty1, Type *Ty2) const;
 
   /// \brief Return true if it is profitable to hoist instruction in the
   /// then/else to before if.
@@ -456,6 +458,16 @@ public:
   int getMaskedMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
                             unsigned AddressSpace) const;
 
+  /// \return The cost of Gather or Scatter operation
+  /// \p Opcode - is a type of memory access Load or Store
+  /// \p DataTy - a vector type of the data to be loaded or stored
+  /// \p Ptr - pointer [or vector of pointers] - address[es] in memory
+  /// \p VariableMask - true when the memory access is predicated with a mask
+  ///                   that is not a compile-time constant
+  /// \p Alignment - alignment of single element
+  int getGatherScatterOpCost(unsigned Opcode, Type *DataTy, Value *Ptr,
+                             bool VariableMask, unsigned Alignment) const;
+
   /// \return The cost of the interleaved memory operation.
   /// \p Opcode is the memory operation code
   /// \p VecTy is the vector type of the interleaved access.
@@ -483,9 +495,13 @@ public:
   ///  ((v0+v2), (v1+v3), undef, undef)
   int getReductionCost(unsigned Opcode, Type *Ty, bool IsPairwiseForm) const;
 
-  /// \returns The cost of Intrinsic instructions.
+  /// \returns The cost of Intrinsic instructions. Types analysis only.
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                             ArrayRef<Type *> Tys) const;
+
+  /// \returns The cost of Intrinsic instructions. Analyses the real arguments.
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                            ArrayRef<Value *> Args) const;
 
   /// \returns The cost of Call instructions.
   int getCallInstrCost(Function *F, Type *RetTy, ArrayRef<Type *> Tys) const;
@@ -568,13 +584,14 @@ public:
                                      int64_t BaseOffset, bool HasBaseReg,
                                      int64_t Scale,
                                      unsigned AddrSpace) = 0;
-  virtual bool isLegalMaskedStore(Type *DataType, int Consecutive) = 0;
-  virtual bool isLegalMaskedLoad(Type *DataType, int Consecutive) = 0;
+  virtual bool isLegalMaskedStore(Type *DataType) = 0;
+  virtual bool isLegalMaskedLoad(Type *DataType) = 0;
+  virtual bool isLegalMaskedScatter(Type *DataType) = 0;
+  virtual bool isLegalMaskedGather(Type *DataType) = 0;
   virtual int getScalingFactorCost(Type *Ty, GlobalValue *BaseGV,
                                    int64_t BaseOffset, bool HasBaseReg,
                                    int64_t Scale, unsigned AddrSpace) = 0;
   virtual bool isTruncateFree(Type *Ty1, Type *Ty2) = 0;
-  virtual bool isZExtFree(Type *Ty1, Type *Ty2) = 0;
   virtual bool isProfitableToHoist(Instruction *I) = 0;
   virtual bool isTypeLegal(Type *Ty) = 0;
   virtual unsigned getJumpBufAlignment() = 0;
@@ -611,6 +628,9 @@ public:
   virtual int getMaskedMemoryOpCost(unsigned Opcode, Type *Src,
                                     unsigned Alignment,
                                     unsigned AddressSpace) = 0;
+  virtual int getGatherScatterOpCost(unsigned Opcode, Type *DataTy,
+                                     Value *Ptr, bool VariableMask,
+                                     unsigned Alignment) = 0;
   virtual int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
                                          unsigned Factor,
                                          ArrayRef<unsigned> Indices,
@@ -620,6 +640,8 @@ public:
                                bool IsPairwiseForm) = 0;
   virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                                     ArrayRef<Type *> Tys) = 0;
+  virtual int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                                    ArrayRef<Value *> Args) = 0;
   virtual int getCallInstrCost(Function *F, Type *RetTy,
                                ArrayRef<Type *> Tys) = 0;
   virtual unsigned getNumberOfParts(Type *Tp) = 0;
@@ -693,11 +715,17 @@ public:
     return Impl.isLegalAddressingMode(Ty, BaseGV, BaseOffset, HasBaseReg,
                                       Scale, AddrSpace);
   }
-  bool isLegalMaskedStore(Type *DataType, int Consecutive) override {
-    return Impl.isLegalMaskedStore(DataType, Consecutive);
+  bool isLegalMaskedStore(Type *DataType) override {
+    return Impl.isLegalMaskedStore(DataType);
   }
-  bool isLegalMaskedLoad(Type *DataType, int Consecutive) override {
-    return Impl.isLegalMaskedLoad(DataType, Consecutive);
+  bool isLegalMaskedLoad(Type *DataType) override {
+    return Impl.isLegalMaskedLoad(DataType);
+  }
+  bool isLegalMaskedScatter(Type *DataType) override {
+    return Impl.isLegalMaskedScatter(DataType);
+  }
+  bool isLegalMaskedGather(Type *DataType) override {
+    return Impl.isLegalMaskedGather(DataType);
   }
   int getScalingFactorCost(Type *Ty, GlobalValue *BaseGV, int64_t BaseOffset,
                            bool HasBaseReg, int64_t Scale,
@@ -707,9 +735,6 @@ public:
   }
   bool isTruncateFree(Type *Ty1, Type *Ty2) override {
     return Impl.isTruncateFree(Ty1, Ty2);
-  }
-  bool isZExtFree(Type *Ty1, Type *Ty2) override {
-    return Impl.isZExtFree(Ty1, Ty2);
   }
   bool isProfitableToHoist(Instruction *I) override {
     return Impl.isProfitableToHoist(I);
@@ -785,6 +810,12 @@ public:
                             unsigned AddressSpace) override {
     return Impl.getMaskedMemoryOpCost(Opcode, Src, Alignment, AddressSpace);
   }
+  int getGatherScatterOpCost(unsigned Opcode, Type *DataTy,
+                             Value *Ptr, bool VariableMask,
+                             unsigned Alignment) override {
+    return Impl.getGatherScatterOpCost(Opcode, DataTy, Ptr, VariableMask,
+                                       Alignment);
+  }
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
                                  unsigned AddressSpace) override {
@@ -798,6 +829,10 @@ public:
   int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
                             ArrayRef<Type *> Tys) override {
     return Impl.getIntrinsicInstrCost(ID, RetTy, Tys);
+  }
+  int getIntrinsicInstrCost(Intrinsic::ID ID, Type *RetTy,
+                            ArrayRef<Value *> Args) override {
+    return Impl.getIntrinsicInstrCost(ID, RetTy, Args);
   }
   int getCallInstrCost(Function *F, Type *RetTy,
                        ArrayRef<Type *> Tys) override {
@@ -861,7 +896,7 @@ public:
   ///
   /// The callback will be called with a particular function for which the TTI
   /// is needed and must return a TTI object for that function.
-  TargetIRAnalysis(std::function<Result(Function &)> TTICallback);
+  TargetIRAnalysis(std::function<Result(const Function &)> TTICallback);
 
   // Value semantics. We spell out the constructors for MSVC.
   TargetIRAnalysis(const TargetIRAnalysis &Arg)
@@ -877,7 +912,7 @@ public:
     return *this;
   }
 
-  Result run(Function &F);
+  Result run(const Function &F);
 
 private:
   static char PassID;
@@ -892,10 +927,10 @@ private:
   /// the analysis and thus use a function_ref which would be lighter weight.
   /// This may also be less error prone as the callback is likely to reference
   /// the external TargetMachine, and that reference needs to never dangle.
-  std::function<Result(Function &)> TTICallback;
+  std::function<Result(const Function &)> TTICallback;
 
   /// \brief Helper function used as the callback in the default constructor.
-  static Result getDefaultTTI(Function &F);
+  static Result getDefaultTTI(const Function &F);
 };
 
 /// \brief Wrapper pass for TargetTransformInfo.
@@ -919,7 +954,7 @@ public:
 
   explicit TargetTransformInfoWrapperPass(TargetIRAnalysis TIRA);
 
-  TargetTransformInfo &getTTI(Function &F);
+  TargetTransformInfo &getTTI(const Function &F);
 };
 
 /// \brief Create an analysis pass wrapper around a TTI object.

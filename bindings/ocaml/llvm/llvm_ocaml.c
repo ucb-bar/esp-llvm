@@ -940,6 +940,17 @@ CAMLprim value llvm_set_linkage(value Linkage, LLVMValueRef Global) {
   return Val_unit;
 }
 
+/* llvalue -> bool */
+CAMLprim value llvm_unnamed_addr(LLVMValueRef Global) {
+  return Val_bool(LLVMHasUnnamedAddr(Global));
+}
+
+/* bool -> llvalue -> unit */
+CAMLprim value llvm_set_unnamed_addr(value UseUnnamedAddr, LLVMValueRef Global) {
+  LLVMSetUnnamedAddr(Global, Bool_val(UseUnnamedAddr));
+  return Val_unit;
+}
+
 /* llvalue -> string */
 CAMLprim value llvm_section(LLVMValueRef Global) {
   return caml_copy_string(LLVMGetSection(Global));
@@ -1745,7 +1756,7 @@ CAMLprim LLVMValueRef llvm_build_invoke_bc(value Args[], int NumArgs) {
 CAMLprim LLVMValueRef llvm_build_landingpad(LLVMTypeRef Ty, LLVMValueRef PersFn,
                                             value NumClauses,  value Name,
                                             value B) {
-    return LLVMBuildLandingPad(Builder_val(B), Ty, Int_val(NumClauses),
+    return LLVMBuildLandingPad(Builder_val(B), Ty, PersFn, Int_val(NumClauses),
                                String_val(Name));
 }
 

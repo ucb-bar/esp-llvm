@@ -302,7 +302,7 @@ class RISCVAsmParser : public MCTargetAsmParser {
 #include "RISCVGenAsmMatcher.inc"
 
 private:
-  MCSubtargetInfo &STI;
+  const MCSubtargetInfo &STI;
   MCAsmParser &Parser;
   struct Register {
     char Prefix;
@@ -330,9 +330,9 @@ private:
   bool parseOperand(OperandVector &Operands, StringRef Mnemonic);
 
 public:
-  RISCVAsmParser(MCSubtargetInfo &sti, MCAsmParser &parser,
+  RISCVAsmParser(const MCSubtargetInfo &sti, MCAsmParser &parser,
                  const MCInstrInfo &MII, const MCTargetOptions &Options)
-      : MCTargetAsmParser(Options), STI(sti), Parser(parser) {
+      : MCTargetAsmParser(Options, sti), STI(sti), Parser(parser) {
     MCAsmParserExtension::Initialize(Parser);
 
     // Initialize the set of available features.

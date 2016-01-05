@@ -72,14 +72,14 @@ bool RISCVBSel::runOnMachineFunction(MachineFunction &Fn) {
   unsigned FuncSize = 0;
   for (MachineFunction::iterator MFI = Fn.begin(), E = Fn.end(); MFI != E;
        ++MFI) {
-    MachineBasicBlock *MBB = MFI;
+    MachineBasicBlock &MBB = *MFI;
 
     unsigned BlockSize = 0;
-    for (MachineBasicBlock::iterator MBBI = MBB->begin(), EE = MBB->end();
+    for (MachineBasicBlock::iterator MBBI = MBB.begin(), EE = MBB.end();
          MBBI != EE; ++MBBI)
       BlockSize += TII->GetInstSizeInBytes(MBBI);
     
-    BlockSizes[MBB->getNumber()] = BlockSize;
+    BlockSizes[MBB.getNumber()] = BlockSize;
     FuncSize += BlockSize;
   }
   

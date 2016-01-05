@@ -17,6 +17,7 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/CodeGen/SelectionDAG.h"
@@ -95,6 +96,9 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
 
       SDValue SpillSlot = Builder.DAG.CreateStackTemporary(ValueType);
       const unsigned FI = cast<FrameIndexSDNode>(SpillSlot)->getIndex();
+      auto *MFI = Builder.DAG.getMachineFunction().getFrameInfo();
+      MFI->markAsStatepointSpillSlotObjectIndex(FI);
+
       Builder.FuncInfo.StatepointStackSlots.push_back(FI);
       AllocatedStackSlots.push_back(true);
       return SpillSlot;
@@ -283,7 +287,7 @@ static void removeDuplicatesGCPtrs(SmallVectorImpl<const Value *> &Bases,
 /// call node. Also update NodeMap so that getValue(statepoint) will
 /// reference lowered call result
 static SDNode *
-lowerCallFromStatepoint(ImmutableStatepoint ISP, MachineBasicBlock *LandingPad,
+lowerCallFromStatepoint(ImmutableStatepoint ISP, const BasicBlock *EHPadBB,
                         SelectionDAGBuilder &Builder,
                         SmallVectorImpl<SDValue> &PendingExports) {
 
@@ -316,7 +320,7 @@ lowerCallFromStatepoint(ImmutableStatepoint ISP, MachineBasicBlock *LandingPad,
   SDValue ReturnValue, CallEndVal;
   std::tie(ReturnValue, CallEndVal) = Builder.lowerCallOperands(
       ISP.getCallSite(), ImmutableStatepoint::CallArgsBeginPos,
-      ISP.getNumCallArgs(), ActualCallee, DefTy, LandingPad,
+      ISP.getNumCallArgs(), ActualCallee, DefTy, EHPadBB,
       false /* IsPatchPoint */);
 
   SDNode *CallEnd = CallEndVal.getNode();
@@ -333,23 +337,31 @@ lowerCallFromStatepoint(ImmutableStatepoint ISP, MachineBasicBlock *LandingPad,
   //   ch, glue = callseq_end ch, glue
   //   get_return_value ch, glue
   //
-  // get_return_value can either be a CopyFromReg to grab the return value from
-  // %RAX, or it can be a LOAD to load a value returned by reference via a stack
-  // slot.
+  // get_return_value can either be a sequence of CopyFromReg instructions
+  // to grab the return value from the return register(s), or it can be a LOAD
+  // to load a value returned by reference via a stack slot.
 
-  if (HasDef && (CallEnd->getOpcode() == ISD::CopyFromReg ||
-                 CallEnd->getOpcode() == ISD::LOAD))
-    CallEnd = CallEnd->getOperand(0).getNode();
+  if (HasDef) {
+    if (CallEnd->getOpcode() == ISD::LOAD)
+      CallEnd = CallEnd->getOperand(0).getNode();
+    else
+      while (CallEnd->getOpcode() == ISD::CopyFromReg)
+        CallEnd = CallEnd->getOperand(0).getNode();
+  }
 
   assert(CallEnd->getOpcode() == ISD::CALLSEQ_END && "expected!");
 
-  if (HasDef) {
-    if (CS.isInvoke()) {
-      // Result value will be used in different basic block for invokes
-      // so we need to export it now. But statepoint call has a different type
-      // than the actual call. It means that standard exporting mechanism will
-      // create register of the wrong type. So instead we need to create
-      // register with correct type and save value into it manually.
+  // Export the result value if needed
+  const Instruction *GCResult = ISP.getGCResult();
+  if (HasDef && GCResult) {
+    if (GCResult->getParent() != CS.getParent()) {
+      // Result value will be used in a different basic block so we need to
+      // export it now.
+      // Default exporting mechanism will not work here because statepoint call
+      // has a different type than the actual call. It means that by default
+      // llvm will create export register of the wrong type (always i32 in our
+      // case). So instead we need to create export register with correct type
+      // manually.
       // TODO: To eliminate this problem we can remove gc.result intrinsics
       //       completely and make statepoint call to return a tuple.
       unsigned Reg = Builder.FuncInfo.CreateRegs(ISP.getActualReturnType());
@@ -363,8 +375,9 @@ lowerCallFromStatepoint(ImmutableStatepoint ISP, MachineBasicBlock *LandingPad,
       PendingExports.push_back(Chain);
       Builder.FuncInfo.ValueMap[CS.getInstruction()] = Reg;
     } else {
-      // The value of the statepoint itself will be the value of call itself.
-      // We'll replace the actually call node shortly.  gc_result will grab
+      // Result value will be used in a same basic block. Don't export it or
+      // perform any explicit register copies.
+      // We'll replace the actuall call node shortly. gc_result will grab
       // this value.
       Builder.setValue(CS.getInstruction(), ReturnValue);
     }
@@ -500,21 +513,21 @@ static void lowerStatepointMetaArgs(SmallVectorImpl<SDValue> &Ops,
   // to the GCStrategy from there (yet).
   GCStrategy &S = Builder.GFI->getStrategy();
   for (const Value *V : Bases) {
-    auto Opt = S.isGCManagedPointer(V);
+    auto Opt = S.isGCManagedPointer(V->getType());
     if (Opt.hasValue()) {
       assert(Opt.getValue() &&
              "non gc managed base pointer found in statepoint");
     }
   }
   for (const Value *V : Ptrs) {
-    auto Opt = S.isGCManagedPointer(V);
+    auto Opt = S.isGCManagedPointer(V->getType());
     if (Opt.hasValue()) {
       assert(Opt.getValue() &&
              "non gc managed derived pointer found in statepoint");
     }
   }
   for (const Value *V : Relocations) {
-    auto Opt = S.isGCManagedPointer(V);
+    auto Opt = S.isGCManagedPointer(V->getType());
     if (Opt.hasValue()) {
       assert(Opt.getValue() && "non gc managed pointer relocated");
     }
@@ -611,7 +624,8 @@ static void lowerStatepointMetaArgs(SmallVectorImpl<SDValue> &Ops,
       // uses of the corresponding values so that it would automatically
       // export them. Relocates of the spilled values does not use original
       // value.
-      if (StatepointSite.getCallSite().isInvoke())
+      if (RelocateOpers.getUnderlyingCallSite().getParent() !=
+          StatepointInstr->getParent())
         Builder.ExportFromCurrentBlock(V);
     }
   }
@@ -626,7 +640,7 @@ void SelectionDAGBuilder::visitStatepoint(const CallInst &CI) {
 }
 
 void SelectionDAGBuilder::LowerStatepoint(
-    ImmutableStatepoint ISP, MachineBasicBlock *LandingPad /*=nullptr*/) {
+    ImmutableStatepoint ISP, const BasicBlock *EHPadBB /*= nullptr*/) {
   // The basic scheme here is that information about both the original call and
   // the safepoint is encoded in the CallInst.  We create a temporary call and
   // lower it, then reverse engineer the calling sequence.
@@ -638,14 +652,12 @@ void SelectionDAGBuilder::LowerStatepoint(
   ImmutableCallSite CS(ISP.getCallSite());
 
 #ifndef NDEBUG
-  // Consistency check. Don't do this for invokes. It would be too
-  // expensive to preserve this information across different basic blocks
-  if (!CS.isInvoke()) {
-    for (const User *U : CS->users()) {
-      const CallInst *Call = cast<CallInst>(U);
-      if (isGCRelocate(Call))
-        StatepointLowering.scheduleRelocCall(*Call);
-    }
+  // Consistency check. Check only relocates in the same basic block as thier
+  // statepoint.
+  for (const User *U : CS->users()) {
+    const CallInst *Call = cast<CallInst>(U);
+    if (isGCRelocate(Call) && Call->getParent() == CS.getParent())
+      StatepointLowering.scheduleRelocCall(*Call);
   }
 #endif
 
@@ -666,7 +678,7 @@ void SelectionDAGBuilder::LowerStatepoint(
 
   // Get call node, we will replace it later with statepoint
   SDNode *CallNode =
-      lowerCallFromStatepoint(ISP, LandingPad, *this, PendingExports);
+      lowerCallFromStatepoint(ISP, EHPadBB, *this, PendingExports);
 
   // Construct the actual GC_TRANSITION_START, STATEPOINT, and GC_TRANSITION_END
   // nodes with all the appropriate arguments and return values.
@@ -827,8 +839,9 @@ void SelectionDAGBuilder::visitGCResult(const CallInst &CI) {
   Instruction *I = cast<Instruction>(CI.getArgOperand(0));
   assert(isStatepoint(I) && "first argument must be a statepoint token");
 
-  if (isa<InvokeInst>(I)) {
-    // For invokes we should have stored call result in a virtual register.
+  if (I->getParent() != CI.getParent()) {
+    // Statepoint is in different basic block so we should have stored call
+    // result in a virtual register.
     // We can not use default getValue() functionality to copy value from this
     // register because statepoint and actuall call return types can be
     // different, and getValue() will use CopyFromReg of the wrong type,
@@ -851,9 +864,10 @@ void SelectionDAGBuilder::visitGCRelocate(const CallInst &CI) {
 
 #ifndef NDEBUG
   // Consistency check
-  // We skip this check for invoke statepoints. It would be too expensive to
-  // preserve validation info through different basic blocks.
-  if (!RelocateOpers.isTiedToInvoke()) {
+  // We skip this check for relocates not in the same basic block as thier
+  // statepoint. It would be too expensive to preserve validation info through
+  // different basic blocks.
+  if (RelocateOpers.getStatepoint()->getParent() == CI.getParent()) {
     StatepointLowering.relocCallVisited(CI);
   }
 #endif

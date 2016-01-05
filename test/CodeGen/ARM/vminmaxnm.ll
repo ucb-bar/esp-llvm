@@ -2,8 +2,6 @@
 
 ; scalars
 
-; scalars
-
 define float @fp-armv8_vminnm_o(float %a, float %b) {
 ; CHECK-LABEL: "fp-armv8_vminnm_o":
 ; CHECK-NOT: vcmp
@@ -58,17 +56,6 @@ define float @fp-armv8_vminnm_ule(float %a, float %b) {
   ret float %cond
 }
 
-define float @fp-armv8_vminnm_ule(float %a, float %b) {
-; CHECK-FAST-LABEL: "fp-armv8_vminnm_ule":
-; CHECK-FAST-NOT: vcmp
-; CHECK-FAST: vminnm.f32
-; CHECK-LABEL: "fp-armv8_vminnm_ule":
-; CHECK-NOT: vminnm.f32
-  %cmp = fcmp ule float %a, %b
-  %cond = select i1 %cmp, float %a, float %b
-  ret float %cond
-}
-
 define float @fp-armv8_vminnm_u_rev(float %a, float %b) {
 ; CHECK-LABEL: "fp-armv8_vminnm_u_rev":
 ; CHECK-NOT: vcmp
@@ -105,17 +92,6 @@ define float @fp-armv8_vmaxnm_oge(float %a, float %b) {
   ret float %cond
 }
 
-define float @fp-armv8_vmaxnm_oge(float %a, float %b) {
-; CHECK-FAST-LABEL: "fp-armv8_vmaxnm_oge":
-; CHECK-FAST-NOT: vcmp
-; CHECK-FAST: vmaxnm.f32
-; CHECK-LABEL: "fp-armv8_vmaxnm_oge":
-; CHECK-NOT: vmaxnm.f32
-  %cmp = fcmp oge float %a, %b
-  %cond = select i1 %cmp, float %a, float %b
-  ret float %cond
-}
-
 define float @fp-armv8_vmaxnm_o_rev(float %a, float %b) {
 ; CHECK-LABEL: "fp-armv8_vmaxnm_o_rev":
 ; CHECK-NOT: vcmp
@@ -134,17 +110,6 @@ define float @fp-armv8_vmaxnm_ole_rev(float %a, float %b) {
   ret float %cond
 }
 
-define float @fp-armv8_vmaxnm_ole_rev(float %a, float %b) {
-; CHECK-FAST-LABEL: "fp-armv8_vmaxnm_ole_rev":
-; CHECK-FAST-NOT: vcmp
-; CHECK-FAST: vmaxnm.f32
-; CHECK-LABEL: "fp-armv8_vmaxnm_ole_rev":
-; CHECK-NOT: vmaxnm.f32
-  %cmp = fcmp ole float %a, %b
-  %cond = select i1 %cmp, float %b, float %a
-  ret float %cond
-}
-
 define float @fp-armv8_vmaxnm_u(float %a, float %b) {
 ; CHECK-LABEL: "fp-armv8_vmaxnm_u":
 ; CHECK-NOT: vcmp
@@ -159,17 +124,6 @@ define float @fp-armv8_vmaxnm_uge(float %a, float %b) {
 ; CHECK-NOT: vcmp
 ; CHECK: vmaxnm.f32
   %cmp = fcmp fast uge float %a, %b
-  %cond = select i1 %cmp, float %a, float %b
-  ret float %cond
-}
-
-define float @fp-armv8_vmaxnm_uge(float %a, float %b) {
-; CHECK-FAST-LABEL: "fp-armv8_vmaxnm_uge":
-; CHECK-FAST-NOT: vcmp
-; CHECK-FAST: vmaxnm.f32
-; CHECK-LABEL: "fp-armv8_vmaxnm_uge":
-; CHECK-NOT: vmaxnm.f32
-  %cmp = fcmp uge float %a, %b
   %cond = select i1 %cmp, float %a, float %b
   ret float %cond
 }

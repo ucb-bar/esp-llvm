@@ -65,8 +65,8 @@ typedef std::vector<uint8_t> DecoderTable;
 typedef uint32_t DecoderFixup;
 typedef std::vector<DecoderFixup> FixupList;
 typedef std::vector<FixupList> FixupScopeList;
-typedef SetVector<std::string> PredicateSet;
-typedef SetVector<std::string> DecoderSet;
+typedef SmallSetVector<std::string, 16> PredicateSet;
+typedef SmallSetVector<std::string, 16> DecoderSet;
 struct DecoderTableInfo {
   DecoderTable Table;
   FixupScopeList FixupStack;
@@ -1124,7 +1124,7 @@ unsigned FilterChooser::getDecoderIndex(DecoderSet &Decoders,
   // Using the full decoder string as the key value here is a bit
   // heavyweight, but is effective. If the string comparisons become a
   // performance concern, we can implement a mangling of the predicate
-  // data easilly enough with a map back to the actual string. That's
+  // data easily enough with a map back to the actual string. That's
   // overkill for now, though.
 
   // Make sure the predicate is in the table.
@@ -1199,7 +1199,7 @@ unsigned FilterChooser::getPredicateIndex(DecoderTableInfo &TableInfo,
   // Using the full predicate string as the key value here is a bit
   // heavyweight, but is effective. If the string comparisons become a
   // performance concern, we can implement a mangling of the predicate
-  // data easilly enough with a map back to the actual string. That's
+  // data easily enough with a map back to the actual string. That's
   // overkill for now, though.
 
   // Make sure the predicate is in the table.

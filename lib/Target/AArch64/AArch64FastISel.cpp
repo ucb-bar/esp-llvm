@@ -1178,7 +1178,7 @@ unsigned AArch64FastISel::emitAddSub(bool UseAdd, MVT RetVT, const Value *LHS,
   }
 
   // Check if the mul can be folded into the instruction.
-  if (RHS->hasOneUse() && isValueAvailable(RHS))
+  if (RHS->hasOneUse() && isValueAvailable(RHS)) {
     if (isMulPowOf2(RHS)) {
       const Value *MulLHS = cast<MulOperator>(RHS)->getOperand(0);
       const Value *MulRHS = cast<MulOperator>(RHS)->getOperand(1);
@@ -1193,12 +1193,16 @@ unsigned AArch64FastISel::emitAddSub(bool UseAdd, MVT RetVT, const Value *LHS,
       if (!RHSReg)
         return 0;
       bool RHSIsKill = hasTrivialKill(MulLHS);
-      return emitAddSub_rs(UseAdd, RetVT, LHSReg, LHSIsKill, RHSReg, RHSIsKill,
-                           AArch64_AM::LSL, ShiftVal, SetFlags, WantResult);
+      ResultReg = emitAddSub_rs(UseAdd, RetVT, LHSReg, LHSIsKill, RHSReg,
+                                RHSIsKill, AArch64_AM::LSL, ShiftVal, SetFlags,
+                                WantResult);
+      if (ResultReg)
+        return ResultReg;
     }
+  }
 
   // Check if the shift can be folded into the instruction.
-  if (RHS->hasOneUse() && isValueAvailable(RHS))
+  if (RHS->hasOneUse() && isValueAvailable(RHS)) {
     if (const auto *SI = dyn_cast<BinaryOperator>(RHS)) {
       if (const auto *C = dyn_cast<ConstantInt>(SI->getOperand(1))) {
         AArch64_AM::ShiftExtendType ShiftType = AArch64_AM::InvalidShiftExtend;
@@ -1214,12 +1218,15 @@ unsigned AArch64FastISel::emitAddSub(bool UseAdd, MVT RetVT, const Value *LHS,
           if (!RHSReg)
             return 0;
           bool RHSIsKill = hasTrivialKill(SI->getOperand(0));
-          return emitAddSub_rs(UseAdd, RetVT, LHSReg, LHSIsKill, RHSReg,
-                               RHSIsKill, ShiftType, ShiftVal, SetFlags,
-                               WantResult);
+          ResultReg = emitAddSub_rs(UseAdd, RetVT, LHSReg, LHSIsKill, RHSReg,
+                                    RHSIsKill, ShiftType, ShiftVal, SetFlags,
+                                    WantResult);
+          if (ResultReg)
+            return ResultReg;
         }
       }
     }
+  }
 
   unsigned RHSReg = getRegForValue(RHS);
   if (!RHSReg)
@@ -1323,6 +1330,10 @@ unsigned AArch64FastISel::emitAddSub_rs(bool UseAdd, MVT RetVT, unsigned LHSReg,
   if (RetVT != MVT::i32 && RetVT != MVT::i64)
     return 0;
 
+  // Don't deal with undefined shifts.
+  if (ShiftImm >= RetVT.getSizeInBits())
+    return 0;
+
   static const unsigned OpcTable[2][2][2] = {
     { { AArch64::SUBWrs,  AArch64::SUBXrs  },
       { AArch64::ADDWrs,  AArch64::ADDXrs  }  },
@@ -1358,6 +1369,9 @@ unsigned AArch64FastISel::emitAddSub_rx(bool UseAdd, MVT RetVT, unsigned LHSReg,
   assert(LHSReg && RHSReg && "Invalid register number.");
 
   if (RetVT != MVT::i32 && RetVT != MVT::i64)
+    return 0;
+
+  if (ShiftImm >= 4)
     return 0;
 
   static const unsigned OpcTable[2][2][2] = {
@@ -1542,7 +1556,7 @@ unsigned AArch64FastISel::emitLogicalOp(unsigned ISDOpc, MVT RetVT,
     return ResultReg;
 
   // Check if the mul can be folded into the instruction.
-  if (RHS->hasOneUse() && isValueAvailable(RHS))
+  if (RHS->hasOneUse() && isValueAvailable(RHS)) {
     if (isMulPowOf2(RHS)) {
       const Value *MulLHS = cast<MulOperator>(RHS)->getOperand(0);
       const Value *MulRHS = cast<MulOperator>(RHS)->getOperand(1);
@@ -1558,12 +1572,15 @@ unsigned AArch64FastISel::emitLogicalOp(unsigned ISDOpc, MVT RetVT,
       if (!RHSReg)
         return 0;
       bool RHSIsKill = hasTrivialKill(MulLHS);
-      return emitLogicalOp_rs(ISDOpc, RetVT, LHSReg, LHSIsKill, RHSReg,
-                              RHSIsKill, ShiftVal);
+      ResultReg = emitLogicalOp_rs(ISDOpc, RetVT, LHSReg, LHSIsKill, RHSReg,
+                                   RHSIsKill, ShiftVal);
+      if (ResultReg)
+        return ResultReg;
     }
+  }
 
   // Check if the shift can be folded into the instruction.
-  if (RHS->hasOneUse() && isValueAvailable(RHS))
+  if (RHS->hasOneUse() && isValueAvailable(RHS)) {
     if (const auto *SI = dyn_cast<ShlOperator>(RHS))
       if (const auto *C = dyn_cast<ConstantInt>(SI->getOperand(1))) {
         uint64_t ShiftVal = C->getZExtValue();
@@ -1571,9 +1588,12 @@ unsigned AArch64FastISel::emitLogicalOp(unsigned ISDOpc, MVT RetVT,
         if (!RHSReg)
           return 0;
         bool RHSIsKill = hasTrivialKill(SI->getOperand(0));
-        return emitLogicalOp_rs(ISDOpc, RetVT, LHSReg, LHSIsKill, RHSReg,
-                                RHSIsKill, ShiftVal);
+        ResultReg = emitLogicalOp_rs(ISDOpc, RetVT, LHSReg, LHSIsKill, RHSReg,
+                                     RHSIsKill, ShiftVal);
+        if (ResultReg)
+          return ResultReg;
       }
+  }
 
   unsigned RHSReg = getRegForValue(RHS);
   if (!RHSReg)
@@ -1646,6 +1666,11 @@ unsigned AArch64FastISel::emitLogicalOp_rs(unsigned ISDOpc, MVT RetVT,
     { AArch64::ORRWrs, AArch64::ORRXrs },
     { AArch64::EORWrs, AArch64::EORXrs }
   };
+
+  // Don't deal with undefined shifts.
+  if (ShiftImm >= RetVT.getSizeInBits())
+    return 0;
+
   const TargetRegisterClass *RC;
   unsigned Opc;
   switch (RetVT.SimpleTy) {
@@ -2235,14 +2260,7 @@ bool AArch64FastISel::emitCompareAndBranch(const BranchInst *BI) {
     MIB.addImm(TestBit);
   MIB.addMBB(TBB);
 
-  // Obtain the branch weight and add the TrueBB to the successor list.
-  uint32_t BranchWeight = 0;
-  if (FuncInfo.BPI)
-    BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                               TBB->getBasicBlock());
-  FuncInfo.MBB->addSuccessor(TBB, BranchWeight);
-  fastEmitBranch(FBB, DbgLoc);
-
+  finishCondBranch(BI->getParent(), TBB, FBB);
   return true;
 }
 
@@ -2257,7 +2275,6 @@ bool AArch64FastISel::selectBranch(const Instruction *I) {
   MachineBasicBlock *TBB = FuncInfo.MBBMap[BI->getSuccessor(0)];
   MachineBasicBlock *FBB = FuncInfo.MBBMap[BI->getSuccessor(1)];
 
-  AArch64CC::CondCode CC = AArch64CC::NE;
   if (const CmpInst *CI = dyn_cast<CmpInst>(BI->getCondition())) {
     if (CI->hasOneUse() && isValueAvailable(CI)) {
       // Try to optimize or fold the cmp.
@@ -2289,7 +2306,7 @@ bool AArch64FastISel::selectBranch(const Instruction *I) {
 
       // FCMP_UEQ and FCMP_ONE cannot be checked with a single branch
       // instruction.
-      CC = getCompareCC(Predicate);
+      AArch64CC::CondCode CC = getCompareCC(Predicate);
       AArch64CC::CondCode ExtraCC = AArch64CC::AL;
       switch (Predicate) {
       default:
@@ -2317,52 +2334,7 @@ bool AArch64FastISel::selectBranch(const Instruction *I) {
           .addImm(CC)
           .addMBB(TBB);
 
-      // Obtain the branch weight and add the TrueBB to the successor list.
-      uint32_t BranchWeight = 0;
-      if (FuncInfo.BPI)
-        BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                                  TBB->getBasicBlock());
-      FuncInfo.MBB->addSuccessor(TBB, BranchWeight);
-
-      fastEmitBranch(FBB, DbgLoc);
-      return true;
-    }
-  } else if (TruncInst *TI = dyn_cast<TruncInst>(BI->getCondition())) {
-    MVT SrcVT;
-    if (TI->hasOneUse() && isValueAvailable(TI) &&
-        isTypeSupported(TI->getOperand(0)->getType(), SrcVT)) {
-      unsigned CondReg = getRegForValue(TI->getOperand(0));
-      if (!CondReg)
-        return false;
-      bool CondIsKill = hasTrivialKill(TI->getOperand(0));
-
-      // Issue an extract_subreg to get the lower 32-bits.
-      if (SrcVT == MVT::i64) {
-        CondReg = fastEmitInst_extractsubreg(MVT::i32, CondReg, CondIsKill,
-                                             AArch64::sub_32);
-        CondIsKill = true;
-      }
-
-      unsigned ANDReg = emitAnd_ri(MVT::i32, CondReg, CondIsKill, 1);
-      assert(ANDReg && "Unexpected AND instruction emission failure.");
-      emitICmp_ri(MVT::i32, ANDReg, /*IsKill=*/true, 0);
-
-      if (FuncInfo.MBB->isLayoutSuccessor(TBB)) {
-        std::swap(TBB, FBB);
-        CC = AArch64CC::EQ;
-      }
-      BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AArch64::Bcc))
-          .addImm(CC)
-          .addMBB(TBB);
-
-      // Obtain the branch weight and add the TrueBB to the successor list.
-      uint32_t BranchWeight = 0;
-      if (FuncInfo.BPI)
-        BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                                  TBB->getBasicBlock());
-      FuncInfo.MBB->addSuccessor(TBB, BranchWeight);
-
-      fastEmitBranch(FBB, DbgLoc);
+      finishCondBranch(BI->getParent(), TBB, FBB);
       return true;
     }
   } else if (const auto *CI = dyn_cast<ConstantInt>(BI->getCondition())) {
@@ -2371,34 +2343,31 @@ bool AArch64FastISel::selectBranch(const Instruction *I) {
     BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AArch64::B))
         .addMBB(Target);
 
-    // Obtain the branch weight and add the target to the successor list.
-    uint32_t BranchWeight = 0;
-    if (FuncInfo.BPI)
-      BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                                 Target->getBasicBlock());
-    FuncInfo.MBB->addSuccessor(Target, BranchWeight);
+    // Obtain the branch probability and add the target to the successor list.
+    if (FuncInfo.BPI) {
+      auto BranchProbability = FuncInfo.BPI->getEdgeProbability(
+          BI->getParent(), Target->getBasicBlock());
+      FuncInfo.MBB->addSuccessor(Target, BranchProbability);
+    } else
+      FuncInfo.MBB->addSuccessorWithoutProb(Target);
     return true;
-  } else if (foldXALUIntrinsic(CC, I, BI->getCondition())) {
-    // Fake request the condition, otherwise the intrinsic might be completely
-    // optimized away.
-    unsigned CondReg = getRegForValue(BI->getCondition());
-    if (!CondReg)
-      return false;
+  } else {
+    AArch64CC::CondCode CC = AArch64CC::NE;
+    if (foldXALUIntrinsic(CC, I, BI->getCondition())) {
+      // Fake request the condition, otherwise the intrinsic might be completely
+      // optimized away.
+      unsigned CondReg = getRegForValue(BI->getCondition());
+      if (!CondReg)
+        return false;
 
-    // Emit the branch.
-    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AArch64::Bcc))
-      .addImm(CC)
-      .addMBB(TBB);
+      // Emit the branch.
+      BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AArch64::Bcc))
+        .addImm(CC)
+        .addMBB(TBB);
 
-    // Obtain the branch weight and add the TrueBB to the successor list.
-    uint32_t BranchWeight = 0;
-    if (FuncInfo.BPI)
-      BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                                 TBB->getBasicBlock());
-    FuncInfo.MBB->addSuccessor(TBB, BranchWeight);
-
-    fastEmitBranch(FBB, DbgLoc);
-    return true;
+      finishCondBranch(BI->getParent(), TBB, FBB);
+      return true;
+    }
   }
 
   unsigned CondReg = getRegForValue(BI->getCondition());
@@ -2406,36 +2375,22 @@ bool AArch64FastISel::selectBranch(const Instruction *I) {
     return false;
   bool CondRegIsKill = hasTrivialKill(BI->getCondition());
 
-  // We've been divorced from our compare!  Our block was split, and
-  // now our compare lives in a predecessor block.  We musn't
-  // re-compare here, as the children of the compare aren't guaranteed
-  // live across the block boundary (we *could* check for this).
-  // Regardless, the compare has been done in the predecessor block,
-  // and it left a value for us in a virtual register.  Ergo, we test
-  // the one-bit value left in the virtual register.
-  //
-  // FIXME: Optimize this with TBZW/TBZNW.
-  unsigned ANDReg = emitAnd_ri(MVT::i32, CondReg, CondRegIsKill, 1);
-  assert(ANDReg && "Unexpected AND instruction emission failure.");
-  emitICmp_ri(MVT::i32, ANDReg, /*IsKill=*/true, 0);
-
+  // i1 conditions come as i32 values, test the lowest bit with tb(n)z.
+  unsigned Opcode = AArch64::TBNZW;
   if (FuncInfo.MBB->isLayoutSuccessor(TBB)) {
     std::swap(TBB, FBB);
-    CC = AArch64CC::EQ;
+    Opcode = AArch64::TBZW;
   }
 
-  BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, TII.get(AArch64::Bcc))
-      .addImm(CC)
+  const MCInstrDesc &II = TII.get(Opcode);
+  unsigned ConstrainedCondReg
+    = constrainOperandRegClass(II, CondReg, II.getNumDefs());
+  BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc, II)
+      .addReg(ConstrainedCondReg, getKillRegState(CondRegIsKill))
+      .addImm(0)
       .addMBB(TBB);
 
-  // Obtain the branch weight and add the TrueBB to the successor list.
-  uint32_t BranchWeight = 0;
-  if (FuncInfo.BPI)
-    BranchWeight = FuncInfo.BPI->getEdgeWeight(BI->getParent(),
-                                               TBB->getBasicBlock());
-  FuncInfo.MBB->addSuccessor(TBB, BranchWeight);
-
-  fastEmitBranch(FBB, DbgLoc);
+  finishCondBranch(BI->getParent(), TBB, FBB);
   return true;
 }
 
@@ -2459,6 +2414,10 @@ bool AArch64FastISel::selectIndirectBr(const Instruction *I) {
 
 bool AArch64FastISel::selectCmp(const Instruction *I) {
   const CmpInst *CI = cast<CmpInst>(I);
+
+  // Vectors of i1 are weird: bail out.
+  if (CI->getType()->isVectorTy())
+    return false;
 
   // Try to optimize or fold the cmp.
   CmpInst::Predicate Predicate = optimizeCmpPredicate(CI);
@@ -3321,8 +3280,8 @@ bool AArch64FastISel::foldXALUIntrinsic(AArch64CC::CondCode &CC,
     return false;
 
   // Make sure nothing is in the way
-  BasicBlock::const_iterator Start = I;
-  BasicBlock::const_iterator End = II;
+  BasicBlock::const_iterator Start(I);
+  BasicBlock::const_iterator End(II);
   for (auto Itr = std::prev(Start); Itr != End; --Itr) {
     // We only expect extractvalue instructions between the intrinsic and the
     // instruction to be selected.
@@ -3685,6 +3644,9 @@ bool AArch64FastISel::selectRet(const Instruction *I) {
     return false;
 
   if (F.isVarArg())
+    return false;
+
+  if (TLI.supportSplitCSR(FuncInfo.MF))
     return false;
 
   // Build a list of return value registers.

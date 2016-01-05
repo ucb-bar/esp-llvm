@@ -330,7 +330,7 @@ bool RISCVDAGToDAGISel::selectAddress(SDValue Addr,
 static void insertDAGNode(SelectionDAG *DAG, SDNode *Pos, SDValue N) {
   if (N.getNode()->getNodeId() == -1 ||
       N.getNode()->getNodeId() > Pos->getNodeId()) {
-    DAG->RepositionNode(Pos, N.getNode());
+    DAG->RepositionNode(Pos->getIterator(), N.getNode());
     N.getNode()->setNodeId(Pos->getNodeId());
   }
 }

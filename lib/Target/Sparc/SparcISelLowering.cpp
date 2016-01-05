@@ -400,6 +400,7 @@ LowerFormalArguments_32(SDValue Chain,
   CCInfo.AnalyzeFormalArguments(Ins, CC_Sparc32);
 
   const unsigned StackOffset = 92;
+  bool IsLittleEndian = DAG.getDataLayout().isLittleEndian();
 
   unsigned InIdx = 0;
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i, ++InIdx) {
@@ -442,6 +443,10 @@ LowerFormalArguments_32(SDValue Chain,
                                         &SP::IntRegsRegClass);
           LoVal = DAG.getCopyFromReg(Chain, dl, loReg, MVT::i32);
         }
+
+        if (IsLittleEndian)
+          std::swap(LoVal, HiVal);
+
         SDValue WholeValue =
           DAG.getNode(ISD::BUILD_PAIR, dl, MVT::i64, LoVal, HiVal);
         WholeValue = DAG.getNode(ISD::BITCAST, dl, VA.getLocVT(), WholeValue);
@@ -498,6 +503,9 @@ LowerFormalArguments_32(SDValue Chain,
                                   MachinePointerInfo(),
                                   false, false, false, 0);
 
+      if (IsLittleEndian)
+        std::swap(LoVal, HiVal);
+
       SDValue WholeValue =
         DAG.getNode(ISD::BUILD_PAIR, dl, MVT::i64, LoVal, HiVal);
       WholeValue = DAG.getNode(ISD::BITCAST, dl, VA.getValVT(), WholeValue);
@@ -514,16 +522,12 @@ LowerFormalArguments_32(SDValue Chain,
       Load = DAG.getLoad(VA.getValVT(), dl, Chain, FIPtr,
                          MachinePointerInfo(),
                          false, false, false, 0);
+    } else if (VA.getValVT() == MVT::f128) {
+      report_fatal_error("SPARCv8 does not handle f128 in calls; "
+                         "pass indirectly");
     } else {
-      ISD::LoadExtType LoadOp = ISD::SEXTLOAD;
-      // Sparc is big endian, so add an offset based on the ObjectVT.
-      unsigned Offset = 4-std::max(1U, VA.getValVT().getSizeInBits()/8);
-      FIPtr = DAG.getNode(ISD::ADD, dl, MVT::i32, FIPtr,
-                          DAG.getConstant(Offset, dl, MVT::i32));
-      Load = DAG.getExtLoad(LoadOp, dl, MVT::i32, Chain, FIPtr,
-                            MachinePointerInfo(),
-                            VA.getValVT(), false, false, false,0);
-      Load = DAG.getNode(ISD::TRUNCATE, dl, VA.getValVT(), Load);
+      // We shouldn't see any other value types here.
+      llvm_unreachable("Unexpected ValVT encountered in frame lowering.");
     }
     InVals.push_back(Load);
   }
@@ -854,11 +858,10 @@ SparcTargetLowering::LowerCall_32(TargetLowering::CallLoweringInfo &CLI,
         // Move from the float value from float registers into the
         // integer registers.
 
-        // TODO: this conversion is done in two steps, because
-        // f64->i64 conversion is done efficiently, and i64->v2i32 is
-        // basically a no-op. But f64->v2i32 is NOT done efficiently
-        // for some reason.
-        Arg = DAG.getNode(ISD::BITCAST, dl, MVT::i64, Arg);
+        // TODO: The f64 -> v2i32 conversion is super-inefficient for
+        // constants: it sticks them in the constant pool, then loads
+        // to a fp register, then stores to temp memory, then loads to
+        // integer registers.
         Arg = DAG.getNode(ISD::BITCAST, dl, MVT::v2i32, Arg);
       }
 
@@ -1041,8 +1044,8 @@ SparcTargetLowering::getSRetArgSize(SelectionDAG &DAG, SDValue Callee) const
   if (!CalleeFn)
     return 0;
 
-  assert(CalleeFn->hasStructRetAttr() &&
-         "Callee does not have the StructRet attribute.");
+  // It would be nice to check for the sret attribute on CalleeFn here,
+  // but since it is not part of the function type, any check will misfire.
 
   PointerType *Ty = cast<PointerType>(CalleeFn->arg_begin()->getType());
   Type *ElementTy = Ty->getElementType();
@@ -1423,6 +1426,14 @@ SparcTargetLowering::SparcTargetLowering(TargetMachine &TM,
     : TargetLowering(TM), Subtarget(&STI) {
   MVT PtrVT = MVT::getIntegerVT(8 * TM.getPointerSize());
 
+  // Instructions which use registers as conditionals examine all the
+  // bits (as does the pseudo SELECT_CC expansion). I don't think it
+  // matters much whether it's ZeroOrOneBooleanContent, or
+  // ZeroOrNegativeOneBooleanContent, so, arbitrarily choose the
+  // former.
+  setBooleanContents(ZeroOrOneBooleanContent);
+  setBooleanVectorContents(ZeroOrOneBooleanContent);
+
   // Set up the register classes.
   addRegisterClass(MVT::i32, &SP::IntRegsRegClass);
   addRegisterClass(MVT::f32, &SP::FPRegsRegClass);
@@ -1667,9 +1678,6 @@ SparcTargetLowering::SparcTargetLowering(TargetMachine &TM,
   setOperationAction(ISD::STACKRESTORE      , MVT::Other, Expand);
   setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32  , Custom);
 
-  setExceptionPointerRegister(SP::I0);
-  setExceptionSelectorRegister(SP::I1);
-
   setStackPointerRegisterToSaveRestore(SP::O6);
 
   setOperationAction(ISD::CTPOP, MVT::i32,
@@ -1832,18 +1840,15 @@ void SparcTargetLowering::computeKnownBitsForTargetNode
 // set LHS/RHS and SPCC to the LHS/RHS of the setcc and SPCC to the condition.
 static void LookThroughSetCC(SDValue &LHS, SDValue &RHS,
                              ISD::CondCode CC, unsigned &SPCC) {
-  if (isa<ConstantSDNode>(RHS) &&
-      cast<ConstantSDNode>(RHS)->isNullValue() &&
+  if (isNullConstant(RHS) &&
       CC == ISD::SETNE &&
       (((LHS.getOpcode() == SPISD::SELECT_ICC ||
          LHS.getOpcode() == SPISD::SELECT_XCC) &&
         LHS.getOperand(3).getOpcode() == SPISD::CMPICC) ||
        (LHS.getOpcode() == SPISD::SELECT_FCC &&
         LHS.getOperand(3).getOpcode() == SPISD::CMPFCC)) &&
-      isa<ConstantSDNode>(LHS.getOperand(0)) &&
-      isa<ConstantSDNode>(LHS.getOperand(1)) &&
-      cast<ConstantSDNode>(LHS.getOperand(0))->isOne() &&
-      cast<ConstantSDNode>(LHS.getOperand(1))->isNullValue()) {
+      isOneConstant(LHS.getOperand(0)) &&
+      isNullConstant(LHS.getOperand(1))) {
     SDValue CMPCC = LHS.getOperand(3);
     SPCC = cast<ConstantSDNode>(LHS.getOperand(2))->getZExtValue();
     LHS = CMPCC.getOperand(0);
@@ -2878,7 +2883,7 @@ static SDValue LowerUMULO_SMULO(SDValue Op, SelectionDAG &DAG,
 
   SDValue MulResult = TLI.makeLibCall(DAG,
                                       RTLIB::MUL_I128, WideVT,
-                                      Args, 4, isSigned, dl).first;
+                                      Args, isSigned, dl).first;
   SDValue BottomHalf = DAG.getNode(ISD::EXTRACT_ELEMENT, dl, VT,
                                    MulResult, DAG.getIntPtrConstant(0, dl));
   SDValue TopHalf = DAG.getNode(ISD::EXTRACT_ELEMENT, dl, VT,
@@ -3046,8 +3051,7 @@ SparcTargetLowering::expandSelectCC(MachineInstr *MI,
   // to set, the condition code register to branch on, the true/false values to
   // select between, and a branch opcode to use.
   const BasicBlock *LLVM_BB = BB->getBasicBlock();
-  MachineFunction::iterator It = BB;
-  ++It;
+  MachineFunction::iterator It = ++BB->getIterator();
 
   //  thisMBB:
   //  ...
@@ -3132,7 +3136,7 @@ SparcTargetLowering::expandAtomicRMW(MachineInstr *MI,
     .addReg(AddrReg).addImm(0);
 
   // Split the basic block MBB before MI and insert the loop block in the hole.
-  MachineFunction::iterator MFI = MBB;
+  MachineFunction::iterator MFI = MBB->getIterator();
   const BasicBlock *LLVM_BB = MBB->getBasicBlock();
   MachineFunction *MF = MBB->getParent();
   MachineBasicBlock *LoopMBB = MF->CreateMachineBasicBlock(LLVM_BB);

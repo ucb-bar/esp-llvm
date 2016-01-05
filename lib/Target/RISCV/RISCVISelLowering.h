@@ -111,6 +111,15 @@ public:
   bool isFMAFasterThanFMulAndFAdd(EVT) const override {
     return true;
   }
+  /// If a physical register, this returns the register that receives the
+  /// exception address on entry to an EH pad.
+  unsigned
+  getExceptionPointerRegister(const Constant *PersonalityFn) const override;
+  /// If a physical register, this returns the register that receives the
+  /// exception typeid on entry to a landing pad.
+  unsigned
+  getExceptionSelectorRegister(const Constant *PersonalityFn) const override;
+
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
   bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
   const char *getTargetNodeName(unsigned Opcode) const override;

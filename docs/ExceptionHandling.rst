@@ -162,11 +162,11 @@ pad to the back end. For C++, the ``landingpad`` instruction returns a pointer
 and integer pair corresponding to the pointer to the *exception structure* and
 the *selector value* respectively.
 
-The ``landingpad`` instruction takes a reference to the personality function to
-be used for this ``try``/``catch`` sequence. The remainder of the instruction is
-a list of *cleanup*, *catch*, and *filter* clauses. The exception is tested
-against the clauses sequentially from first to last. The clauses have the
-following meanings:
+The ``landingpad`` instruction looks for a reference to the personality
+function to be used for this ``try``/``catch`` sequence in the parent
+function's attribute list. The instruction contains a list of *cleanup*,
+*catch*, and *filter* clauses. The exception is tested against the clauses
+sequentially from first to last. The clauses have the following meanings:
 
 -  ``catch <type> @ExcType``
 
@@ -314,97 +314,6 @@ the selector results they understand and then resume exception propagation with
 the `resume instruction <LangRef.html#i_resume>`_ if none of the conditions
 match.
 
-C++ Exception Handling using the Windows Runtime
-=================================================
-
-(Note: Windows C++ exception handling support is a work in progress and is
- not yet fully implemented.  The text below describes how it will work
- when completed.)
-
-The Windows runtime function for C++ exception handling uses a multi-phase
-approach.  When an exception occurs it searches the current callstack for a
-frame that has a handler for the exception.  If a handler is found, it then
-calls the cleanup handler for each frame above the handler which has a
-cleanup handler before calling the catch handler.  These calls are all made
-from a stack context different from the original frame in which the handler
-is defined.  Therefore, it is necessary to outline these handlers from their
-original context before code generation.
-
-Catch handlers are called with a pointer to the handler itself as the first
-argument and a pointer to the parent function's stack frame as the second
-argument.  The catch handler uses the `llvm.recoverframe
-<LangRef.html#llvm-frameallocate-and-llvm-framerecover-intrinsics>`_ to get a
-pointer to a frame allocation block that is created in the parent frame using
-the `llvm.allocateframe 
-<LangRef.html#llvm-frameallocate-and-llvm-framerecover-intrinsics>`_ intrinsic.
-The ``WinEHPrepare`` pass will have created a structure definition for the
-contents of this block.  The first two members of the structure will always be
-(1) a 32-bit integer that the runtime uses to track the exception state of the
-parent frame for the purposes of handling chained exceptions and (2) a pointer
-to the object associated with the exception (roughly, the parameter of the
-catch clause). These two members will be followed by any frame variables from
-the parent function which must be accessed in any of the functions unwind or
-catch handlers.  The catch handler returns the address at which execution
-should continue.
-
-Cleanup handlers perform any cleanup necessary as the frame goes out of scope,
-such as calling object destructors.  The runtime handles the actual unwinding
-of the stack.  If an exception occurs in a cleanup handler the runtime manages
-termination of the process. Cleanup handlers are called with the same arguments
-as catch handlers (a pointer to the handler and a pointer to the parent stack
-frame) and use the same mechanism described above to access frame variables
-in the parent function.  Cleanup handlers do not return a value.
-
-The IR generated for Windows runtime based C++ exception handling is initially
-very similar to the ``landingpad`` mechanism described above.  Calls to
-libc++abi functions (such as ``__cxa_begin_catch``/``__cxa_end_catch`` and
-``__cxa_throw_exception`` are replaced with calls to intrinsics or Windows
-runtime functions (such as ``llvm.eh.begincatch``/``llvm.eh.endcatch`` and
-``__CxxThrowException``).
-
-During the WinEHPrepare pass, the handler functions are outlined into handler
-functions and the original landing pad code is replaced with a call to the
-``llvm.eh.actions`` intrinsic that describes the order in which handlers will
-be processed from the logical location of the landing pad and an indirect
-branch to the return value of the ``llvm.eh.actions`` intrinsic. The
-``llvm.eh.actions`` intrinsic is defined as returning the address at which
-execution will continue.  This is a temporary construct which will be removed
-before code generation, but it allows for the accurate tracking of control
-flow until then.
-
-A typical landing pad will look like this after outlining:
-
-.. code-block:: llvm
-
-    lpad:
-      %vals = landingpad { i8*, i32 } personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*)
-	      cleanup
-          catch i8* bitcast (i8** @_ZTIi to i8*)
-          catch i8* bitcast (i8** @_ZTIf to i8*)
-      %recover = call i8* (...)* @llvm.eh.actions(
-          i32 3, i8* bitcast (i8** @_ZTIi to i8*), i8* (i8*, i8*)* @_Z4testb.catch.1)
-          i32 2, i8* null, void (i8*, i8*)* @_Z4testb.cleanup.1)
-          i32 1, i8* bitcast (i8** @_ZTIf to i8*), i8* (i8*, i8*)* @_Z4testb.catch.0)
-          i32 0, i8* null, void (i8*, i8*)* @_Z4testb.cleanup.0)
-      indirectbr i8* %recover, [label %try.cont1, label %try.cont2]
-
-In this example, the landing pad represents an exception handling context with
-two catch handlers and a cleanup handler that have been outlined.  If an
-exception is thrown with a type that matches ``_ZTIi``, the ``_Z4testb.catch.1``
-handler will be called an no clean-up is needed.  If an exception is thrown
-with a type that matches ``_ZTIf``, first the ``_Z4testb.cleanup.1`` handler
-will be called to perform unwind-related cleanup, then the ``_Z4testb.catch.1``
-handler will be called.  If an exception is throw which does not match either
-of these types and the exception is handled by another frame further up the
-call stack, first the ``_Z4testb.cleanup.1`` handler will be called, then the
-``_Z4testb.cleanup.0`` handler (which corresponds to a different scope) will be
-called, and exception handling will continue at the next frame in the call
-stack will be called.  One of the catch handlers will return the address of
-``%try.cont1`` in the parent function and the other will return the address of
-``%try.cont2``, meaning that execution continues at one of those blocks after
-an exception is caught.
-
-
 Exception Handling Intrinsics
 =============================
 
@@ -490,6 +399,20 @@ abstract interface.
 When used in the native Windows C++ exception handling implementation, this
 intrinsic serves as a placeholder to delimit code before a catch handler is
 outlined.  After the handler is outlined, this intrinsic is simply removed.
+
+
+.. _llvm.eh.exceptionpointer:
+
+``llvm.eh.exceptionpointer``
+----------------------------
+
+.. code-block:: llvm
+
+  i8 addrspace(N)* @llvm.eh.padparam.pNi8(token %catchpad)
+
+
+This intrinsic retrieves a pointer to the exception caught by the given
+``catchpad``.
 
 
 SJLJ Intrinsics
@@ -599,16 +522,12 @@ table.
 Exception Handling using the Windows Runtime
 =================================================
 
-(Note: Windows C++ exception handling support is a work in progress and is not
-yet fully implemented.  The text below describes how it will work when
-completed.)
-
 Background on Windows exceptions
 ---------------------------------
 
-Interacting with exceptions on Windows is significantly more complicated than on
-Itanium C++ ABI platforms. The fundamental difference between the two models is
-that Itanium EH is designed around the idea of "successive unwinding," while
+Interacting with exceptions on Windows is significantly more complicated than
+on Itanium C++ ABI platforms. The fundamental difference between the two models
+is that Itanium EH is designed around the idea of "successive unwinding," while
 Windows EH is not.
 
 Under Itanium, throwing an exception typically involes allocating thread local
@@ -695,30 +614,33 @@ purposes.
 
 The following new instructions are considered "exception handling pads", in that
 they must be the first non-phi instruction of a basic block that may be the
-unwind destination of an invoke: ``catchpad``, ``cleanuppad``, and
-``terminatepad``. As with landingpads, when entering a try scope, if the
+unwind destination of an EH flow edge:
+``catchswitch``, ``catchpad``, and ``cleanuppad``.
+As with landingpads, when entering a try scope, if the
 frontend encounters a call site that may throw an exception, it should emit an
-invoke that unwinds to a ``catchpad`` block. Similarly, inside the scope of a
-C++ object with a destructor, invokes should unwind to a ``cleanuppad``. The
-``terminatepad`` instruction exists to represent ``noexcept`` and throw
-specifications with one combined instruction. All potentially throwing calls in
-a ``noexcept`` function should transitively unwind to a terminateblock. Throw
-specifications are not implemented by MSVC, and are not yet supported.
+invoke that unwinds to a ``catchswitch`` block. Similarly, inside the scope of a
+C++ object with a destructor, invokes should unwind to a ``cleanuppad``.
 
-Each of these new EH pad instructions has a label operand that indicates which
-action should be considered after this action. The ``catchpad`` and
-``terminatepad`` instructions are terminators, and this label is considered to
-be an unwind destination analogous to the unwind destination of an invoke. The
-``cleanuppad`` instruction is different from the other two in that it is not a
-terminator, and this label operand is not an edge in the CFG. The code inside a
-cleanuppad runs before transferring control to the next action, so the
-``cleanupret`` instruction is the instruction that unwinds to the next EH pad.
-All of these "unwind edges" may refer to a basic block that contains an EH pad
-instruction, or they may simply unwind to the caller. Unwinding to the caller
-has roughly the same semantics as the ``resume`` instruction in the
-``landingpad`` model. When inlining through an invoke, instructions that unwind
-to the caller are hooked up to unwind to the unwind destination of the call
-site.
+New instructions are also used to mark the points where control is transferred
+out of a catch/cleanup handler (which will correspond to exits from the
+generated funclet).  A catch handler which reaches its end by normal execution
+executes a ``catchret`` instruction, which is a terminator indicating where in
+the function control is returned to.  A cleanup handler which reaches its end
+by normal execution executes a ``cleanupret`` instruction, which is a terminator
+indicating where the active exception will unwind to next.
+
+Each of these new EH pad instructions has a way to identify which action should
+be considered after this action. The ``catchswitch`` instruction is a terminator
+and has an unwind destination operand analogous to the unwind destination of an
+invoke.  The ``cleanuppad`` instruction is not
+a terminator, so the unwind destination is stored on the ``cleanupret``
+instruction instead. Successfully executing a catch handler should resume
+normal control flow, so neither ``catchpad`` nor ``catchret`` instructions can
+unwind. All of these "unwind edges" may refer to a basic block that contains an
+EH pad instruction, or they may unwind to the caller.  Unwinding to the caller
+has roughly the same semantics as the ``resume`` instruction in the landingpad
+model. When inlining through an invoke, instructions that unwind to the caller
+are hooked up to unwind to the unwind destination of the call site.
 
 Putting things together, here is a hypothetical lowering of some C++ that uses
 all of the new IR instructions:
@@ -736,6 +658,7 @@ all of the new IR instructions:
       Cleanup obj;
       may_throw();
     } catch (int e) {
+      may_throw();
       return e;
     }
     return 0;
@@ -758,26 +681,97 @@ all of the new IR instructions:
     call void @"\01??_DCleanup@@QEAA@XZ"(%struct.Cleanup* nonnull %obj) nounwind
     br label %return
 
-  return:                                           ; preds = %invoke.cont.2, %catch
-    %retval.0 = phi i32 [ 0, %invoke.cont.2 ], [ %9, %catch ]
+  return:                                           ; preds = %invoke.cont.3, %invoke.cont.2
+    %retval.0 = phi i32 [ 0, %invoke.cont.2 ], [ %3, %invoke.cont.3 ]
     ret i32 %retval.0
 
-  ; EH scope code, ordered innermost to outermost:
+  lpad.cleanup:                                     ; preds = %invoke.cont.2
+    %0 = cleanuppad within none []
+    call void @"\01??1Cleanup@@QEAA@XZ"(%struct.Cleanup* nonnull %obj) nounwind
+    cleanupret %0 unwind label %lpad.catch
 
-  lpad.cleanup:                                     ; preds = %invoke.cont
-    cleanuppad [label %lpad.catch]
-    call void @"\01??_DCleanup@@QEAA@XZ"(%struct.Cleanup* nonnull %obj) nounwind
-    cleanupret unwind label %lpad.catch
+  lpad.catch:                                       ; preds = %lpad.cleanup, %entry
+    %1 = catchswitch within none [label %catch.body] unwind label %lpad.terminate
 
-  lpad.catch:                                       ; preds = %entry, %lpad.cleanup
-    catchpad void [%rtti.TypeDescriptor2* @"\01??_R0H@8", i32 0, i32* %e]
-            to label %catch unwind label %lpad.terminate
+  catch.body:                                       ; preds = %lpad.catch
+    %catch = catchpad within %1 [%rtti.TypeDescriptor2* @"\01??_R0H@8", i32 0, i32* %e]
+    invoke void @"\01?may_throw@@YAXXZ"()
+            to label %invoke.cont.3 unwind label %lpad.terminate
 
-  catch:                                            ; preds = %lpad.catch
-    %9 = load i32, i32* %e, align 4
-    catchret label %return
+  invoke.cont.3:                                    ; preds = %catch.body
+    %3 = load i32, i32* %e, align 4
+    catchret from %catch to label %return
 
-  lpad.terminate:
-    terminatepad [void ()* @"\01?terminate@@YAXXZ"]
-            unwind to caller
+  lpad.terminate:                                   ; preds = %catch.body, %lpad.catch
+    cleanuppad within none []
+    call void @"\01?terminate@@YAXXZ"
+    unreachable
   }
+
+Funclet parent tokens
+-----------------------
+
+In order to produce tables for EH personalities that use funclets, it is
+necessary to recover the nesting that was present in the source. This funclet
+parent relationship is encoded in the IR using tokens produced by the new "pad"
+instructions. The token operand of a "pad" or "ret" instruction indicates which
+funclet it is in, or "none" if it is not nested within another funclet.
+
+The ``catchpad`` and ``cleanuppad`` instructions establish new funclets, and
+their tokens are consumed by other "pad" instructions to establish membership.
+The ``catchswitch`` instruction does not create a funclet, but it produces a
+token that is always consumed by its immediate successor ``catchpad``
+instructions. This ensures that every catch handler modelled by a ``catchpad``
+belongs to exactly one ``catchswitch``, which models the dispatch point after a
+C++ try.
+
+Here is an example of what this nesting looks like using some hypothetical
+C++ code:
+
+.. code-block:: c
+
+  void f() {
+    try {
+      throw;
+    } catch (...) {
+      try {
+        throw;
+      } catch (...) {
+      }
+    }
+  }
+
+.. code-block:: llvm
+
+  define void @f() #0 personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to i8*) {
+  entry:
+    invoke void @_CxxThrowException(i8* null, %eh.ThrowInfo* null) #1
+            to label %unreachable unwind label %catch.dispatch
+
+  catch.dispatch:                                   ; preds = %entry
+    %0 = catchswitch within none [label %catch] unwind to caller
+
+  catch:                                            ; preds = %catch.dispatch
+    %1 = catchpad within %0 [i8* null, i32 64, i8* null]
+    invoke void @_CxxThrowException(i8* null, %eh.ThrowInfo* null) #1
+            to label %unreachable unwind label %catch.dispatch2
+
+  catch.dispatch2:                                  ; preds = %catch
+    %2 = catchswitch within %1 [label %catch3] unwind to caller
+
+  catch3:                                           ; preds = %catch.dispatch2
+    %3 = catchpad within %2 [i8* null, i32 64, i8* null]
+    catchret from %3 to label %try.cont
+
+  try.cont:                                         ; preds = %catch3
+    catchret from %1 to label %try.cont6
+
+  try.cont6:                                        ; preds = %try.cont
+    ret void
+
+  unreachable:                                      ; preds = %catch, %entry
+    unreachable
+  }
+
+The "inner" ``catchswitch`` consumes ``%1`` which is produced by the outer
+catchswitch.

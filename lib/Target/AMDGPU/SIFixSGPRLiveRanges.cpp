@@ -47,6 +47,7 @@
 #include "AMDGPU.h"
 #include "SIInstrInfo.h"
 #include "SIRegisterInfo.h"
+#include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/CodeGen/LiveIntervalAnalysis.h"
 #include "llvm/CodeGen/LiveVariables.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -79,12 +80,12 @@ public:
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<LiveIntervals>();
-    AU.addRequired<MachinePostDominatorTree>();
-    AU.setPreservesCFG();
+    AU.addRequired<LiveVariables>();
+    AU.addPreserved<LiveVariables>();
 
-    //AU.addPreserved<SlotIndexes>(); // XXX - This might be OK
-    AU.addPreserved<LiveIntervals>();
+    AU.addRequired<MachinePostDominatorTree>();
+    AU.addPreserved<MachinePostDominatorTree>();
+    AU.setPreservesCFG();
 
     MachineFunctionPass::getAnalysisUsage(AU);
   }
@@ -94,7 +95,6 @@ public:
 
 INITIALIZE_PASS_BEGIN(SIFixSGPRLiveRanges, DEBUG_TYPE,
                       "SI Fix SGPR Live Ranges", false, false)
-INITIALIZE_PASS_DEPENDENCY(LiveIntervals)
 INITIALIZE_PASS_DEPENDENCY(LiveVariables)
 INITIALIZE_PASS_DEPENDENCY(MachinePostDominatorTree)
 INITIALIZE_PASS_END(SIFixSGPRLiveRanges, DEBUG_TYPE,
@@ -113,48 +113,48 @@ bool SIFixSGPRLiveRanges::runOnMachineFunction(MachineFunction &MF) {
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   const SIRegisterInfo *TRI = static_cast<const SIRegisterInfo *>(
       MF.getSubtarget().getRegisterInfo());
+  bool MadeChange = false;
 
   MachinePostDominatorTree *PDT = &getAnalysis<MachinePostDominatorTree>();
-  std::vector<std::pair<unsigned, LiveRange *>> SGPRLiveRanges;
+  SmallVector<unsigned, 16> SGPRLiveRanges;
 
-  LiveIntervals *LIS = &getAnalysis<LiveIntervals>();
-  LiveVariables *LV = getAnalysisIfAvailable<LiveVariables>();
+  LiveVariables *LV = &getAnalysis<LiveVariables>();
+  MachineBasicBlock *Entry = &MF.front();
 
-  // First pass, collect all live intervals for SGPRs
-  for (const MachineBasicBlock &MBB : MF) {
-    for (const MachineInstr &MI : MBB) {
+  // Use a depth first order so that in SSA, we encounter all defs before
+  // uses. Once the defs of the block have been found, attempt to insert
+  // SGPR_USE instructions in successor blocks if required.
+  for (MachineBasicBlock *MBB : depth_first(Entry)) {
+    for (const MachineInstr &MI : *MBB) {
       for (const MachineOperand &MO : MI.defs()) {
-        if (MO.isImplicit())
-          continue;
+        // We should never see a live out def of a physical register, so we also
+        // do not need to worry about implicit_defs().
         unsigned Def = MO.getReg();
         if (TargetRegisterInfo::isVirtualRegister(Def)) {
           if (TRI->isSGPRClass(MRI.getRegClass(Def))) {
             // Only consider defs that are live outs. We don't care about def /
             // use within the same block.
-            LiveRange &LR = LIS->getInterval(Def);
-            if (LIS->isLiveOutOfMBB(LR, &MBB))
-              SGPRLiveRanges.push_back(std::make_pair(Def, &LR));
+
+            // LiveVariables does not consider registers that are only used in a
+            // phi in a sucessor block as live out, unlike LiveIntervals.
+            //
+            // This is OK because SIFixSGPRCopies replaced any SGPR phis with
+            // VGPRs.
+            if (LV->isLiveOut(Def, *MBB))
+              SGPRLiveRanges.push_back(Def);
           }
-        } else if (TRI->isSGPRClass(TRI->getPhysRegClass(Def))) {
-            SGPRLiveRanges.push_back(
-                std::make_pair(Def, &LIS->getRegUnit(Def)));
         }
       }
     }
-  }
 
-  // Second pass fix the intervals
-  for (MachineFunction::iterator BI = MF.begin(), BE = MF.end();
-                                                  BI != BE; ++BI) {
-    MachineBasicBlock &MBB = *BI;
-    if (MBB.succ_size() < 2)
+    if (MBB->succ_size() < 2)
       continue;
 
     // We have structured control flow, so the number of successors should be
     // two.
-    assert(MBB.succ_size() == 2);
-    MachineBasicBlock *SuccA = *MBB.succ_begin();
-    MachineBasicBlock *SuccB = *(++MBB.succ_begin());
+    assert(MBB->succ_size() == 2);
+    MachineBasicBlock *SuccA = *MBB->succ_begin();
+    MachineBasicBlock *SuccB = *(++MBB->succ_begin());
     MachineBasicBlock *NCD = PDT->findNearestCommonDominator(SuccA, SuccB);
 
     if (!NCD)
@@ -170,27 +170,33 @@ bool SIFixSGPRLiveRanges::runOnMachineFunction(MachineFunction &MF) {
                                             *(++NCD->succ_begin()));
     }
 
-    for (std::pair<unsigned, LiveRange*> RegLR : SGPRLiveRanges) {
-      unsigned Reg = RegLR.first;
-      LiveRange *LR = RegLR.second;
-
+    for (unsigned Reg : SGPRLiveRanges) {
       // FIXME: We could be smarter here. If the register is Live-In to one
       // block, but the other doesn't have any SGPR defs, then there won't be a
       // conflict. Also, if the branch condition is uniform then there will be
       // no conflict.
-      bool LiveInToA = LIS->isLiveInToMBB(*LR, SuccA);
-      bool LiveInToB = LIS->isLiveInToMBB(*LR, SuccB);
+      bool LiveInToA = LV->isLiveIn(Reg, *SuccA);
+      bool LiveInToB = LV->isLiveIn(Reg, *SuccB);
 
-      if ((!LiveInToA && !LiveInToB) ||
-          (LiveInToA && LiveInToB))
+      if (!LiveInToA && !LiveInToB) {
+        DEBUG(dbgs() << PrintReg(Reg, TRI, 0)
+              << " is live into neither successor\n");
         continue;
+      }
+
+      if (LiveInToA && LiveInToB) {
+        DEBUG(dbgs() << PrintReg(Reg, TRI, 0)
+              << " is live into both successors\n");
+        continue;
+      }
 
       // This interval is live in to one successor, but not the other, so
       // we need to update its range so it is live in to both.
-      DEBUG(dbgs() << "Possible SGPR conflict detected " <<  " in " << *LR <<
-                      " BB#" << SuccA->getNumber() << ", BB#" <<
-                      SuccB->getNumber() <<
-                      " with NCD = " << NCD->getNumber() << '\n');
+      DEBUG(dbgs() << "Possible SGPR conflict detected for "
+            << PrintReg(Reg, TRI, 0)
+            << " BB#" << SuccA->getNumber()
+            << ", BB#" << SuccB->getNumber()
+            << " with NCD = BB#" << NCD->getNumber() << '\n');
 
       assert(TargetRegisterInfo::isVirtualRegister(Reg) &&
              "Not expecting to extend live range of physreg");
@@ -202,17 +208,12 @@ bool SIFixSGPRLiveRanges::runOnMachineFunction(MachineFunction &MF) {
                 TII->get(AMDGPU::SGPR_USE))
         .addReg(Reg, RegState::Implicit);
 
-      SlotIndex SI = LIS->InsertMachineInstrInMaps(NCDSGPRUse);
-      LIS->extendToIndices(*LR, SI.getRegSlot());
-
-      if (LV) {
-        // TODO: This won't work post-SSA
-        LV->HandleVirtRegUse(Reg, NCD, NCDSGPRUse);
-      }
+      MadeChange = true;
+      LV->HandleVirtRegUse(Reg, NCD, NCDSGPRUse);
 
       DEBUG(NCDSGPRUse->dump());
     }
   }
 
-  return false;
+  return MadeChange;
 }

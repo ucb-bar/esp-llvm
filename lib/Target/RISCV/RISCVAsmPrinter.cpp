@@ -131,7 +131,7 @@ void RISCVAsmPrinter::EmitEndOfAsmFile(Module &M) {
     // Output stubs for external and common global variables.
     MachineModuleInfoELF::SymbolListTy Stubs = MMIELF.GetGVStubList();
     if (!Stubs.empty()) {
-      OutStreamer->SwitchSection(TLOFELF.getDataRelSection());
+      OutStreamer->SwitchSection(TLOFELF.getDataSection());
       const DataLayout TD = getDataLayout();
 
       for (unsigned i = 0, e = Stubs.size(); i != e; ++i) {

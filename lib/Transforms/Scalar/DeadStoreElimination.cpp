@@ -16,16 +16,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/CaptureTracking.h"
-#include "llvm/Analysis/CFG.h"
+#include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
-#include "llvm/Analysis/PostDominators.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Constants.h"
@@ -45,7 +43,6 @@ using namespace llvm;
 
 STATISTIC(NumRedundantStores, "Number of redundant stores deleted");
 STATISTIC(NumFastStores, "Number of stores deleted");
-STATISTIC(NumCrossBlockStores, "Number of cross block stores deleted");
 STATISTIC(NumFastOther , "Number of other instrs removed");
 
 namespace {
@@ -53,111 +50,60 @@ namespace {
     AliasAnalysis *AA;
     MemoryDependenceAnalysis *MD;
     DominatorTree *DT;
-    PostDominatorTree *PDT;
     const TargetLibraryInfo *TLI;
-    SmallVector<SmallVector<StoreInst *, 8>, 16> Candidates;
-    SetVector<StoreInst *> DeadStores;
-    SmallVector<std::pair<const BasicBlock *, const BasicBlock *>, 32>
-        BackEdges;
-    DenseSet<std::pair<const BasicBlock *, const BasicBlock *>> BackEdgesMap;
-    static char ID; // Pass identification, replacement for typeid
-    DSE()
-        : FunctionPass(ID), AA(nullptr), MD(nullptr), DT(nullptr),
-          PDT(nullptr) {
-      initializeDSEPass(*PassRegistry::getPassRegistry());
-    }
-    // Return all stores in a given BasicBlock.
-    SmallVector<StoreInst *, 8> getStores(BasicBlock *BB) {
-      SmallVector<StoreInst *, 8> VecStores;
-      for (auto &BI : *BB) {
-        if (StoreInst *SI = dyn_cast<StoreInst>(&BI))
-          VecStores.push_back(SI);
-      }
-      return VecStores;
-    }
 
-    // Get dfs in/out on the PDT and populate Candidates store list which
-    // is used to find potential dead stores for a given block
-    void populateCandidateStores(Function &F) {
-      for (auto &I : F) {
-        DomTreeNode *DTNode = PDT->getNode(&I);
-        if (!DTNode)
-          continue;
-        int DFSIn = DTNode->getDFSNumIn();
-        SmallVector<StoreInst *, 8> VecStores = getStores(&I);
-        Candidates[DFSIn] = VecStores;
-      }
+    static char ID; // Pass identification, replacement for typeid
+    DSE() : FunctionPass(ID), AA(nullptr), MD(nullptr), DT(nullptr) {
+      initializeDSEPass(*PassRegistry::getPassRegistry());
     }
 
     bool runOnFunction(Function &F) override {
       if (skipOptnoneFunction(F))
         return false;
 
-      AA = &getAnalysis<AliasAnalysis>();
+      AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
       MD = &getAnalysis<MemoryDependenceAnalysis>();
       DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
       TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-      PDT = &getAnalysis<PostDominatorTree>();
-      if (PDT->getRootNode()) {
-        int Count = PDT->getRootNode()->getDFSNumOut();
-        SmallVector<StoreInst *, 8> VecStores;
-        Candidates.resize(Count + 1);
-        Candidates.assign(Count + 1, VecStores);
 
-        // If we have more than 1 block try to populate candidate store.
-        if (Count > 1) {
-          populateCandidateStores(F);
-          FindFunctionBackedges(F, BackEdges);
-          for (auto I : BackEdges)
-            BackEdgesMap.insert(I);
-        }
-      }
       bool Changed = false;
-      for (Function::iterator I = F.begin(), E = F.end(); I != E; ++I)
+      for (BasicBlock &I : F)
         // Only check non-dead blocks.  Dead blocks may have strange pointer
         // cycles that will confuse alias analysis.
-        if (DT->isReachableFromEntry(I))
-          Changed |= runOnBasicBlock(*I);
+        if (DT->isReachableFromEntry(&I))
+          Changed |= runOnBasicBlock(I);
 
       AA = nullptr; MD = nullptr; DT = nullptr;
       return Changed;
     }
 
     bool runOnBasicBlock(BasicBlock &BB);
-    bool MemoryIsNotModifiedBetween(LoadInst *LI, StoreInst *SI);
+    bool MemoryIsNotModifiedBetween(Instruction *FirstI, Instruction *SecondI);
     bool HandleFree(CallInst *F);
     bool handleEndBlock(BasicBlock &BB);
     void RemoveAccessedObjects(const MemoryLocation &LoadedLoc,
                                SmallSetVector<Value *, 16> &DeadStackObjects,
                                const DataLayout &DL);
-    void handleNonLocalStoreDeletion(StoreInst *SI, BasicBlock::iterator &BBI,
-                                     BasicBlock &CurBlock);
-    bool isSafeCandidateForDeletion(BasicBlock *SrcBlock, BasicBlock *SinkBlock,
-                                    StoreInst *SI);
-    void DeleteDeadInstruction(Instruction *I, MemoryDependenceAnalysis &MD,
-                               const TargetLibraryInfo &TLI,
-                               SmallSetVector<Value *, 16> *ValueSet = nullptr);
+
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.setPreservesCFG();
       AU.addRequired<DominatorTreeWrapperPass>();
-      AU.addRequired<AliasAnalysis>();
+      AU.addRequired<AAResultsWrapperPass>();
       AU.addRequired<MemoryDependenceAnalysis>();
-      AU.addRequired<PostDominatorTree>();
       AU.addRequired<TargetLibraryInfoWrapperPass>();
-      AU.addPreserved<AliasAnalysis>();
       AU.addPreserved<DominatorTreeWrapperPass>();
+      AU.addPreserved<GlobalsAAWrapperPass>();
       AU.addPreserved<MemoryDependenceAnalysis>();
-      AU.addPreserved<PostDominatorTree>();
     }
   };
 }
 
 char DSE::ID = 0;
 INITIALIZE_PASS_BEGIN(DSE, "dse", "Dead Store Elimination", false, false)
-INITIALIZE_AG_DEPENDENCY(AliasAnalysis)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
+INITIALIZE_PASS_DEPENDENCY(GlobalsAAWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(MemoryDependenceAnalysis)
-INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
 INITIALIZE_PASS_END(DSE, "dse", "Dead Store Elimination", false, false)
 
@@ -166,6 +112,50 @@ FunctionPass *llvm::createDeadStoreEliminationPass() { return new DSE(); }
 //===----------------------------------------------------------------------===//
 // Helper functions
 //===----------------------------------------------------------------------===//
+
+/// DeleteDeadInstruction - Delete this instruction.  Before we do, go through
+/// and zero out all the operands of this instruction.  If any of them become
+/// dead, delete them and the computation tree that feeds them.
+///
+/// If ValueSet is non-null, remove any deleted instructions from it as well.
+///
+static void DeleteDeadInstruction(Instruction *I,
+                               MemoryDependenceAnalysis &MD,
+                               const TargetLibraryInfo &TLI,
+                               SmallSetVector<Value*, 16> *ValueSet = nullptr) {
+  SmallVector<Instruction*, 32> NowDeadInsts;
+
+  NowDeadInsts.push_back(I);
+  --NumFastOther;
+
+  // Before we touch this instruction, remove it from memdep!
+  do {
+    Instruction *DeadInst = NowDeadInsts.pop_back_val();
+    ++NumFastOther;
+
+    // This instruction is dead, zap it, in stages.  Start by removing it from
+    // MemDep, which needs to know the operands and needs it to be in the
+    // function.
+    MD.removeInstruction(DeadInst);
+
+    for (unsigned op = 0, e = DeadInst->getNumOperands(); op != e; ++op) {
+      Value *Op = DeadInst->getOperand(op);
+      DeadInst->setOperand(op, nullptr);
+
+      // If this operand just became dead, add it to the NowDeadInsts list.
+      if (!Op->use_empty()) continue;
+
+      if (Instruction *OpI = dyn_cast<Instruction>(Op))
+        if (isInstructionTriviallyDead(OpI, &TLI))
+          NowDeadInsts.push_back(OpI);
+    }
+
+    DeadInst->eraseFromParent();
+
+    if (ValueSet) ValueSet->remove(DeadInst);
+  } while (!NowDeadInsts.empty());
+}
+
 
 /// hasMemoryWrite - Does this instruction write some memory?  This only returns
 /// true for things that we can analyze with other helpers below.
@@ -493,11 +483,12 @@ static bool isPossibleSelfRead(Instruction *Inst,
 //===----------------------------------------------------------------------===//
 
 bool DSE::runOnBasicBlock(BasicBlock &BB) {
+  const DataLayout &DL = BB.getModule()->getDataLayout();
   bool MadeChange = false;
 
   // Do a top-down walk on the BB.
   for (BasicBlock::iterator BBI = BB.begin(), BBE = BB.end(); BBI != BBE; ) {
-    Instruction *Inst = BBI++;
+    Instruction *Inst = &*BBI++;
 
     // Handle 'free' calls specially.
     if (CallInst *F = isFreeCall(Inst, TLI)) {
@@ -512,6 +503,22 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
     // If we're storing the same value back to a pointer that we just
     // loaded from, then the store can be removed.
     if (StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
+
+      auto RemoveDeadInstAndUpdateBBI = [&](Instruction *DeadInst) {
+        // DeleteDeadInstruction can delete the current instruction.  Save BBI
+        // in case we need it.
+        WeakVH NextInst(&*BBI);
+
+        DeleteDeadInstruction(DeadInst, *MD, *TLI);
+
+        if (!NextInst) // Next instruction deleted.
+          BBI = BB.begin();
+        else if (BBI != BB.begin()) // Revisit this instruction if possible.
+          --BBI;
+        ++NumRedundantStores;
+        MadeChange = true;
+      };
+
       if (LoadInst *DepLoad = dyn_cast<LoadInst>(SI->getValueOperand())) {
         if (SI->getPointerOperand() == DepLoad->getPointerOperand() &&
             isRemovable(SI) &&
@@ -520,18 +527,26 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
           DEBUG(dbgs() << "DSE: Remove Store Of Load from same pointer:\n  "
                        << "LOAD: " << *DepLoad << "\n  STORE: " << *SI << '\n');
 
-          // DeleteDeadInstruction can delete the current instruction.  Save BBI
-          // in case we need it.
-          WeakVH NextInst(BBI);
+          RemoveDeadInstAndUpdateBBI(SI);
+          continue;
+        }
+      }
 
-          DeleteDeadInstruction(SI, *MD, *TLI);
+      // Remove null stores into the calloc'ed objects
+      Constant *StoredConstant = dyn_cast<Constant>(SI->getValueOperand());
 
-          if (!NextInst)  // Next instruction deleted.
-            BBI = BB.begin();
-          else if (BBI != BB.begin())  // Revisit this instruction if possible.
-            --BBI;
-          ++NumRedundantStores;
-          MadeChange = true;
+      if (StoredConstant && StoredConstant->isNullValue() &&
+          isRemovable(SI)) {
+        Instruction *UnderlyingPointer = dyn_cast<Instruction>(
+            GetUnderlyingObject(SI->getPointerOperand(), DL));
+
+        if (UnderlyingPointer && isCallocLikeFn(UnderlyingPointer, TLI) &&
+            MemoryIsNotModifiedBetween(UnderlyingPointer, SI)) {
+          DEBUG(dbgs()
+                << "DSE: Remove null store to the calloc'ed object:\n  DEAD: "
+                << *Inst << "\n  OBJECT: " << *UnderlyingPointer << '\n');
+
+          RemoveDeadInstAndUpdateBBI(SI);
           continue;
         }
       }
@@ -539,15 +554,10 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
 
     MemDepResult InstDep = MD->getDependency(Inst);
 
-    if (!InstDep.isDef() && !InstDep.isClobber() && !InstDep.isNonLocal())
+    // Ignore any store where we can't find a local dependence.
+    // FIXME: cross-block DSE would be fun. :)
+    if (!InstDep.isDef() && !InstDep.isClobber())
       continue;
-    if (InstDep.isNonLocal()) {
-      if (!PDT->getRootNode())
-        continue;
-      if (StoreInst *SI = dyn_cast<StoreInst>(Inst))
-        handleNonLocalStoreDeletion(SI, BBI, BB);
-      continue;
-    }
 
     // Figure out what location is being stored to.
     MemoryLocation Loc = getLocForWrite(Inst, *AA);
@@ -576,7 +586,6 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
       if (isRemovable(DepWrite) &&
           !isPossibleSelfRead(Inst, Loc, DepWrite, *TLI, *AA)) {
         int64_t InstWriteOffset, DepWriteOffset;
-        const DataLayout &DL = BB.getModule()->getDataLayout();
         OverwriteResult OR =
             isOverwrite(Loc, DepLoc, DL, *TLI, DepWriteOffset, InstWriteOffset);
         if (OR == OverwriteComplete) {
@@ -590,7 +599,7 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
 
           // DeleteDeadInstruction can delete the current instruction in loop
           // cases, reset BBI.
-          BBI = Inst;
+          BBI = Inst->getIterator();
           if (BBI != BB.begin())
             --BBI;
           break;
@@ -636,7 +645,8 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
       if (AA->getModRefInfo(DepWrite, Loc) & MRI_Ref)
         break;
 
-      InstDep = MD->getPointerDependencyFrom(Loc, false, DepWrite, &BB);
+      InstDep = MD->getPointerDependencyFrom(Loc, false,
+                                             DepWrite->getIterator(), &BB);
     }
   }
 
@@ -648,52 +658,53 @@ bool DSE::runOnBasicBlock(BasicBlock &BB) {
   return MadeChange;
 }
 
-/// Returns true if the memory which is accessed by the store instruction is not
-/// modified between the load and the store instruction.
-/// Precondition: The store instruction must be dominated by the load
+/// Returns true if the memory which is accessed by the second instruction is not
+/// modified between the first and the second instruction.
+/// Precondition: Second instruction must be dominated by the first
 /// instruction.
-bool DSE::MemoryIsNotModifiedBetween(LoadInst *LI, StoreInst *SI) {
+bool DSE::MemoryIsNotModifiedBetween(Instruction *FirstI,
+                                     Instruction *SecondI) {
   SmallVector<BasicBlock *, 16> WorkList;
   SmallPtrSet<BasicBlock *, 8> Visited;
-  BasicBlock::iterator LoadBBI(LI);
-  ++LoadBBI;
-  BasicBlock::iterator StoreBBI(SI);
-  BasicBlock *LoadBB = LI->getParent();
-  BasicBlock *StoreBB = SI->getParent();
-  MemoryLocation StoreLoc = MemoryLocation::get(SI);
+  BasicBlock::iterator FirstBBI(FirstI);
+  ++FirstBBI;
+  BasicBlock::iterator SecondBBI(SecondI);
+  BasicBlock *FirstBB = FirstI->getParent();
+  BasicBlock *SecondBB = SecondI->getParent();
+  MemoryLocation MemLoc = MemoryLocation::get(SecondI);
 
   // Start checking the store-block.
-  WorkList.push_back(StoreBB);
+  WorkList.push_back(SecondBB);
   bool isFirstBlock = true;
 
   // Check all blocks going backward until we reach the load-block.
   while (!WorkList.empty()) {
     BasicBlock *B = WorkList.pop_back_val();
 
-    // Ignore instructions before LI if this is the LoadBB.
-    BasicBlock::iterator BI = (B == LoadBB ? LoadBBI : B->begin());
+    // Ignore instructions before LI if this is the FirstBB.
+    BasicBlock::iterator BI = (B == FirstBB ? FirstBBI : B->begin());
 
     BasicBlock::iterator EI;
     if (isFirstBlock) {
-      // Ignore instructions after SI if this is the first visit of StoreBB.
-      assert(B == StoreBB && "first block is not the store block");
-      EI = StoreBBI;
+      // Ignore instructions after SI if this is the first visit of SecondBB.
+      assert(B == SecondBB && "first block is not the store block");
+      EI = SecondBBI;
       isFirstBlock = false;
     } else {
-      // It's not StoreBB or (in case of a loop) the second visit of StoreBB.
+      // It's not SecondBB or (in case of a loop) the second visit of SecondBB.
       // In this case we also have to look at instructions after SI.
       EI = B->end();
     }
     for (; BI != EI; ++BI) {
-      Instruction *I = BI;
-      if (I->mayWriteToMemory() && I != SI) {
-        auto Res = AA->getModRefInfo(I, StoreLoc);
+      Instruction *I = &*BI;
+      if (I->mayWriteToMemory() && I != SecondI) {
+        auto Res = AA->getModRefInfo(I, MemLoc);
         if (Res != MRI_NoModRef)
           return false;
       }
     }
-    if (B != LoadBB) {
-      assert(B != &LoadBB->getParent()->getEntryBlock() &&
+    if (B != FirstBB) {
+      assert(B != &FirstBB->getParent()->getEntryBlock() &&
           "Should not hit the entry block because SI must be dominated by LI");
       for (auto PredI = pred_begin(B), PE = pred_end(B); PredI != PE; ++PredI) {
         if (!Visited.insert(*PredI).second)
@@ -721,50 +732,6 @@ static void FindUnconditionalPreds(SmallVectorImpl<BasicBlock *> &Blocks,
   }
 }
 
-/// DeleteDeadInstruction - Delete this instruction.  Before we do, go through
-/// and zero out all the operands of this instruction.  If any of them become
-/// dead, delete them and the computation tree that feeds them.
-/// If ValueSet is non-null, remove any deleted instructions from it as well.
-void DSE::DeleteDeadInstruction(Instruction *I, MemoryDependenceAnalysis &MD,
-                                const TargetLibraryInfo &TLI,
-                                SmallSetVector<Value *, 16> *ValueSet) {
-  SmallVector<Instruction *, 32> NowDeadInsts;
-
-  NowDeadInsts.push_back(I);
-  --NumFastOther;
-
-  // Before we touch this instruction, remove it from memdep!
-  do {
-    Instruction *DeadInst = NowDeadInsts.pop_back_val();
-    ++NumFastOther;
-    if (StoreInst *SI = dyn_cast<StoreInst>(DeadInst))
-      DeadStores.insert(SI);
-
-    // This instruction is dead, zap it, in stages.  Start by removing it from
-    // MemDep, which needs to know the operands and needs it to be in the
-    // function.
-    MD.removeInstruction(DeadInst);
-
-    for (unsigned op = 0, e = DeadInst->getNumOperands(); op != e; ++op) {
-      Value *Op = DeadInst->getOperand(op);
-      DeadInst->setOperand(op, nullptr);
-
-      // If this operand just became dead, add it to the NowDeadInsts list.
-      if (!Op->use_empty())
-        continue;
-
-      if (Instruction *OpI = dyn_cast<Instruction>(Op))
-        if (isInstructionTriviallyDead(OpI, &TLI))
-          NowDeadInsts.push_back(OpI);
-    }
-
-    DeadInst->eraseFromParent();
-
-    if (ValueSet)
-      ValueSet->remove(DeadInst);
-  } while (!NowDeadInsts.empty());
-}
-
 /// HandleFree - Handle frees of entire structures whose dependency is a store
 /// to a field of that structure.
 bool DSE::HandleFree(CallInst *F) {
@@ -780,7 +747,8 @@ bool DSE::HandleFree(CallInst *F) {
     Instruction *InstPt = BB->getTerminator();
     if (BB == F->getParent()) InstPt = F;
 
-    MemDepResult Dep = MD->getPointerDependencyFrom(Loc, false, InstPt, BB);
+    MemDepResult Dep =
+        MD->getPointerDependencyFrom(Loc, false, InstPt->getIterator(), BB);
     while (Dep.isDef() || Dep.isClobber()) {
       Instruction *Dependency = Dep.getInst();
       if (!hasMemoryWrite(Dependency, *TLI) || !isRemovable(Dependency))
@@ -793,7 +761,7 @@ bool DSE::HandleFree(CallInst *F) {
       if (!AA->isMustAlias(F->getArgOperand(0), DepPointer))
         break;
 
-      Instruction *Next = std::next(BasicBlock::iterator(Dependency));
+      auto Next = ++Dependency->getIterator();
 
       // DCE instructions only used to calculate that store
       DeleteDeadInstruction(Dependency, *MD, *TLI);
@@ -829,23 +797,22 @@ bool DSE::handleEndBlock(BasicBlock &BB) {
   SmallSetVector<Value*, 16> DeadStackObjects;
 
   // Find all of the alloca'd pointers in the entry block.
-  BasicBlock *Entry = BB.getParent()->begin();
-  for (BasicBlock::iterator I = Entry->begin(), E = Entry->end(); I != E; ++I) {
-    if (isa<AllocaInst>(I))
-      DeadStackObjects.insert(I);
+  BasicBlock &Entry = BB.getParent()->front();
+  for (Instruction &I : Entry) {
+    if (isa<AllocaInst>(&I))
+      DeadStackObjects.insert(&I);
 
     // Okay, so these are dead heap objects, but if the pointer never escapes
     // then it's leaked by this function anyways.
-    else if (isAllocLikeFn(I, TLI) && !PointerMayBeCaptured(I, true, true))
-      DeadStackObjects.insert(I);
+    else if (isAllocLikeFn(&I, TLI) && !PointerMayBeCaptured(&I, true, true))
+      DeadStackObjects.insert(&I);
   }
 
   // Treat byval or inalloca arguments the same, stores to them are dead at the
   // end of the function.
-  for (Function::arg_iterator AI = BB.getParent()->arg_begin(),
-       AE = BB.getParent()->arg_end(); AI != AE; ++AI)
-    if (AI->hasByValOrInAllocaAttr())
-      DeadStackObjects.insert(AI);
+  for (Argument &AI : BB.getParent()->args())
+    if (AI.hasByValOrInAllocaAttr())
+      DeadStackObjects.insert(&AI);
 
   const DataLayout &DL = BB.getModule()->getDataLayout();
 
@@ -854,10 +821,10 @@ bool DSE::handleEndBlock(BasicBlock &BB) {
     --BBI;
 
     // If we find a store, check to see if it points into a dead stack value.
-    if (hasMemoryWrite(BBI, *TLI) && isRemovable(BBI)) {
+    if (hasMemoryWrite(&*BBI, *TLI) && isRemovable(&*BBI)) {
       // See through pointer-to-pointer bitcasts
       SmallVector<Value *, 4> Pointers;
-      GetUnderlyingObjects(getStoredPointerOperand(BBI), Pointers, DL);
+      GetUnderlyingObjects(getStoredPointerOperand(&*BBI), Pointers, DL);
 
       // Stores to stack values are valid candidates for removal.
       bool AllDead = true;
@@ -869,7 +836,7 @@ bool DSE::handleEndBlock(BasicBlock &BB) {
         }
 
       if (AllDead) {
-        Instruction *Dead = BBI++;
+        Instruction *Dead = &*BBI++;
 
         DEBUG(dbgs() << "DSE: Dead Store at End of Block:\n  DEAD: "
                      << *Dead << "\n  Objects: ";
@@ -890,8 +857,8 @@ bool DSE::handleEndBlock(BasicBlock &BB) {
     }
 
     // Remove any dead non-memory-mutating instructions.
-    if (isInstructionTriviallyDead(BBI, TLI)) {
-      Instruction *Inst = BBI++;
+    if (isInstructionTriviallyDead(&*BBI, TLI)) {
+      Instruction *Inst = &*BBI++;
       DeleteDeadInstruction(Inst, *MD, *TLI, &DeadStackObjects);
       ++NumFastOther;
       MadeChange = true;
@@ -901,15 +868,15 @@ bool DSE::handleEndBlock(BasicBlock &BB) {
     if (isa<AllocaInst>(BBI)) {
       // Remove allocas from the list of dead stack objects; there can't be
       // any references before the definition.
-      DeadStackObjects.remove(BBI);
+      DeadStackObjects.remove(&*BBI);
       continue;
     }
 
-    if (auto CS = CallSite(BBI)) {
+    if (auto CS = CallSite(&*BBI)) {
       // Remove allocation function calls from the list of dead stack objects; 
       // there can't be any references before the definition.
-      if (isAllocLikeFn(BBI, TLI))
-        DeadStackObjects.remove(BBI);
+      if (isAllocLikeFn(&*BBI, TLI))
+        DeadStackObjects.remove(&*BBI);
 
       // If this call does not access memory, it can't be loading any of our
       // pointers.
@@ -991,123 +958,4 @@ void DSE::RemoveAccessedObjects(const MemoryLocation &LoadedLoc,
     MemoryLocation StackLoc(I, getPointerSize(I, DL, *TLI));
     return !AA->isNoAlias(StackLoc, LoadedLoc);
   });
-}
-
-/// isSafeCandidateForDeletion- Check all paths from the SrcBlock till
-/// SinkBlock to see if Store 'SI' is safe to be remove.
-/// Returns true if the candidate store SI is safe to delete
-/// else returns false.
-bool DSE::isSafeCandidateForDeletion(BasicBlock *SrcBlock,
-                                     BasicBlock *SinkBlock, StoreInst *SI) {
-  SmallVector<BasicBlock *, 16> WorkList;
-  SmallPtrSet<BasicBlock *, 8> Visited;
-  BasicBlock::iterator BBI(SI);
-
-  // Check from the store till end of block and make sure we have no references
-  // to memory stored by this Store Instruction.
-  for (auto BI = ++BBI, BE = SrcBlock->end(); BI != BE; ++BI) {
-    Instruction *I = BI;
-    StoreInst *CSI = dyn_cast<StoreInst>(I);
-    if (CSI) {
-      AliasResult R =
-          AA->alias(MemoryLocation::get(SI), MemoryLocation::get(CSI));
-      if (R == MustAlias)
-        return true;
-    } else {
-      ModRefInfo Res = AA->getModRefInfo(I, MemoryLocation::get(SI));
-      if (Res != MRI_NoModRef)
-        return false;
-    }
-  }
-
-  // Add successors of the block to stack and start DFS.
-  for (succ_iterator I = succ_begin(SrcBlock), E = succ_end(SrcBlock); I != E;
-       ++I) {
-    if (!Visited.insert(*I).second)
-      continue;
-    // A path with backedge may not be safe. Conservatively mark
-    // this store unsafe.
-    if (BackEdgesMap.count(std::make_pair(SrcBlock, *I)))
-      return false;
-    WorkList.push_back(*I);
-  }
-
-  while (!WorkList.empty()) {
-    BasicBlock *B = WorkList.pop_back_val();
-    auto BI = B->begin();
-    auto BE = B->end();
-    for (; BI != BE; ++BI) {
-      Instruction *I = BI;
-      StoreInst *CSI = dyn_cast<StoreInst>(I);
-      if (CSI) {
-        AliasResult R =
-            AA->alias(MemoryLocation::get(SI), MemoryLocation::get(CSI));
-        if (R == MustAlias)
-          break;
-      } else {
-        ModRefInfo Res = AA->getModRefInfo(I, MemoryLocation::get(SI));
-        if (Res != MRI_NoModRef)
-          return false;
-      }
-    }
-
-    // If we reached the sink node or we found a block which has a stores that
-    // overwrites the candidate block we need not look at their successors.
-    if (B == SinkBlock || BI != BE)
-      continue;
-
-    for (succ_iterator I = succ_begin(B), E = succ_end(B); I != E; ++I) {
-      if (!Visited.insert(*I).second)
-        continue;
-      // A path with backedge may not be safe.Conservatively mark
-      // this store unsafe.
-      if (BackEdgesMap.count(std::make_pair(B, *I)))
-        return false;
-      WorkList.push_back(*I);
-    }
-  }
-
-  return true;
-}
-
-/// handleNonLocalStoreDeletion - Handle non local dead store elimination.
-/// This works by finding candidate stores using PDT and then running DFS
-/// from candidate store block checking all paths to make sure the store is
-/// safe to delete.
-void DSE::handleNonLocalStoreDeletion(StoreInst *SI, BasicBlock::iterator &BBI,
-                                      BasicBlock &CurBlock) {
-  BasicBlock *BB = SI->getParent();
-  Value *Pointer = SI->getPointerOperand();
-  DomTreeNode *DTNode = PDT->getNode(BB);
-  if (!DTNode)
-    return;
-
-  int DFSNumIn = DTNode->getDFSNumIn();
-  int DFSNumOut = DTNode->getDFSNumOut();
-  for (int i = DFSNumIn + 1; i < DFSNumOut; ++i) {
-    for (auto &I : Candidates[i]) {
-      StoreInst *CandidateSI = I;
-      if (DeadStores.count(CandidateSI))
-        continue;
-      Value *MemPtr = CandidateSI->getPointerOperand();
-      if (!MemPtr)
-        continue;
-      if (Pointer->getType() != MemPtr->getType())
-        continue;
-      AliasResult R =
-          AA->alias(MemoryLocation::get(SI), MemoryLocation::get(CandidateSI));
-      if (R != MustAlias)
-        continue;
-      if (isSafeCandidateForDeletion(CandidateSI->getParent(), BB,
-                                     CandidateSI)) {
-        DeleteDeadInstruction(CandidateSI, *MD, *TLI);
-        ++NumCrossBlockStores;
-        // DeleteDeadInstruction can delete the current instruction in loop
-        // cases, reset BBI.
-        BBI = SI;
-        if (BBI != CurBlock.begin())
-          --BBI;
-      }
-    }
-  }
 }

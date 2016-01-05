@@ -21,6 +21,8 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
@@ -58,6 +60,8 @@ struct AlignmentFromAssumptions : public FunctionPass {
     AU.addRequired<DominatorTreeWrapperPass>();
 
     AU.setPreservesCFG();
+    AU.addPreserved<AAResultsWrapperPass>();
+    AU.addPreserved<GlobalsAAWrapperPass>();
     AU.addPreserved<LoopInfoWrapperPass>();
     AU.addPreserved<DominatorTreeWrapperPass>();
     AU.addPreserved<ScalarEvolutionWrapperPass>();
@@ -249,8 +253,7 @@ bool AlignmentFromAssumptions::extractAlignmentInfo(CallInst *I,
 
   // The mask must have some trailing ones (otherwise the condition is
   // trivial and tells us nothing about the alignment of the left operand).
-  unsigned TrailingOnes =
-    MaskSCEV->getValue()->getValue().countTrailingOnes();
+  unsigned TrailingOnes = MaskSCEV->getAPInt().countTrailingOnes();
   if (!TrailingOnes)
     return false;
 
@@ -270,7 +273,7 @@ bool AlignmentFromAssumptions::extractAlignmentInfo(CallInst *I,
   OffSCEV = nullptr;
   if (PtrToIntInst *PToI = dyn_cast<PtrToIntInst>(AndLHS)) {
     AAPtr = PToI->getPointerOperand();
-    OffSCEV = SE->getConstant(Int64Ty, 0);
+    OffSCEV = SE->getZero(Int64Ty);
   } else if (const SCEVAddExpr* AndLHSAddSCEV =
              dyn_cast<SCEVAddExpr>(AndLHSSCEV)) {
     // Try to find the ptrtoint; subtract it and the rest is the offset.

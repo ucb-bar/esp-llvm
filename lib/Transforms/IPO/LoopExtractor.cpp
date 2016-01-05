@@ -43,12 +43,13 @@ namespace {
         initializeLoopExtractorPass(*PassRegistry::getPassRegistry());
       }
 
-    bool runOnLoop(Loop *L, LPPassManager &LPM) override;
+    bool runOnLoop(Loop *L, LPPassManager &) override;
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequiredID(BreakCriticalEdgesID);
       AU.addRequiredID(LoopSimplifyID);
       AU.addRequired<DominatorTreeWrapperPass>();
+      AU.addRequired<LoopInfoWrapperPass>();
     }
   };
 }
@@ -79,7 +80,7 @@ INITIALIZE_PASS(SingleLoopExtractor, "loop-extract-single",
 //
 Pass *llvm::createLoopExtractorPass() { return new LoopExtractor(); }
 
-bool LoopExtractor::runOnLoop(Loop *L, LPPassManager &LPM) {
+bool LoopExtractor::runOnLoop(Loop *L, LPPassManager &) {
   if (skipOptnoneFunction(L))
     return false;
 
@@ -92,6 +93,7 @@ bool LoopExtractor::runOnLoop(Loop *L, LPPassManager &LPM) {
     return false;
 
   DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
+  LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   bool Changed = false;
 
   // If there is more than one top-level loop in this function, extract all of
@@ -141,7 +143,7 @@ bool LoopExtractor::runOnLoop(Loop *L, LPPassManager &LPM) {
       Changed = true;
       // After extraction, the loop is replaced by a function call, so
       // we shouldn't try to run any more loop passes on it.
-      LPM.deleteLoopFromQueue(L);
+      LI.updateUnloop(L);
     }
     ++NumExtracted;
   }
@@ -259,7 +261,7 @@ bool BlockExtractorPass::runOnModule(Module &M) {
     // Figure out which index the basic block is in its function.
     Function::iterator BBI = MF->begin();
     std::advance(BBI, std::distance(F->begin(), Function::iterator(BB)));
-    TranslatedBlocksToNotExtract.insert(BBI);
+    TranslatedBlocksToNotExtract.insert(&*BBI);
   }
 
   while (!BlocksToNotExtractByName.empty()) {
@@ -278,7 +280,7 @@ bool BlockExtractorPass::runOnModule(Module &M) {
         BasicBlock &BB = *BI;
         if (BB.getName() != BlockName) continue;
 
-        TranslatedBlocksToNotExtract.insert(BI);
+        TranslatedBlocksToNotExtract.insert(&*BI);
       }
     }
 
@@ -291,8 +293,8 @@ bool BlockExtractorPass::runOnModule(Module &M) {
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     SplitLandingPadPreds(&*F);
     for (Function::iterator BB = F->begin(), E = F->end(); BB != E; ++BB)
-      if (!TranslatedBlocksToNotExtract.count(BB))
-        BlocksToExtract.push_back(BB);
+      if (!TranslatedBlocksToNotExtract.count(&*BB))
+        BlocksToExtract.push_back(&*BB);
   }
 
   for (unsigned i = 0, e = BlocksToExtract.size(); i != e; ++i) {

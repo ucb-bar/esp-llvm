@@ -26,7 +26,7 @@ static BasicBlock::iterator moveBeforeInsertPoint(BasicBlock::iterator I, BasicB
   if (I == IP)
     return ++IP;
   // Otherwise, move I before IP and return IP.
-  I->moveBefore(IP);
+  I->moveBefore(&*IP);
   return IP;
 }
 
@@ -60,6 +60,8 @@ void llvm::initializeInstrumentation(PassRegistry &Registry) {
   initializeAddressSanitizerModulePass(Registry);
   initializeBoundsCheckingPass(Registry);
   initializeGCOVProfilerPass(Registry);
+  initializePGOInstrumentationGenPass(Registry);
+  initializePGOInstrumentationUsePass(Registry);
   initializeInstrProfilingPass(Registry);
   initializeMemorySanitizerPass(Registry);
   initializeThreadSanitizerPass(Registry);

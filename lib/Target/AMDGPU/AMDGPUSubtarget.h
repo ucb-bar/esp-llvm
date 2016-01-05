@@ -1,4 +1,4 @@
-//=====-- AMDGPUSubtarget.h - Define Subtarget for the AMDIL ---*- C++ -*-====//
+//=====-- AMDGPUSubtarget.h - Define Subtarget for AMDGPU ------*- C++ -*-====//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,17 +12,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_R600_AMDGPUSUBTARGET_H
-#define LLVM_LIB_TARGET_R600_AMDGPUSUBTARGET_H
+#ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPUSUBTARGET_H
+#define LLVM_LIB_TARGET_AMDGPU_AMDGPUSUBTARGET_H
+
 #include "AMDGPU.h"
 #include "AMDGPUFrameLowering.h"
 #include "AMDGPUInstrInfo.h"
-#include "AMDGPUIntrinsicInfo.h"
+#include "AMDGPUISelLowering.h"
 #include "AMDGPUSubtarget.h"
-#include "R600ISelLowering.h"
-#include "AMDKernelCodeT.h"
 #include "Utils/AMDGPUBaseInfo.h"
-#include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 
@@ -72,11 +70,13 @@ private:
   bool FastFMAF32;
   bool CaymanISA;
   bool FlatAddressSpace;
+  bool FlatForGlobal;
   bool EnableIRStructurizer;
   bool EnablePromoteAlloca;
   bool EnableIfCvt;
   bool EnableLoadStoreOpt;
   bool EnableUnsafeDSOffsetFolding;
+  bool EnableXNACK;
   unsigned WavefrontSize;
   bool CFALUBug;
   int LocalMemorySize;
@@ -88,10 +88,10 @@ private:
   bool CIInsts;
   bool FeatureDisable;
   int LDSBankCount;
-  unsigned IsaVersion; 
+  unsigned IsaVersion;
   bool EnableHugeScratchBuffer;
 
-  AMDGPUFrameLowering FrameLowering;
+  std::unique_ptr<AMDGPUFrameLowering> FrameLowering;
   std::unique_ptr<AMDGPUTargetLowering> TLInfo;
   std::unique_ptr<AMDGPUInstrInfo> InstrInfo;
   InstrItineraryData InstrItins;
@@ -104,7 +104,7 @@ public:
                                                    StringRef GPU, StringRef FS);
 
   const AMDGPUFrameLowering *getFrameLowering() const override {
-    return &FrameLowering;
+    return FrameLowering.get();
   }
   const AMDGPUInstrInfo *getInstrInfo() const override {
     return InstrInfo.get();
@@ -159,6 +159,10 @@ public:
 
   bool hasFlatAddressSpace() const {
     return FlatAddressSpace;
+  }
+
+  bool useFlatForGlobal() const {
+    return FlatForGlobal;
   }
 
   bool hasBFE() const {
@@ -287,6 +291,10 @@ public:
   }
   bool isVGPRSpillingEnabled(const SIMachineFunctionInfo *MFI) const;
 
+  bool isXNACKEnabled() const {
+    return EnableXNACK;
+  }
+
   unsigned getMaxWavesPerCU() const {
     if (getGeneration() >= AMDGPUSubtarget::SOUTHERN_ISLANDS)
       return 10;
@@ -305,6 +313,9 @@ public:
     return isAmdHsaOS() ? 0 : 36;
   }
 
+  unsigned getMaxNumUserSGPRs() const {
+    return 16;
+  }
 };
 
 } // End namespace llvm

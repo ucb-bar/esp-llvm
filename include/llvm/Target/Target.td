@@ -620,6 +620,7 @@ class Operand<ValueType ty> : DAGOperand {
   string EncoderMethod = "";
   string DecoderMethod = "";
   bit hasCompleteDecoder = 1;
+  string OperandNamespace = "MCOI";
   string OperandType = "OPERAND_UNKNOWN";
   dag MIOperandInfo = (ops);
 
@@ -936,8 +937,9 @@ class AsmParser {
   // written register name matcher
   bit ShouldEmitMatchRegisterName = 1;
 
-  /// Does the instruction mnemonic allow '.'
-  bit MnemonicContainsDot = 0;
+  // HasMnemonicFirst - Set to false if target instructions don't always
+  // start with a mnemonic as the first token.
+  bit HasMnemonicFirst = 1;
 }
 def DefaultAsmParser : AsmParser;
 
@@ -965,6 +967,15 @@ class AsmParserVariant {
   // register tokens as constrained registers, instead of tokens, for the
   // purposes of matching.
   string RegisterPrefix = "";
+
+  // TokenizingCharacters - Characters that are standalone tokens
+  string TokenizingCharacters = "[]*!";
+
+  // SeparatorCharacters - Characters that are not tokens
+  string SeparatorCharacters = " \t,";
+
+  // BreakCharacters - Characters that start new identifiers
+  string BreakCharacters = "";
 }
 def DefaultAsmParserVariant : AsmParserVariant;
 

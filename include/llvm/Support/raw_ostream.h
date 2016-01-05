@@ -349,10 +349,6 @@ class raw_fd_ostream : public raw_pwrite_stream {
   ///
   bool Error;
 
-  /// Controls whether the stream should attempt to use atomic writes, when
-  /// possible.
-  bool UseAtomicWrites;
-
   uint64_t pos;
 
   bool SupportsSeeking;
@@ -401,16 +397,6 @@ public:
   /// Flushes the stream and repositions the underlying file descriptor position
   /// to the offset specified from the beginning of the file.
   uint64_t seek(uint64_t off);
-
-  /// Set the stream to attempt to use atomic writes for individual output
-  /// routines where possible.
-  ///
-  /// Note that because raw_ostream's are typically buffered, this flag is only
-  /// sensible when used on unbuffered streams which will flush their output
-  /// immediately.
-  void SetUseAtomicWrites(bool Value) {
-    UseAtomicWrites = Value;
-  }
 
   raw_ostream &changeColor(enum Colors colors, bool bold=false,
                            bool bg=false) override;
@@ -536,9 +522,9 @@ class buffer_ostream : public raw_svector_ostream {
 
 public:
   buffer_ostream(raw_ostream &OS) : raw_svector_ostream(Buffer), OS(OS) {}
-  ~buffer_ostream() { OS << str(); }
+  ~buffer_ostream() override { OS << str(); }
 };
 
 } // end llvm namespace
 
-#endif
+#endif // LLVM_SUPPORT_RAW_OSTREAM_H

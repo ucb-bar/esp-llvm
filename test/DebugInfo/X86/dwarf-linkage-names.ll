@@ -19,10 +19,10 @@
 ; LINKAGE1: .section .debug_info
 ; LINKAGE1: DW_TAG_variable
 ; LINKAGE1-NOT: DW_TAG
-; LINKAGE1: {{DW_AT_(MIPS_)*linkage_name}}
+; LINKAGE1: {{DW_AT_(MIPS_)?linkage_name}}
 ; LINKAGE1: DW_TAG_subprogram
 ; LINKAGE1-NOT: DW_TAG
-; LINKAGE1: {{DW_AT_(MIPS_)*linkage_name}}
+; LINKAGE1: {{DW_AT_(MIPS_)?linkage_name}}
 ; LINKAGE1: .section
 
 ; Also verify we see the mangled names. We do this as a separate pass to
@@ -34,14 +34,14 @@
 ; Without linkage names, verify there aren't any linkage-name attributes,
 ; and no mangled names.
 
-; NOLINKAGE-NOT: {{DW_AT_(MIPS_)*linkage_name}}
+; NOLINKAGE-NOT: {{DW_AT_(MIPS_)?linkage_name}}
 ; NOLINKAGE-NOT: .asciz   "_ZN4test10global_varE"
 ; NOLINKAGE-NOT: .asciz   "_ZN4test3barEv"
 
 @_ZN4test10global_varE = global i32 0, align 4
 
 ; Function Attrs: nounwind uwtable
-define i32 @_ZN4test3barEv() #0 {
+define i32 @_ZN4test3barEv() #0 !dbg !4 {
 entry:
   %0 = load i32, i32* @_ZN4test10global_varE, align 4, !dbg !14
   ret i32 %0, !dbg !15
@@ -57,7 +57,7 @@ attributes #0 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fp
 !1 = !DIFile(filename: "dwarf-linkage-names.cpp", directory: "/home/probinson/projects/scratch")
 !2 = !{}
 !3 = !{!4}
-!4 = !DISubprogram(name: "bar", linkageName: "_ZN4test3barEv", scope: !5, file: !1, line: 3, type: !6, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, function: i32 ()* @_ZN4test3barEv, variables: !2)
+!4 = distinct !DISubprogram(name: "bar", linkageName: "_ZN4test3barEv", scope: !5, file: !1, line: 3, type: !6, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, variables: !2)
 !5 = !DINamespace(name: "test", scope: null, file: !1, line: 1)
 !6 = !DISubroutineType(types: !7)
 !7 = !{!8}

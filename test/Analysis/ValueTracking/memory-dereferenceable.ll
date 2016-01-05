@@ -5,8 +5,11 @@
 
 target datalayout = "e"
 
+%TypeOpaque = type opaque
+
 declare zeroext i1 @return_i1()
 
+declare i32* @foo()
 @globalstr = global [6 x i8] c"hello\00"
 @globali32ptr = external global i32*
 
@@ -16,6 +19,7 @@ declare zeroext i1 @return_i1()
 @globalptr.align1 = external global i8, align 1
 @globalptr.align16 = external global i8, align 16
 
+; CHECK-LABEL: 'test'
 define void @test(i32 addrspace(1)* dereferenceable(8) %dparam,
                   i8 addrspace(1)* dereferenceable(32) align 1 %dparam.align1,
                   i8 addrspace(1)* dereferenceable(32) align 16 %dparam.align16)
@@ -34,8 +38,8 @@ entry:
     %load3 = load i32, i32 addrspace(1)* %dparam
 
 ; CHECK: %relocate{{.*}}(aligned)
-    %tok = tail call i32 (i64, i32, i1 ()*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_i1f(i64 0, i32 0, i1 ()* @return_i1, i32 0, i32 0, i32 0, i32 0, i32 addrspace(1)* %dparam)
-    %relocate = call i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(i32 %tok, i32 7, i32 7)
+    %tok = tail call token (i64, i32, i1 ()*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_i1f(i64 0, i32 0, i1 ()* @return_i1, i32 0, i32 0, i32 0, i32 0, i32 addrspace(1)* %dparam)
+    %relocate = call i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token %tok, i32 7, i32 7)
     %load4 = load i32, i32 addrspace(1)* %relocate
 
 ; CHECK-NOT: %nparam
@@ -111,11 +115,46 @@ entry:
     %load21 = load i8, i8 addrspace(1)* %gep.align1.offset16, align 16
     %load22 = load i8, i8 addrspace(1)* %gep.align16.offset16, align 16
 
+; CHECK-NOT: %no_deref_return
+; CHECK: %deref_return{{.*}}(unaligned)
+; CHECK: %deref_and_aligned_return{{.*}}(aligned)
+    %no_deref_return = call i32* @foo()
+    %deref_return = call dereferenceable(32) i32* @foo()
+    %deref_and_aligned_return = call dereferenceable(32) align 16 i32* @foo()
+    %load23 = load i32, i32* %no_deref_return
+    %load24 = load i32, i32* %deref_return, align 16
+    %load25 = load i32, i32* %deref_and_aligned_return, align 16
+
+    ; Load from a dereferenceable and aligned load
+; CHECK: %d4_unaligned_load{{.*}}(unaligned)
+; CHECK: %d4_aligned_load{{.*}}(aligned)
+    %d4_unaligned_load = load i32*, i32** @globali32ptr, !dereferenceable !0
+    %d4_aligned_load = load i32*, i32** @globali32ptr, !dereferenceable !0, !align !{i64 16}
+    %load26 = load i32, i32* %d4_unaligned_load, align 16
+    %load27 = load i32, i32* %d4_aligned_load, align 16
+
     ret void
 }
 
-declare i32 @llvm.experimental.gc.statepoint.p0f_i1f(i64, i32, i1 ()*, i32, i32, ...)
-declare i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(i32, i32, i32)
+; Just check that we don't crash.
+; CHECK-LABEL: 'opaque_type_crasher'
+define void @opaque_type_crasher(%TypeOpaque* dereferenceable(16) %a) {
+entry:
+  %bc = bitcast %TypeOpaque* %a to i8*
+  %ptr8 = getelementptr inbounds i8, i8* %bc, i32 8
+  %ptr32 = bitcast i8* %ptr8 to i32*
+  br i1 undef, label %if.then, label %if.end
+
+if.then:
+  %res = load i32, i32* %ptr32, align 4
+  br label %if.end
+
+if.end:
+  ret void
+}
+
+declare token @llvm.experimental.gc.statepoint.p0f_i1f(i64, i32, i1 ()*, i32, i32, ...)
+declare i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token, i32, i32)
 
 !0 = !{i64 4}
 !1 = !{i64 2}

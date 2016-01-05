@@ -231,7 +231,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           const std::vector<CalleeSavedInfo> &CSI,
                           const TargetRegisterInfo *TRI) const {
   MachineFunction *MF = MBB.getParent();
-  MachineBasicBlock *EntryBlock = MF->begin();
+  MachineBasicBlock &EntryBlock = *(MF->begin());
   const TargetInstrInfo &TII = *MF->getSubtarget().getInstrInfo();
 
   for (unsigned i = 0, e = CSI.size(); i != e; ++i) {
@@ -244,12 +244,12 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     bool IsRAAndRetAddrIsTaken = (Reg == RISCV::ra || Reg == RISCV::ra_64)
         && MF->getFrameInfo()->isReturnAddressTaken();
     if (!IsRAAndRetAddrIsTaken)
-      EntryBlock->addLiveIn(Reg);
+      EntryBlock.addLiveIn(Reg);
 
     // Insert the spill to the stack frame.
     bool IsKill = !IsRAAndRetAddrIsTaken;
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(*EntryBlock, MI, Reg, IsKill,
+    TII.storeRegToStackSlot(EntryBlock, MI, Reg, IsKill,
                             CSI[i].getFrameIdx(), RC, TRI);
   }
 

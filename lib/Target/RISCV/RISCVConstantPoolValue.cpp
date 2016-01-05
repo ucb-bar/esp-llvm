@@ -26,16 +26,6 @@ RISCVConstantPoolValue::Create(const GlobalValue *GV,
   return new RISCVConstantPoolValue(GV, Modifier);
 }
 
-unsigned RISCVConstantPoolValue::getRelocationInfo() const {
-  switch (Modifier) {
-  case RISCVCP::NTPOFF:
-    // May require a relocation, but the relocations are always resolved
-    // by the static linker.
-    return 1;
-  }
-  llvm_unreachable("Unknown modifier");
-}
-
 int RISCVConstantPoolValue::
 getExistingMachineCPValue(MachineConstantPool *CP, unsigned Alignment) {
   unsigned AlignMask = Alignment - 1;

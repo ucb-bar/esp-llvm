@@ -71,12 +71,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
 
   // Set up special registers.
   if(Subtarget.isRV64()) {
-    setExceptionPointerRegister(RISCV::epc_64);
-    setExceptionSelectorRegister(RISCV::evec_64);
     setStackPointerRegisterToSaveRestore(RISCV::sp_64);
   }else {
-    setExceptionPointerRegister(RISCV::epc);
-    setExceptionSelectorRegister(RISCV::evec);
     setStackPointerRegisterToSaveRestore(RISCV::sp);
   }
 
@@ -406,6 +402,25 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
   computeRegisterProperties(STI.getRegisterInfo());
 }
 
+/// If a physical register, this returns the register that receives the
+/// exception address on entry to an EH pad.
+unsigned
+RISCVTargetLowering::getExceptionPointerRegister(const Constant *PersonalityFn) const {
+  if(Subtarget.isRV64())
+    return RISCV::epc_64;
+  else 
+    return RISCV::epc;
+}
+
+/// If a physical register, this returns the register that receives the
+/// exception typeid on entry to a landing pad.
+unsigned
+RISCVTargetLowering::getExceptionSelectorRegister(const Constant *PersonalityFn) const {
+  if(Subtarget.isRV64())
+    return RISCV::evec_64;
+  else 
+    return RISCV::evec;
+}
 
 bool RISCVTargetLowering::isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const {
   // The RISCV target isn't yet aware of offsets.
@@ -1399,7 +1414,7 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   // destination vreg to set, the condition code register to branch on, the
   // true/false values to select between, and a branch opcode to use.
   const BasicBlock *LLVM_BB = BB->getBasicBlock();
-  MachineFunction::iterator It = BB;
+  MachineFunction::iterator It = BB->getIterator();
   ++It;
 
   //  thisMBB:

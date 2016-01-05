@@ -430,6 +430,33 @@ enum {
 #include "ELFRelocs/ARM.def"
 };
 
+// AVR specific e_flags
+enum : unsigned {
+  EF_AVR_ARCH_AVR1    = 1,
+  EF_AVR_ARCH_AVR2    = 2,
+  EF_AVR_ARCH_AVR25   = 25,
+  EF_AVR_ARCH_AVR3    = 3,
+  EF_AVR_ARCH_AVR31   = 31,
+  EF_AVR_ARCH_AVR35   = 35,
+  EF_AVR_ARCH_AVR4    = 4,
+  EF_AVR_ARCH_AVR5    = 5,
+  EF_AVR_ARCH_AVR51   = 51,
+  EF_AVR_ARCH_AVR6    = 6,
+  EF_AVR_ARCH_AVRTINY = 100,
+  EF_AVR_ARCH_XMEGA1  = 101,
+  EF_AVR_ARCH_XMEGA2  = 102,
+  EF_AVR_ARCH_XMEGA3  = 103,
+  EF_AVR_ARCH_XMEGA4  = 104,
+  EF_AVR_ARCH_XMEGA5  = 105,
+  EF_AVR_ARCH_XMEGA6  = 106,
+  EF_AVR_ARCH_XMEGA7  = 107
+};
+
+// ELF Relocation types for AVR
+enum {
+#include "ELFRelocs/AVR.def"
+};
+
 // Mips Specific e_flags
 enum : unsigned {
   EF_MIPS_NOREORDER = 0x00000001, // Don't reorder instructions
@@ -523,26 +550,28 @@ enum {
   ODK_PAGESIZE   = 11   // Page size information
 };
 
-// Hexagon Specific e_flags
-// Release 5 ABI
+// Hexagon-specific e_flags
 enum {
-  // Object processor version flags, bits[3:0]
+  // Object processor version flags, bits[11:0]
   EF_HEXAGON_MACH_V2      = 0x00000001,   // Hexagon V2
   EF_HEXAGON_MACH_V3      = 0x00000002,   // Hexagon V3
   EF_HEXAGON_MACH_V4      = 0x00000003,   // Hexagon V4
   EF_HEXAGON_MACH_V5      = 0x00000004,   // Hexagon V5
+  EF_HEXAGON_MACH_V55     = 0x00000005,   // Hexagon V55
+  EF_HEXAGON_MACH_V60     = 0x00000060,   // Hexagon V60
 
   // Highest ISA version flags
-  EF_HEXAGON_ISA_MACH     = 0x00000000,   // Same as specified in bits[3:0]
+  EF_HEXAGON_ISA_MACH     = 0x00000000,   // Same as specified in bits[11:0]
                                           // of e_flags
   EF_HEXAGON_ISA_V2       = 0x00000010,   // Hexagon V2 ISA
   EF_HEXAGON_ISA_V3       = 0x00000020,   // Hexagon V3 ISA
   EF_HEXAGON_ISA_V4       = 0x00000030,   // Hexagon V4 ISA
-  EF_HEXAGON_ISA_V5       = 0x00000040    // Hexagon V5 ISA
+  EF_HEXAGON_ISA_V5       = 0x00000040,   // Hexagon V5 ISA
+  EF_HEXAGON_ISA_V55      = 0x00000050,   // Hexagon V55 ISA
+  EF_HEXAGON_ISA_V60      = 0x00000060,   // Hexagon V60 ISA
 };
 
-// Hexagon specific Section indexes for common small data
-// Release 5 ABI
+// Hexagon-specific section indexes for common small data
 enum {
   SHN_HEXAGON_SCOMMON     = 0xff00,       // Other access sizes
   SHN_HEXAGON_SCOMMON_1   = 0xff01,       // Byte-sized access
@@ -561,7 +590,7 @@ enum {
 #include "ELFRelocs/SystemZ.def"
 };
 
-// ELF Relocation types for RISCV
+// ELF Relocation type for RISCV.
 enum {
 #include "ELFRelocs/RISCV.def"
 };

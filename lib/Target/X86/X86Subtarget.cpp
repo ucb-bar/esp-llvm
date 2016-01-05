@@ -189,9 +189,25 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
       FullFS = "+64bit,+sse2";
   }
 
+  // LAHF/SAHF are always supported in non-64-bit mode.
+  if (!In64BitMode) {
+    if (!FullFS.empty())
+      FullFS = "+sahf," + FullFS;
+    else
+      FullFS = "+sahf";
+  }
+
+
   // Parse features string and set the CPU.
   ParseSubtargetFeatures(CPUName, FullFS);
 
+  // All CPUs that implement SSE4.2 or SSE4A support unaligned accesses of
+  // 16-bytes and under that are reasonably fast. These features were
+  // introduced with Intel's Nehalem/Silvermont and AMD's Family10h
+  // micro-architectures respectively.
+  if (hasSSE42() || hasSSE4A())
+    IsUAMem16Slow = false;
+  
   InstrItins = getInstrItineraryForCPU(CPUName);
 
   // It's important to keep the MCSubtargetInfo feature bits in sync with
@@ -221,13 +237,18 @@ void X86Subtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
 }
 
 void X86Subtarget::initializeEnvironment() {
-  X86SSELevel = NoMMXSSE;
+  X86SSELevel = NoSSE;
   X863DNowLevel = NoThreeDNow;
   HasCMov = false;
   HasX86_64 = false;
   HasPOPCNT = false;
   HasSSE4A = false;
   HasAES = false;
+  HasFXSR = false;
+  HasXSAVE = false;
+  HasXSAVEOPT = false;
+  HasXSAVEC = false;
+  HasXSAVES = false;
   HasPCLMUL = false;
   HasFMA = false;
   HasFMA4 = false;
@@ -249,13 +270,15 @@ void X86Subtarget::initializeEnvironment() {
   HasBWI = false;
   HasVLX = false;
   HasADX = false;
+  HasPKU = false;
   HasSHA = false;
   HasPRFCHW = false;
   HasRDSEED = false;
+  HasLAHFSAHF = false;
   HasMPX = false;
   IsBTMemSlow = false;
   IsSHLDSlow = false;
-  IsUAMemFast = false;
+  IsUAMem16Slow = false;
   IsUAMem32Slow = false;
   HasSSEUnalignedMem = false;
   HasCmpxchg16b = false;
