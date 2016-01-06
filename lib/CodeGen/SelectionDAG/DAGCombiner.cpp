@@ -8798,6 +8798,8 @@ static inline bool CanCombineFCOPYSIGN_EXTEND_ROUND(SDNode *N) {
   // to keep one f128 value in one SSE register, but
   // instruction selection cannot handle FCOPYSIGN on
   // SSE registers yet.
+  if(N->getOperand(1)->getNumOperands() == 0)
+    return false; // constant second operand can't be combined
   SDValue N1 = N->getOperand(1);
   EVT N1VT = N1->getValueType(0);
   EVT N1Op0VT = N1->getOperand(0)->getValueType(0);
