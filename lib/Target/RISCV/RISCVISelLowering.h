@@ -127,6 +127,8 @@ public:
   getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                StringRef Constraint,
                                MVT VT) const override;
+  std::pair<unsigned, const TargetRegisterClass *>
+  parseRegForInlineAsmConstraint(StringRef C, MVT VT) const;
   TargetLowering::ConstraintType
   getConstraintType(StringRef Constraint) const override;
   TargetLowering::ConstraintWeight

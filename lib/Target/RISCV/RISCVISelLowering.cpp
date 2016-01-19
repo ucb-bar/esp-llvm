@@ -528,6 +528,63 @@ getSingleConstraintMatchWeight(AsmOperandInfo &info,
   return weight;
 }
 
+/// This is a helper function to parse a physical register string and split it
+/// into non-numeric and numeric parts (Prefix and Reg). The first boolean flag
+/// that is returned indicates whether parsing was successful. The second flag
+/// is true if the numeric part exists.
+static std::pair<bool, bool> parsePhysicalReg(StringRef C, StringRef &Prefix,
+                                              unsigned long long &Reg) {
+  if (C.front() != '{' || C.back() != '}')
+    return std::make_pair(false, false);
+
+  // Search for the first numeric character.
+  StringRef::const_iterator I, B = C.begin() + 1, E = C.end() - 1;
+  I = std::find_if(B, E, isdigit);
+
+  Prefix = StringRef(B, I - B);
+
+  // The second flag is set to false if no numeric characters were found.
+  if (I == E)
+    return std::make_pair(true, false);
+
+  // Parse the numeric characters.
+  return std::make_pair(!getAsUnsignedInteger(StringRef(I, E - I), 10, Reg),
+                        true);
+}
+
+std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
+parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
+  const TargetRegisterInfo *TRI =
+      Subtarget.getRegisterInfo();
+  const TargetRegisterClass *RC;
+  StringRef Prefix;
+  unsigned long long Reg;
+
+  std::pair<bool, bool> R = parsePhysicalReg(C, Prefix, Reg);
+
+  if (!R.first)
+    return std::make_pair(0U, nullptr);
+
+  if (!R.second)
+    return std::make_pair(0U, nullptr);
+
+  if (Prefix == "f") { // Parse f0-f31.
+    // Select 64 bit if we have D
+    if (VT == MVT::Other)
+      VT = (Subtarget.hasD()) ? MVT::f64 : MVT::f32;
+
+    RC = getRegClassFor(VT);
+
+  } else { // Parse x0-x31.
+    assert(Prefix == "x");
+    RC = getRegClassFor((VT == MVT::Other) ?
+        (Subtarget.isRV64() ? MVT::i64 : MVT::i32) : VT);
+  }
+
+  assert(Reg < RC->getNumRegs());
+  return std::make_pair(*(RC->begin() + Reg), RC);
+}
+
 std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
 getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, StringRef Constraint, MVT VT) const {
   if (Constraint.size() == 1) {
@@ -550,6 +607,14 @@ getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, StringRef Constraint
       return std::make_pair(0U, &RISCV::GR32BitRegClass);
     }
   }
+
+  // Handle specific registers
+  std::pair<unsigned, const TargetRegisterClass *> R;
+  R = parseRegForInlineAsmConstraint(Constraint, VT);
+
+  if (R.second)
+    return R;
+
   return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
 }
 
