@@ -107,7 +107,7 @@ def t6   : GPR32<31,"x31">, DwarfRegNum<[31]>;
 defm GR32 : RISCVRegClass<"GR32", i32, 32, (add
   zero, ra, sp, gp, tp,
   t0, t1, t2,
-  fp, s0, s1,
+  fp, s1,
   a0, a1, a2, a3, a4, a5, a6, a7, 
   s2, s3, s4, s5, s6, s7, s8, s9, s10, s11,
   t3, t4, t5, t6), 1>;
@@ -180,7 +180,7 @@ def t6_64   : GPR64<31,"x31", [t6]  >, DwarfRegNum<[31]>;
 defm GR64 : RISCVRegClass<"GR64", i64, 64, (add
   zero_64, ra_64, sp_64, gp_64, tp_64,
   t0_64, t1_64, t2_64,
-  fp_64, s0_64, s1_64,
+  fp_64, s1_64,
   a0_64, a1_64, a2_64, a3_64, a4_64, a5_64, a6_64, a7_64, 
   s2_64, s3_64, s4_64, s5_64, s6_64, s7_64, s8_64, s9_64, s10_64, s11_64,
   t3_64, t4_64, t5_64, t6_64), 1>;

@@ -608,14 +608,16 @@ getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI, StringRef Constraint
     }
   }
 
-  // Handle specific registers
   std::pair<unsigned, const TargetRegisterClass *> R;
-  R = parseRegForInlineAsmConstraint(Constraint, VT);
+  // Try the default implementation
+  R = TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
 
-  if (R.second)
-    return R;
+  // Handle specific registers that don't get caught
+  if(!R.second) {
+    R = parseRegForInlineAsmConstraint(Constraint, VT);
+  }
 
-  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+  return R;
 }
 
 void RISCVTargetLowering::
