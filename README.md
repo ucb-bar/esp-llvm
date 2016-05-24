@@ -78,7 +78,7 @@ Use
 --------------------------------------------------------------------
 
 Using the llvm-riscv is fairly simple to build a full executable however you
-need riscv-64-unknown-\*-gcc to do the assembling and linking. An example of compiling hello
+need riscv64-unknown-\*-gcc to do the assembling and linking. An example of compiling hello
 world:
 
 	$ cat hello.c
@@ -86,6 +86,6 @@ world:
 	int main() {
 	    printf("Hello World!\n");
 	}
-	$ clang -target riscv -mriscv=RV64IAMFD -S hello.c -o hello.S
-	$ riscv-64-unknown-elf-gcc -o hello.riscv hello.S
+	$ clang -target riscv64 -mriscv=RV64IAMFD -S hello.c -o hello.S
+	$ riscv64-unknown-elf-gcc -o hello.riscv hello.S
 
