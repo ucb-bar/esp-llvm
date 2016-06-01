@@ -275,5 +275,8 @@ def disp20imm32 : Operand<i32>;
 def disp20imm64 : Operand<i64>;
 
 // Custom Operands
+def imm1 : ImmLeaf<i1, [{}]>, Operand<i1>;
 
-def pred : PredicateOperand<i1, (ops VPR), (ops vp0)>;
+def pred : PredicateOperand<i1, (ops imm1, VPR), (ops (i1 0), vp0)> {
+  let PrintMethod = "printPredOperand";
+}

@@ -200,3 +200,9 @@ void RISCVInstPrinter::printCond4Operand(const MCInst *MI, int OpNum,
   assert(Imm > 0 && Imm < 15 && "Invalid condition");
   O << CondNames[Imm - 1];
 }
+
+void RISCVInstPrinter::printPredOperand(const MCInst *MI, int OpNum, raw_ostream &O) {
+  if(MI->getOperand(OpNum).getImm() == 1)
+    O << "!";
+  printOperand(MI, OpNum+1, O);
+}

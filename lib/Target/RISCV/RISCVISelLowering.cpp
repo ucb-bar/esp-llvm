@@ -19,6 +19,8 @@
 #include "RISCVMachineFunctionInfo.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "RISCVXhwachaUtilities.h"
+#include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -115,6 +117,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
     setOperationAction(ISD::SETCC, MVT::i64, Expand);//only use 32bit
     setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
+  }
+
+  if(Subtarget.hasXhwacha()) {
+    // Constnat loading can be handled very quickly in hwacha worker thread
+    setOperationAction(ISD::ConstantFP, MVT::f32, Custom);
+    setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
   }
 
 
@@ -1405,6 +1413,85 @@ lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const {
   return FrameAddr;
 }
 
+SDValue RISCVTargetLowering::
+lowerConstantFP(SDValue Op, SelectionDAG &DAG) const {
+  // We can only do something cool if this is in a function that is going to be a vector fetch block
+  bool isOpenCLKernel = isOpenCLKernelFunction(*(DAG.getMachineFunction().getFunction()));
+  ConstantFPSDNode *CFP = cast<ConstantFPSDNode>(Op);
+  if(isOpenCLKernel) {
+    EVT VT = Op.getValueType();
+    EVT iVT = (VT == MVT::f64) ? MVT::i64 : MVT::i32;
+    SDLoc DL(Op);
+    //TODO: may need a bitcast for int to fp depending on how constant work out
+    SDValue constOp = DAG.getConstant(CFP->getValueAPF().bitcastToAPInt(), DL, iVT);
+    if(VT.getSizeInBits() <= 32) {
+      //Single VADDI will do the job
+      SDValue sextOp = DAG.getSExtOrTrunc(constOp, DL, MVT::i64);
+      return DAG.getNode(RISCVISD::VLI, DL, MVT::i64, sextOp);
+    }else if(VT.getSizeInBits() <= 64) {
+      //VLUI plus VADDI to load 64 bits
+      SDValue lui = DAG.getNode(RISCVISD::VLUI, DL, iVT, DAG.getNode(RISCVISD::HI32, DL, iVT, constOp));
+      return DAG.getNode(RISCVISD::VADDI, DL, iVT, lui, DAG.getNode(RISCVISD::LO32, DL, iVT, constOp));
+    } else {
+      llvm_unreachable("Unable to load >64 bit constants");
+    }
+  } else {
+    //copied from SelectionDAGLegalize::ExpandConstantFP(cast<ConstantFPSDNode>(Op), true);
+    bool UseCP = true;
+    const TargetLowering &TLI = DAG.getTargetLoweringInfo();
+      bool Extend = false;
+      SDLoc dl(CFP);
+
+      // If a FP immediate is precise when represented as a float and if the
+      // target can do an extending load from float to double, we put it into
+      // the constant pool as a float, even if it's is statically typed as a
+      // double.  This shrinks FP constants and canonicalizes them for targets where
+      // an FP extending load is the same cost as a normal load (such as on the x87
+      // fp stack or PPC FP unit).
+      EVT VT = CFP->getValueType(0);
+      ConstantFP *LLVMC = const_cast<ConstantFP*>(CFP->getConstantFPValue());
+      if (!UseCP) {
+        assert((VT == MVT::f64 || VT == MVT::f32) && "Invalid type expansion");
+        return DAG.getConstant(LLVMC->getValueAPF().bitcastToAPInt(), dl,
+                               (VT == MVT::f64) ? MVT::i64 : MVT::i32);
+      }
+
+      EVT OrigVT = VT;
+      EVT SVT = VT;
+      while (SVT != MVT::f32 && SVT != MVT::f16) {
+        SVT = (MVT::SimpleValueType)(SVT.getSimpleVT().SimpleTy - 1);
+        if (ConstantFPSDNode::isValueValidForType(SVT, CFP->getValueAPF()) &&
+            // Only do this if the target has a native EXTLOAD instruction from
+            // smaller type.
+            TLI.isLoadExtLegal(ISD::EXTLOAD, OrigVT, SVT) &&
+            TLI.ShouldShrinkFPConstant(OrigVT)) {
+          Type *SType = SVT.getTypeForEVT(*DAG.getContext());
+          LLVMC = cast<ConstantFP>(ConstantExpr::getFPTrunc(LLVMC, SType));
+          VT = SVT;
+          Extend = true;
+        }
+      }
+
+      SDValue CPIdx =
+          DAG.getConstantPool(LLVMC, TLI.getPointerTy(DAG.getDataLayout()));
+      unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
+      if (Extend) {
+        SDValue Result =
+          DAG.getExtLoad(ISD::EXTLOAD, dl, OrigVT,
+                         DAG.getEntryNode(),
+                         CPIdx, MachinePointerInfo::getConstantPool(),
+                         VT, false, false, false, Alignment);
+        return Result;
+      }
+      SDValue Result =
+        DAG.getLoad(OrigVT, dl, DAG.getEntryNode(), CPIdx,
+                    MachinePointerInfo::getConstantPool(), false, false, false,
+                    Alignment);
+      return Result;
+  }
+  llvm_unreachable("Unable to load FP constant");
+}
+
 SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
                                               SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
@@ -1434,6 +1521,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerSTACKRESTORE(Op, DAG);
   case ISD::FRAMEADDR:
     return lowerFRAMEADDR(Op, DAG);
+  case ISD::ConstantFP:
+    return lowerConstantFP(Op, DAG);
   default:
     llvm_unreachable("Unexpected node to lower");
   }
@@ -1449,6 +1538,8 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     OPCODE(Lo);
     OPCODE(FENCE);
     OPCODE(SELECT_CC);
+    OPCODE(VLUI);
+    OPCODE(VADDI);
   }
   return NULL;
 #undef OPCODE

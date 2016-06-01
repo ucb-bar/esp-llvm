@@ -61,6 +61,10 @@ def r_fence64           : SDNode<"RISCVISD::FENCE", SDT_RFence64, [SDNPHasChain,
 def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
 def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
 
+def r_vlui     : SDNode<"RISCVISD::VLUI", SDTIntUnaryOp>;
+def r_vli      : SDNode<"RISCVISD::VLI", SDTIntUnaryOp>;
+def r_vaddi    : SDNode<"RISCVISD::VADDI", SDTIntBinOp>;
+
 //global addr
 def RISCVHi    : SDNode<"RISCVISD::Hi", SDTIntUnaryOp>;
 def RISCVLo    : SDNode<"RISCVISD::Lo", SDTIntUnaryOp>;

@@ -62,6 +62,8 @@ private:
   // Print the mnemonic for a condition-code mask ("ne", "lh", etc.)
   // This forms part of the instruction name rather than the operand list.
   void printCond4Operand(const MCInst *MI, int OpNum, raw_ostream &O);
+  // Print predicate operand with the ! for immediate
+  void printPredOperand(const MCInst *MI, int OpNum, raw_ostream &O);
 };
 } // end namespace llvm
 

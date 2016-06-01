@@ -75,6 +75,11 @@ namespace RISCVISD {
     CALLV,
     VSETCFG,
     VSETVL,
+    VLUI,
+    VLI,
+    VADDI,
+    HI32,
+    LO32,
 
     // Wrappers around the inner loop of an 8- or 16-bit ATOMIC_SWAP or
     // ATOMIC_LOAD_<op>.
@@ -211,6 +216,7 @@ private:
   SDValue lowerSTACKSAVE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerSTACKRESTORE(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerFRAMEADDR(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerConstantFP(SDValue Op, SelectionDAG &DAG) const;
 
   // Helper functions for above
   SDValue getTargetNode(SDValue Op, SelectionDAG &DAG, unsigned Flag) const;

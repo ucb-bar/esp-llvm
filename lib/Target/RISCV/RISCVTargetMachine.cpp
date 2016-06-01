@@ -30,6 +30,7 @@ namespace llvm {
   ModulePass *createRISCVVectorFetchIROpt();
   MachineFunctionPass *createRISCVVectorFetchMachOpt();
   MachineFunctionPass *createRISCVVectorFetchRegFix();
+  MachineFunctionPass *createRISCVVectorFetchPreEmitOpt();
 }
 
 static std::string computeDataLayout(const Triple &TT) {
@@ -124,6 +125,7 @@ bool RISCVPassConfig::addInstSelector() {
 
 void RISCVPassConfig::addPreEmitPass(){
   addPass(createRISCVBranchSelectionPass());
+  addPass(createRISCVVectorFetchPreEmitOpt());
 }
 
 void RISCVPassConfig::addPreRegAlloc(){
