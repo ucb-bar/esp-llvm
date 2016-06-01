@@ -453,6 +453,7 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc))
       .addReg(RISCV::vs0, getKillRegState(KillSrc))
+      .addImm(0)
       .addReg(RISCV::vp0); //TODO: do copy's need to be predicated
     return;
   }else

@@ -126,11 +126,11 @@ let isCall = 1, isCodeGenOnly = 1 in {
   }
 
 //Moves
-def VMSS_X : InstV<(outs VSR:$dest), (ins GR64:$src), "vmss\t$dest,$src",
+def VMSS_X : InstV<(outs VSR:$dest), (ins GR64:$src), "vmcs\t$dest,$src",
                      //[(set VSR:$dest, (COPY_TO_REG_CLASS GR64:$src, VSR))]
                      []>, Requires<[HasXhwacha]>;
 
-def VMSA : InstV<(outs VAR:$dest), (ins GR64:$src), "vmsa\t$dest,$src",
+def VMSA : InstV<(outs VAR:$dest), (ins GR64:$src), "vmca\t$dest,$src",
                      //[(set VAR:$dest, (COPY_TO_REG_CLASS GR64:$src, VAR))]
                      []>, Requires<[HasXhwacha]>;
 
@@ -268,6 +268,7 @@ let isPseudo = 1 in {
   //def VAND64 : InstR<"vand" , ?, ?, and   , VR64, VR64>, Requires<[HasXhwacha]>;
   //def VMUL64 : InstR<"vmul", ?, ?, mul   , VR64, VR64>, Requires<[HasXhwacha]>;
   defm VFMUL_S_RDY : InstVR3<"vfmul.s", fmul, VVW>, Requires<[HasXhwacha]>;
+  defm VFDIV_S_RDY : InstVR3<"vfdiv.s", fdiv, VVW>, Requires<[HasXhwacha]>;
   defm VFADD_S_RDY : InstVR3<"vfadd.s", fadd, VVW>, Requires<[HasXhwacha]>;
   defm VFSUB_S_RDY : InstVR3<"vfsub.s", fsub, VVW>, Requires<[HasXhwacha]>;
   defm VFMUL_D_RDY : InstVR3<"vfmul.d", fmul, VVR>, Requires<[HasXhwacha]>;
@@ -288,6 +289,7 @@ let isPseudo = 1 in {
   //FIXME: These instructions are for S and H operations that after regalloc
   // are post processed to be D regs. S and H in the names are replaced with RAS and RAH (RegAlloc)
   defm VFMUL_RAS_RDY : InstVR3<"vfmul.s", fmul, VVR>, Requires<[HasXhwacha]>;
+  defm VFDIV_RAS_RDY : InstVR3<"vfdiv.s", fdiv, VVR>, Requires<[HasXhwacha]>;
   defm VFADD_RAS_RDY : InstVR3<"vfadd.s", fadd, VVR>, Requires<[HasXhwacha]>;
   defm VFSUB_RAS_RDY : InstVR3<"vfsub.s", fsub, VVR>, Requires<[HasXhwacha]>;
   def VSXW_RAS_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
@@ -308,4 +310,6 @@ let isPseudo = 1 in {
   defm VCMPGTU : InstVR3CmpSwitch<"vcmpltu", setugt>;
 }
 
-
+// load immediate patterns
+def : Pat<(r_vli imm64sx32:$imm), (VADDI (i64 vs0), imm64sx32:$imm)>;
+//TODO: 64bit immediate pattern
