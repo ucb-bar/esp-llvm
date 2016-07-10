@@ -5,9 +5,24 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 ; Make sure consecutive vector generates correct negative indices.
 ; PR15882
 
-; CHECK-LABEL: @reverse_induction_i64(
-; CHECK: add <4 x i64> %[[SPLAT:.*]], <i64 0, i64 -1, i64 -2, i64 -3>
-; CHECK: add <4 x i64> %[[SPLAT]], <i64 -4, i64 -5, i64 -6, i64 -7>
+; CHECK: %index = phi i64 [ 0, %vector.ph ], [ %index.next, %vector.body ]
+; CHECK: %offset.idx = sub i64 %startval, %index
+; CHECK: %[[a0:.+]] = add i64 %offset.idx, 0
+; CHECK: %[[v0:.+]] = insertelement <4 x i64> undef, i64 %[[a0]], i64 0
+; CHECK: %[[a1:.+]] = add i64 %offset.idx, -1
+; CHECK: %[[v1:.+]] = insertelement <4 x i64> %[[v0]], i64 %[[a1]], i64 1
+; CHECK: %[[a2:.+]] = add i64 %offset.idx, -2
+; CHECK: %[[v2:.+]] = insertelement <4 x i64> %[[v1]], i64 %[[a2]], i64 2
+; CHECK: %[[a3:.+]] = add i64 %offset.idx, -3
+; CHECK: %[[v3:.+]] = insertelement <4 x i64> %[[v2]], i64 %[[a3]], i64 3
+; CHECK: %[[a4:.+]] = add i64 %offset.idx, -4
+; CHECK: %[[v4:.+]] = insertelement <4 x i64> undef, i64 %[[a4]], i64 0
+; CHECK: %[[a5:.+]] = add i64 %offset.idx, -5
+; CHECK: %[[v5:.+]] = insertelement <4 x i64> %[[v4]], i64 %[[a5]], i64 1
+; CHECK: %[[a6:.+]] = add i64 %offset.idx, -6
+; CHECK: %[[v6:.+]] = insertelement <4 x i64> %[[v5]], i64 %[[a6]], i64 2
+; CHECK: %[[a7:.+]] = add i64 %offset.idx, -7
+; CHECK: %[[v7:.+]] = insertelement <4 x i64> %[[v6]], i64 %[[a7]], i64 3
 
 define i32 @reverse_induction_i64(i64 %startval, i32 * %ptr) {
 entry:
@@ -30,8 +45,25 @@ loopend:
 }
 
 ; CHECK-LABEL: @reverse_induction_i128(
-; CHECK: add <4 x i128> %[[SPLAT:.*]], <i128 0, i128 -1, i128 -2, i128 -3>
-; CHECK: add <4 x i128> %[[SPLAT]], <i128 -4, i128 -5, i128 -6, i128 -7>
+; CHECK: %index = phi i128 [ 0, %vector.ph ], [ %index.next, %vector.body ]
+; CHECK: %offset.idx = sub i128 %startval, %index
+; CHECK: %[[a0:.+]] = add i128 %offset.idx, 0
+; CHECK: %[[v0:.+]] = insertelement <4 x i128> undef, i128 %[[a0]], i64 0
+; CHECK: %[[a1:.+]] = add i128 %offset.idx, -1
+; CHECK: %[[v1:.+]] = insertelement <4 x i128> %[[v0]], i128 %[[a1]], i64 1
+; CHECK: %[[a2:.+]] = add i128 %offset.idx, -2
+; CHECK: %[[v2:.+]] = insertelement <4 x i128> %[[v1]], i128 %[[a2]], i64 2
+; CHECK: %[[a3:.+]] = add i128 %offset.idx, -3
+; CHECK: %[[v3:.+]] = insertelement <4 x i128> %[[v2]], i128 %[[a3]], i64 3
+; CHECK: %[[a4:.+]] = add i128 %offset.idx, -4
+; CHECK: %[[v4:.+]] = insertelement <4 x i128> undef, i128 %[[a4]], i64 0
+; CHECK: %[[a5:.+]] = add i128 %offset.idx, -5
+; CHECK: %[[v5:.+]] = insertelement <4 x i128> %[[v4]], i128 %[[a5]], i64 1
+; CHECK: %[[a6:.+]] = add i128 %offset.idx, -6
+; CHECK: %[[v6:.+]] = insertelement <4 x i128> %[[v5]], i128 %[[a6]], i64 2
+; CHECK: %[[a7:.+]] = add i128 %offset.idx, -7
+; CHECK: %[[v7:.+]] = insertelement <4 x i128> %[[v6]], i128 %[[a7]], i64 3
+
 define i32 @reverse_induction_i128(i128 %startval, i32 * %ptr) {
 entry:
   br label %for.body
@@ -53,8 +85,24 @@ loopend:
 }
 
 ; CHECK-LABEL: @reverse_induction_i16(
-; CHECK: add <4 x i16> %[[SPLAT:.*]], <i16 0, i16 -1, i16 -2, i16 -3>
-; CHECK: add <4 x i16> %[[SPLAT]], <i16 -4, i16 -5, i16 -6, i16 -7>
+; CHECK: %index = phi i32 [ 0, %vector.ph ], [ %index.next, %vector.body ]
+; CHECK: %offset.idx = sub i16 %startval, {{.*}}
+; CHECK: %[[a0:.+]] = add i16 %offset.idx, 0
+; CHECK: %[[v0:.+]] = insertelement <4 x i16> undef, i16 %[[a0]], i64 0
+; CHECK: %[[a1:.+]] = add i16 %offset.idx, -1
+; CHECK: %[[v1:.+]] = insertelement <4 x i16> %[[v0]], i16 %[[a1]], i64 1
+; CHECK: %[[a2:.+]] = add i16 %offset.idx, -2
+; CHECK: %[[v2:.+]] = insertelement <4 x i16> %[[v1]], i16 %[[a2]], i64 2
+; CHECK: %[[a3:.+]] = add i16 %offset.idx, -3
+; CHECK: %[[v3:.+]] = insertelement <4 x i16> %[[v2]], i16 %[[a3]], i64 3
+; CHECK: %[[a4:.+]] = add i16 %offset.idx, -4
+; CHECK: %[[v4:.+]] = insertelement <4 x i16> undef, i16 %[[a4]], i64 0
+; CHECK: %[[a5:.+]] = add i16 %offset.idx, -5
+; CHECK: %[[v5:.+]] = insertelement <4 x i16> %[[v4]], i16 %[[a5]], i64 1
+; CHECK: %[[a6:.+]] = add i16 %offset.idx, -6
+; CHECK: %[[v6:.+]] = insertelement <4 x i16> %[[v5]], i16 %[[a6]], i64 2
+; CHECK: %[[a7:.+]] = add i16 %offset.idx, -7
+; CHECK: %[[v7:.+]] = insertelement <4 x i16> %[[v6]], i16 %[[a7]], i64 3
 
 define i32 @reverse_induction_i16(i16 %startval, i32 * %ptr) {
 entry:
@@ -96,7 +144,8 @@ loopend:
 ; CHECK-LABEL: @reverse_forward_induction_i64_i8(
 ; CHECK: vector.body
 ; CHECK: %index = phi i64 [ 0, %vector.ph ], [ %index.next, %vector.body ]
-; CHECK: %offset.idx = sub i64 1023, %index
+; CHECK: %vec.ind = phi <4 x i64> [ <i64 1023, i64 1022, i64 1021, i64 1020>, %vector.ph ]
+; CHECK: %step.add = add <4 x i64> %vec.ind, <i64 -4, i64 -4, i64 -4, i64 -4>
 ; CHECK: trunc i64 %index to i8
 
 define void @reverse_forward_induction_i64_i8() {
@@ -122,7 +171,8 @@ while.end:
 ; CHECK-LABEL: @reverse_forward_induction_i64_i8_signed(
 ; CHECK: vector.body:
 ; CHECK:  %index = phi i64 [ 0, %vector.ph ], [ %index.next, %vector.body ]
-; CHECK:  %offset.idx = sub i64 1023, %index
+; CHECK: %vec.ind = phi <4 x i64> [ <i64 1023, i64 1022, i64 1021, i64 1020>, %vector.ph ]
+; CHECK: %step.add = add <4 x i64> %vec.ind, <i64 -4, i64 -4, i64 -4, i64 -4>
 
 define void @reverse_forward_induction_i64_i8_signed() {
 entry:

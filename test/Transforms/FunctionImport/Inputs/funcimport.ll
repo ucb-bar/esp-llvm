@@ -10,6 +10,7 @@
 
 define void @globalfunc1() #0 {
 entry:
+  call void @funcwithpersonality()
   ret void
 }
 
@@ -74,13 +75,74 @@ entry:
   ret void
 }
 
+define linkonce void @linkoncefunc2() #0 {
+entry:
+  ret void
+}
+
 define internal i32 @staticfunc() #0 {
 entry:
   ret i32 1
 }
 
+declare i32 @__gxx_personality_v0(...)
+
+; Add enough instructions to prevent import with inst limit of 5
+define internal void @funcwithpersonality() #2 personality i8* bitcast (i32 (...)* @__gxx_personality_v0 to i8*) {
+entry:
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  ret void
+}
+
 define internal void @staticfunc2() #0 {
 entry:
+  ret void
+}
+
+define void @referencelargelinkonce() #0 {
+entry:
+  call void @linkonceodr()
+  ret void
+}
+
+; A large enough linkonce_odr function that should never be imported
+define linkonce_odr void @linkonceodr() #0 {
+entry:
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
+  call void @globalfunc2()
   ret void
 }
 

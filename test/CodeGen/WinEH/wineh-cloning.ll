@@ -233,48 +233,6 @@ exit:
 ; CHECK-NEXT:   br label %outer.ret
 
 
-define void @test9() personality i32 (...)* @__C_specific_handler {
-entry:
-  invoke void @f()
-    to label %invoke.cont unwind label %left
-invoke.cont:
-  invoke void @f()
-    to label %unreachable unwind label %right
-left:
-  %cp.left = cleanuppad within none []
-  call void @llvm.foo(i32 1)
-  invoke void @f() [ "funclet"(token %cp.left) ]
-    to label %unreachable unwind label %right
-right:
-  %cp.right = cleanuppad within none []
-  call void @llvm.foo(i32 2)
-  invoke void @f() [ "funclet"(token %cp.right) ]
-    to label %unreachable unwind label %left
-unreachable:
-  unreachable
-}
-; This is an irreducible loop with two funclets that enter each other.
-; CHECK-LABEL: define void @test9(
-; CHECK:     entry:
-; CHECK:               to label %invoke.cont unwind label %[[LEFT:.+]]
-; CHECK:     invoke.cont:
-; CHECK:               to label %[[UNREACHABLE_ENTRY:.+]] unwind label %[[RIGHT:.+]]
-; CHECK:     [[LEFT]]:
-; CHECK:       call void @llvm.foo(i32 1)
-; CHECK:       invoke void @f()
-; CHECK:               to label %[[UNREACHABLE_LEFT:.+]] unwind label %[[RIGHT]]
-; CHECK:     [[RIGHT]]:
-; CHECK:       call void @llvm.foo(i32 2)
-; CHECK:       invoke void @f()
-; CHECK:               to label %[[UNREACHABLE_RIGHT:.+]] unwind label %[[LEFT]]
-; CHECK:     [[UNREACHABLE_RIGHT]]:
-; CHECK:       unreachable
-; CHECK:     [[UNREACHABLE_LEFT]]:
-; CHECK:       unreachable
-; CHECK:     [[UNREACHABLE_ENTRY]]:
-; CHECK:       unreachable
-
-
 define void @test10() personality i32 (...)* @__CxxFrameHandler3 {
 entry:
   invoke void @f()
@@ -425,11 +383,10 @@ exit:
 !llvm.dbg.cu = !{!1}
 
 !0 = !{i32 2, !"Debug Info Version", i32 3}
-!1 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "compiler", isOptimized: false, runtimeVersion: 0, emissionKind: 1, enums: !3, subprograms: !4)
+!1 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !2, producer: "compiler", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !3)
 !2 = !DIFile(filename: "test.cpp", directory: ".")
 !3 = !{}
-!4 = !{!5}
-!5 = distinct !DISubprogram(name: "test12", scope: !2, file: !2, type: !6, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, variables: !3)
+!5 = distinct !DISubprogram(name: "test12", scope: !2, file: !2, type: !6, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: true, unit: !1, variables: !3)
 !6 = !DISubroutineType(types: !7)
 !7 = !{null}
 !8 = !DILocation(line: 1, scope: !5)

@@ -9,6 +9,7 @@
 
 #include "RISCVTargetMachine.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/Support/TargetRegistry.h"
 
@@ -29,12 +30,19 @@ static std::string computeDataLayout(const Triple &TT) {
   return Ret;
 }
 
+static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
+  if (!RM.hasValue())
+    return Reloc::Static;
+  return *RM;
+}
+
 RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
-                                       Reloc::Model RM, CodeModel::Model CM,
+                                       Optional<Reloc::Model> RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
-    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options, RM, CM, OL),
+    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
+        getEffectiveRelocModel(RM), CM, OL),
       TLOF(make_unique<RISCVTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
@@ -43,7 +51,7 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
 RISCV64TargetMachine::RISCV64TargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
-                                       Reloc::Model RM, CodeModel::Model CM,
+                                       Optional<Reloc::Model> RM, CodeModel::Model CM,
                                        CodeGenOpt::Level OL)
   :RISCVTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL) {}
 

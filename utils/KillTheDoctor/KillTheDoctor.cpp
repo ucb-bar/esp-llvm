@@ -296,7 +296,7 @@ static StringRef ExceptionCodeToString(DWORD ExceptionCode) {
 
 int main(int argc, char **argv) {
   // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal();
+  sys::PrintStackTraceOnErrorSignal(argv[0]);
   PrettyStackTraceProgram X(argc, argv);
   llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
 
@@ -328,18 +328,16 @@ int main(int argc, char **argv) {
   if (TraceExecution)
     errs() << ToolName << ": Found Program: " << ProgramToRun << '\n';
 
-  for (std::vector<std::string>::iterator i = Argv.begin(),
-                                          e = Argv.end();
-                                          i != e; ++i) {
+  for (const std::string &Arg : Argv) {
     CommandLine.push_back(' ');
-    CommandLine.append(*i);
+    CommandLine.append(Arg);
   }
 
   if (TraceExecution)
     errs() << ToolName << ": Program Image Path: " << ProgramToRun << '\n'
            << ToolName << ": Command Line: " << CommandLine << '\n';
 
-  STARTUPINFO StartupInfo;
+  STARTUPINFOA StartupInfo;
   PROCESS_INFORMATION ProcessInfo;
   std::memset(&StartupInfo, 0, sizeof(StartupInfo));
   StartupInfo.cb = sizeof(StartupInfo);

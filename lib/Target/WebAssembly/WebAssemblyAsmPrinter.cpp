@@ -17,6 +17,7 @@
 #include "WebAssembly.h"
 #include "InstPrinter/WebAssemblyInstPrinter.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
+#include "MCTargetDesc/WebAssemblyTargetStreamer.h"
 #include "WebAssemblyMCInstLower.h"
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "WebAssemblyRegisterInfo.h"
@@ -66,10 +67,13 @@ private:
   // AsmPrinter Implementation.
   //===------------------------------------------------------------------===//
 
+  void EmitEndOfAsmFile(Module &M) override;
   void EmitJumpTableInfo() override;
   void EmitConstantPool() override;
   void EmitFunctionBodyStart() override;
+  void EmitFunctionBodyEnd() override;
   void EmitInstruction(const MachineInstr *MI) override;
+  const MCExpr *lowerConstant(const Constant *CV) override;
   bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                        unsigned AsmVariant, const char *ExtraCode,
                        raw_ostream &OS) override;
@@ -80,6 +84,7 @@ private:
   MVT getRegType(unsigned RegNo) const;
   const char *toString(MVT VT) const;
   std::string regToString(const MachineOperand &MO);
+  WebAssemblyTargetStreamer *getTargetStreamer();
 };
 
 } // end anonymous namespace
@@ -89,16 +94,17 @@ private:
 //===----------------------------------------------------------------------===//
 
 MVT WebAssemblyAsmPrinter::getRegType(unsigned RegNo) const {
-  const TargetRegisterClass *TRC =
-      TargetRegisterInfo::isVirtualRegister(RegNo) ?
-      MRI->getRegClass(RegNo) :
-      MRI->getTargetRegisterInfo()->getMinimalPhysRegClass(RegNo);
+  const TargetRegisterClass *TRC = MRI->getRegClass(RegNo);
   for (MVT T : {MVT::i32, MVT::i64, MVT::f32, MVT::f64})
     if (TRC->hasType(T))
       return T;
   DEBUG(errs() << "Unknown type for register number: " << RegNo);
   llvm_unreachable("Unknown register type");
   return MVT::Other;
+}
+
+const char *WebAssemblyAsmPrinter::toString(MVT VT) const {
+  return WebAssembly::TypeToString(VT);
 }
 
 std::string WebAssemblyAsmPrinter::regToString(const MachineOperand &MO) {
@@ -111,23 +117,14 @@ std::string WebAssemblyAsmPrinter::regToString(const MachineOperand &MO) {
   return '$' + utostr(WAReg);
 }
 
-const char *WebAssemblyAsmPrinter::toString(MVT VT) const {
-  return WebAssembly::TypeToString(VT);
+WebAssemblyTargetStreamer *WebAssemblyAsmPrinter::getTargetStreamer() {
+  MCTargetStreamer *TS = OutStreamer->getTargetStreamer();
+  return static_cast<WebAssemblyTargetStreamer *>(TS);
 }
 
 //===----------------------------------------------------------------------===//
 // WebAssemblyAsmPrinter Implementation.
 //===----------------------------------------------------------------------===//
-
-void WebAssemblyAsmPrinter::EmitConstantPool() {
-  assert(MF->getConstantPool()->getConstants().empty() &&
-         "WebAssembly disables constant pools");
-}
-
-void WebAssemblyAsmPrinter::EmitJumpTableInfo() {
-  // Nothing to do; jump tables are incorporated into the instruction stream.
-}
-
 static void ComputeLegalValueVTs(const Function &F, const TargetMachine &TM,
                                  Type *Ty, SmallVectorImpl<MVT> &ValueVTs) {
   const DataLayout &DL(F.getParent()->getDataLayout());
@@ -144,30 +141,57 @@ static void ComputeLegalValueVTs(const Function &F, const TargetMachine &TM,
   }
 }
 
-void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
-  if (!MFI->getParams().empty()) {
-    MCInst Param;
-    Param.setOpcode(WebAssembly::PARAM);
-    for (MVT VT : MFI->getParams())
-      Param.addOperand(MCOperand::createImm(VT.SimpleTy));
-    EmitToStreamer(*OutStreamer, Param);
+void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
+  for (const auto &F : M) {
+    // Emit function type info for all undefined functions
+    if (F.isDeclarationForLinker() && !F.isIntrinsic()) {
+      SmallVector<MVT, 4> SignatureVTs;
+      ComputeLegalValueVTs(F, TM, F.getReturnType(), SignatureVTs);
+      size_t NumResults = SignatureVTs.size();
+      if (SignatureVTs.size() > 1) {
+        // WebAssembly currently can't lower returns of multiple values without
+        // demoting to sret (see WebAssemblyTargetLowering::CanLowerReturn). So
+        // replace multiple return values with a pointer parameter.
+        SignatureVTs.clear();
+        SignatureVTs.push_back(
+            MVT::getIntegerVT(M.getDataLayout().getPointerSizeInBits()));
+        NumResults = 0;
+      }
+
+      for (auto &Arg : F.args()) {
+        ComputeLegalValueVTs(F, TM, Arg.getType(), SignatureVTs);
+      }
+
+      getTargetStreamer()->emitIndirectFunctionType(F.getName(), SignatureVTs,
+                                                    NumResults);
+    }
   }
+}
+
+void WebAssemblyAsmPrinter::EmitConstantPool() {
+  assert(MF->getConstantPool()->getConstants().empty() &&
+         "WebAssembly disables constant pools");
+}
+
+void WebAssemblyAsmPrinter::EmitJumpTableInfo() {
+  // Nothing to do; jump tables are incorporated into the instruction stream.
+}
+
+void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
+  if (!MFI->getParams().empty())
+    getTargetStreamer()->emitParam(MFI->getParams());
 
   SmallVector<MVT, 4> ResultVTs;
   const Function &F(*MF->getFunction());
   ComputeLegalValueVTs(F, TM, F.getReturnType(), ResultVTs);
+
   // If the return type needs to be legalized it will get converted into
   // passing a pointer.
-  if (ResultVTs.size() == 1) {
-    MCInst Result;
-    Result.setOpcode(WebAssembly::RESULT);
-    Result.addOperand(MCOperand::createImm(ResultVTs.front().SimpleTy));
-    EmitToStreamer(*OutStreamer, Result);
-  }
+  if (ResultVTs.size() == 1)
+    getTargetStreamer()->emitResult(ResultVTs);
 
   bool AnyWARegs = false;
-  MCInst Local;
-  Local.setOpcode(WebAssembly::LOCAL);
+  SmallVector<MVT, 16> LocalTypes;
   for (unsigned Idx = 0, IdxE = MRI->getNumVirtRegs(); Idx != IdxE; ++Idx) {
     unsigned VReg = TargetRegisterInfo::index2VirtReg(Idx);
     unsigned WAReg = MFI->getWAReg(VReg);
@@ -180,20 +204,17 @@ void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
     // Don't declare stackified registers.
     if (int(WAReg) < 0)
       continue;
-    Local.addOperand(MCOperand::createImm(getRegType(VReg).SimpleTy));
-    AnyWARegs = true;
-  }
-  auto &PhysRegs = MFI->getPhysRegs();
-  for (unsigned PReg = 0; PReg < PhysRegs.size(); ++PReg) {
-    if (PhysRegs[PReg] == -1U)
-      continue;
-    Local.addOperand(MCOperand::createImm(getRegType(PReg).SimpleTy));
+    LocalTypes.push_back(getRegType(VReg));
     AnyWARegs = true;
   }
   if (AnyWARegs)
-    EmitToStreamer(*OutStreamer, Local);
+    getTargetStreamer()->emitLocal(LocalTypes);
 
   AsmPrinter::EmitFunctionBodyStart();
+}
+
+void WebAssemblyAsmPrinter::EmitFunctionBodyEnd() {
+  getTargetStreamer()->emitEndFunc();
 }
 
 void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
@@ -207,9 +228,29 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     // These represent values which are live into the function entry, so there's
     // no instruction to emit.
     break;
-  case WebAssembly::LOOP_END:
-    // This is a no-op which just exists to tell AsmPrinter.cpp that there's a
-    // fallthrough which nevertheless requires a label for the destination here.
+  case WebAssembly::FALLTHROUGH_RETURN_I32:
+  case WebAssembly::FALLTHROUGH_RETURN_I64:
+  case WebAssembly::FALLTHROUGH_RETURN_F32:
+  case WebAssembly::FALLTHROUGH_RETURN_F64: {
+    // These instructions represent the implicit return at the end of a
+    // function body. The operand is always a pop.
+    assert(MFI->isVRegStackified(MI->getOperand(0).getReg()));
+
+    if (isVerbose()) {
+      OutStreamer->AddComment("fallthrough-return: $pop" +
+                              utostr(MFI->getWARegStackId(
+                                  MFI->getWAReg(MI->getOperand(0).getReg()))));
+      OutStreamer->AddBlankLine();
+    }
+    break;
+  }
+  case WebAssembly::FALLTHROUGH_RETURN_VOID:
+    // This instruction represents the implicit return at the end of a
+    // function body with no return value.
+    if (isVerbose()) {
+      OutStreamer->AddComment("fallthrough-return");
+      OutStreamer->AddBlankLine();
+    }
     break;
   default: {
     WebAssemblyMCInstLower MCInstLowering(OutContext, *this);
@@ -219,6 +260,14 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     break;
   }
   }
+}
+
+const MCExpr *WebAssemblyAsmPrinter::lowerConstant(const Constant *CV) {
+  if (const GlobalValue *GV = dyn_cast<GlobalValue>(CV))
+    if (GV->getValueType()->isFunctionTy())
+      return MCSymbolRefExpr::create(
+          getSymbol(GV), MCSymbolRefExpr::VK_WebAssembly_FUNCTION, OutContext);
+  return AsmPrinter::lowerConstant(CV);
 }
 
 bool WebAssemblyAsmPrinter::PrintAsmOperand(const MachineInstr *MI,

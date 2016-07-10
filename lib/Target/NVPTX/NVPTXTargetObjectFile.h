@@ -12,7 +12,6 @@
 
 #include "NVPTXSection.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
-#include <string>
 
 namespace llvm {
 class GlobalVariable;
@@ -41,6 +40,7 @@ public:
     DwarfLocSection = nullptr;
     DwarfARangesSection = nullptr;
     DwarfRangesSection = nullptr;
+    DwarfMacinfoSection = nullptr;
   }
 
   virtual ~NVPTXTargetObjectFile();
@@ -81,10 +81,13 @@ public:
         new NVPTXSection(MCSection::SV_ELF, SectionKind::getMetadata());
     DwarfRangesSection =
         new NVPTXSection(MCSection::SV_ELF, SectionKind::getMetadata());
+    DwarfMacinfoSection =
+        new NVPTXSection(MCSection::SV_ELF, SectionKind::getMetadata());
   }
 
   MCSection *getSectionForConstant(const DataLayout &DL, SectionKind Kind,
-                                   const Constant *C) const override {
+                                   const Constant *C,
+                                   unsigned &Align) const override {
     return ReadOnlySection;
   }
 

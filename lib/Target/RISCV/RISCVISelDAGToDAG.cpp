@@ -198,7 +198,7 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
   // If Op0 is nonnull, then Node can be implemented using:
   //
   //   (Opcode (Opcode Op0 UpperVal) LowerVal)
-  SDNode *splitLargeImmediate(unsigned Opcode, SDNode *Node, SDValue Op0,
+  void splitLargeImmediate(unsigned Opcode, SDNode *Node, SDValue Op0,
                               uint64_t UpperVal, uint64_t LowerVal);
 
 public:
@@ -214,7 +214,7 @@ public:
 
   // Override SelectionDAGISel.
   virtual bool runOnMachineFunction(MachineFunction &MF);
-  SDNode *Select(SDNode *Node) override;
+  void Select(SDNode *Node) override;
   virtual void processFunctionAfterISel(MachineFunction &MF);
   bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,
                                     std::vector<SDValue> &OutOps) override;
@@ -363,7 +363,7 @@ void RISCVDAGToDAGISel::getAddressOperands(const RISCVAddressingMode &AM,
 }
 
 
-SDNode *RISCVDAGToDAGISel::splitLargeImmediate(unsigned Opcode, SDNode *Node,
+void RISCVDAGToDAGISel::splitLargeImmediate(unsigned Opcode, SDNode *Node,
                                                  SDValue Op0, uint64_t UpperVal,
                                                  uint64_t LowerVal) {
   EVT VT = Node->getValueType(0);
@@ -371,14 +371,35 @@ SDNode *RISCVDAGToDAGISel::splitLargeImmediate(unsigned Opcode, SDNode *Node,
   SDValue Upper = CurDAG->getConstant(UpperVal, DL, VT);
   if (Op0.getNode())
     Upper = CurDAG->getNode(Opcode, DL, VT, Op0, Upper);
-  Upper = SDValue(Select(Upper.getNode()), 0);
+
+  {
+    // When we haven't passed in Op0, Upper will be a constant. In order to
+    // prevent folding back to the large immediate in `Or = getNode(...)` we run
+    // SelectCode first and end up with an opaque machine node. This means that
+    // we need to use a handle to keep track of Upper in case it gets CSE'd by
+    // SelectCode.
+    //
+    // Note that in the case where Op0 is passed in we could just call
+    // SelectCode(Upper) later, along with the SelectCode(Or), and avoid needing
+    // the handle at all, but it's fine to do it here.
+    //
+    // TODO: This is a pretty hacky way to do this. Can we do something that
+    // doesn't require a two paragraph explanation?
+    HandleSDNode Handle(Upper);
+    SelectCode(Upper.getNode());
+    Upper = Handle.getValue();
+  }
 
   SDValue Lower = CurDAG->getConstant(LowerVal, DL, VT);
   SDValue Or = CurDAG->getNode(Opcode, DL, VT, Upper, Lower);
-  return Or.getNode();
+
+  ReplaceUses(Node, Or.getNode());
+  CurDAG->RemoveDeadNode(Node);
+
+  SelectCode(Or.getNode());
 }
 
-SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
+void RISCVDAGToDAGISel::Select(SDNode *Node) {
   SDLoc DL(Node);
   // Dump information about the Node being selected
   DEBUG(errs() << "Selecting: "; Node->dump(CurDAG); errs() << "\n");
@@ -386,7 +407,7 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we already have selected!
   if (Node->isMachineOpcode()) {
     DEBUG(errs() << "== "; Node->dump(CurDAG); errs() << "\n");
-    return 0;
+    return;
   }
 
   unsigned Opcode = Node->getOpcode();
@@ -399,23 +420,18 @@ SDNode *RISCVDAGToDAGISel::Select(SDNode *Node) {
     unsigned Opc = Subtarget.isRV64() ? RISCV::ADDI64 : RISCV::ADDI;
     EVT VT = Subtarget.isRV64() ? MVT::i64 : MVT::i32;
     
-    if(Node->hasOneUse()) //don't create a new node just morph this one
-      return CurDAG->SelectNodeTo(Node, Opc, VT, TFI, imm);
-    return CurDAG->getMachineNode(Opc, DL, VT, TFI, imm);
+    if(Node->hasOneUse()) { //don't create a new node just morph this one
+      CurDAG->SelectNodeTo(Node, Opc, VT, TFI, imm);
+      return;
+    }
+    ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, imm));
+    return;
   }
   }//end special selections
 
   // Select the default instruction
-  SDNode *ResNode = SelectCode(Node);
-
-  DEBUG(errs() << "=> ";
-        if (ResNode == NULL || ResNode == Node)
-          Node->dump(CurDAG);
-        else
-          ResNode->dump(CurDAG);
-        errs() << "\n";
-        );
-  return ResNode;
+  SelectCode(Node);
+  return;
 }
 
 bool RISCVDAGToDAGISel::

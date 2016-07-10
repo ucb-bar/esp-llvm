@@ -20,7 +20,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/Dwarf.h"
-#include <vector>
 
 namespace llvm {
 class AsmPrinter;
@@ -244,25 +243,6 @@ public:
 };
 
 //===--------------------------------------------------------------------===//
-/// \brief A signature reference to a type unit.
-class DIETypeSignature {
-  const DwarfTypeUnit *Unit;
-
-  DIETypeSignature() = delete;
-
-public:
-  explicit DIETypeSignature(const DwarfTypeUnit &Unit) : Unit(&Unit) {}
-
-  void EmitValue(const AsmPrinter *AP, dwarf::Form Form) const;
-  unsigned SizeOf(const AsmPrinter *AP, dwarf::Form Form) const {
-    assert(Form == dwarf::DW_FORM_ref_sig8);
-    return 8;
-  }
-
-  void print(raw_ostream &O) const;
-};
-
-//===--------------------------------------------------------------------===//
 /// DIELocList - Represents a pointer to a location list in the debug_loc
 /// section.
 //
@@ -308,8 +288,9 @@ private:
   /// All values that aren't standard layout (or are larger than 8 bytes)
   /// should be stored by reference instead of by value.
   typedef AlignedCharArrayUnion<DIEInteger, DIEString, DIEExpr, DIELabel,
-                                DIEDelta *, DIEEntry, DIETypeSignature,
-                                DIEBlock *, DIELoc *, DIELocList> ValTy;
+                                DIEDelta *, DIEEntry, DIEBlock *, DIELoc *,
+                                DIELocList>
+      ValTy;
   static_assert(sizeof(ValTy) <= sizeof(uint64_t) ||
                     sizeof(ValTy) <= sizeof(void *),
                 "Expected all large types to be stored via pointer");
@@ -584,7 +565,7 @@ public:
   typedef iterator_range<value_iterator> value_range;
   typedef iterator_range<const_value_iterator> const_value_range;
 
-  value_iterator addValue(BumpPtrAllocator &Alloc, DIEValue V) {
+  value_iterator addValue(BumpPtrAllocator &Alloc, const DIEValue &V) {
     List.push_back(*new (Alloc) Node(V));
     return value_iterator(ListTy::toIterator(List.back()));
   }

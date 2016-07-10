@@ -67,12 +67,11 @@ void RISCVAsmPrinter::printOperand(const MachineInstr *MI, int OpNo, raw_ostream
   }
  switch (MO.getType()) {
     case MachineOperand::MO_Register:
-    case MachineOperand::MO_Immediate: {
-      RISCVMCInstLower Lower(MF->getContext(), *this);
-      MCOperand MC(Lower.lowerOperand(MI->getOperand(OpNo)));
-      RISCVInstPrinter::printOperand(MC, O);
+      O << RISCVInstPrinter::getRegisterName(MO.getReg());
       break;
-      }
+    case MachineOperand::MO_Immediate:
+      O << MO.getImm();
+      break;
     case MachineOperand::MO_GlobalAddress:
       O << *getSymbol(MO.getGlobal());
       break;

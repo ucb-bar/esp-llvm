@@ -34,6 +34,7 @@ class ConstantArray;
 class DIE;
 class DIEAbbrev;
 class GCMetadataPrinter;
+class GlobalIndirectSymbol;
 class GlobalValue;
 class GlobalVariable;
 class MachineBasicBlock;
@@ -147,6 +148,8 @@ public:
   DwarfDebug *getDwarfDebug() { return DD; }
   DwarfDebug *getDwarfDebug() const { return DD; }
 
+  bool isPositionIndependent() const;
+
   /// Return true if assembly output should contain comments.
   ///
   bool isVerbose() const { return VerboseAsm; }
@@ -238,11 +241,6 @@ public:
   ///
   virtual void EmitJumpTableInfo();
 
-  /// Emit the control variable for an emulated TLS variable.
-  virtual void EmitEmulatedTLSControlVariable(const GlobalVariable *GV,
-                                              MCSymbol *EmittedSym,
-                                              bool AllZeroInitValue);
-
   /// Emit the specified global variable to the .s file.
   virtual void EmitGlobalVariable(const GlobalVariable *GV);
 
@@ -259,7 +257,7 @@ public:
   void EmitAlignment(unsigned NumBits, const GlobalObject *GO = nullptr) const;
 
   /// Lower the specified LLVM Constant to an MCExpr.
-  const MCExpr *lowerConstant(const Constant *CV);
+  virtual const MCExpr *lowerConstant(const Constant *CV);
 
   /// \brief Print a general LLVM constant to the .s file.
   void EmitGlobalConstant(const DataLayout &DL, const Constant *CV);
@@ -551,6 +549,9 @@ private:
   void EmitXXStructorList(const DataLayout &DL, const Constant *List,
                           bool isCtor);
   GCMetadataPrinter *GetOrCreateGCPrinter(GCStrategy &C);
+  /// Emit GlobalAlias or GlobalIFunc.
+  void emitGlobalIndirectSymbol(Module &M,
+                                const GlobalIndirectSymbol& GIS);
 };
 }
 

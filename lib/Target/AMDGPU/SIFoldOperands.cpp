@@ -13,12 +13,9 @@
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "llvm/CodeGen/LiveIntervalAnalysis.h"
-#include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/LLVMContext.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
@@ -44,8 +41,6 @@ public:
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
-    AU.addRequired<MachineDominatorTree>();
-    AU.addPreserved<MachineDominatorTree>();
     AU.setPreservesCFG();
     MachineFunctionPass::getAnalysisUsage(AU);
   }
@@ -76,11 +71,8 @@ struct FoldCandidate {
 
 } // End anonymous namespace.
 
-INITIALIZE_PASS_BEGIN(SIFoldOperands, DEBUG_TYPE,
-                      "SI Fold Operands", false, false)
-INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-INITIALIZE_PASS_END(SIFoldOperands, DEBUG_TYPE,
-                    "SI Fold Operands", false, false)
+INITIALIZE_PASS(SIFoldOperands, DEBUG_TYPE,
+                "SI Fold Operands", false, false)
 
 char SIFoldOperands::ID = 0;
 
@@ -140,7 +132,7 @@ static bool tryAddToFoldList(std::vector<FoldCandidate> &FoldList,
                              MachineInstr *MI, unsigned OpNo,
                              MachineOperand *OpToFold,
                              const SIInstrInfo *TII) {
-  if (!TII->isOperandLegal(MI, OpNo, OpToFold)) {
+  if (!TII->isOperandLegal(*MI, OpNo, OpToFold)) {
 
     // Special case for v_mac_f32_e64 if we are trying to fold into src2
     unsigned Opc = MI->getOpcode();
@@ -167,7 +159,7 @@ static bool tryAddToFoldList(std::vector<FoldCandidate> &FoldList,
     // see if this makes it possible to fold.
     unsigned CommuteIdx0 = TargetInstrInfo::CommuteAnyOperandIndex;
     unsigned CommuteIdx1 = TargetInstrInfo::CommuteAnyOperandIndex;
-    bool CanCommute = TII->findCommutedOpIndices(MI, CommuteIdx0, CommuteIdx1);
+    bool CanCommute = TII->findCommutedOpIndices(*MI, CommuteIdx0, CommuteIdx1);
 
     if (CanCommute) {
       if (CommuteIdx0 == OpNo)
@@ -185,10 +177,10 @@ static bool tryAddToFoldList(std::vector<FoldCandidate> &FoldList,
       return false;
 
     if (!CanCommute ||
-        !TII->commuteInstruction(MI, false, CommuteIdx0, CommuteIdx1))
+        !TII->commuteInstruction(*MI, false, CommuteIdx0, CommuteIdx1))
       return false;
 
-    if (!TII->isOperandLegal(MI, OpNo, OpToFold))
+    if (!TII->isOperandLegal(*MI, OpNo, OpToFold))
       return false;
   }
 
@@ -301,9 +293,13 @@ static void foldOperand(MachineOperand &OpToFold, MachineInstr *UseMI,
 }
 
 bool SIFoldOperands::runOnMachineFunction(MachineFunction &MF) {
+  if (skipFunction(*MF.getFunction()))
+    return false;
+
+  const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
+
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const SIInstrInfo *TII =
-      static_cast<const SIInstrInfo *>(MF.getSubtarget().getInstrInfo());
+  const SIInstrInfo *TII = ST.getInstrInfo();
   const SIRegisterInfo &TRI = TII->getRegisterInfo();
 
   for (MachineFunction::iterator BI = MF.begin(), BE = MF.end();
@@ -334,12 +330,20 @@ bool SIFoldOperands::runOnMachineFunction(MachineFunction &MF) {
           !MRI.hasOneUse(MI.getOperand(0).getReg()))
         continue;
 
-      // FIXME: Fold operands with subregs.
       if (OpToFold.isReg() &&
-          (!TargetRegisterInfo::isVirtualRegister(OpToFold.getReg()) ||
-           OpToFold.getSubReg()))
+          !TargetRegisterInfo::isVirtualRegister(OpToFold.getReg()))
         continue;
 
+      // Prevent folding operands backwards in the function. For example,
+      // the COPY opcode must not be replaced by 1 in this example:
+      //
+      //    %vreg3<def> = COPY %VGPR0; VGPR_32:%vreg3
+      //    ...
+      //    %VGPR0<def> = V_MOV_B32_e32 1, %EXEC<imp-use>
+      MachineOperand &Dst = MI.getOperand(0);
+      if (Dst.isReg() &&
+          !TargetRegisterInfo::isVirtualRegister(Dst.getReg()))
+        continue;
 
       // We need mutate the operands of new mov instructions to add implicit
       // uses of EXEC, but adding them invalidates the use_iterator, so defer

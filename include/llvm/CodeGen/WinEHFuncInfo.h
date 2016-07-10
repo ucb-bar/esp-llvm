@@ -18,6 +18,7 @@
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/TinyPtrVector.h"
+#include "llvm/IR/Instructions.h"
 
 namespace llvm {
 class AllocaInst;
@@ -93,8 +94,6 @@ struct WinEHFuncInfo {
   DenseMap<const Instruction *, int> EHPadStateMap;
   DenseMap<const FuncletPadInst *, int> FuncletBaseStateMap;
   DenseMap<const InvokeInst *, int> InvokeStateMap;
-  DenseMap<const CatchReturnInst *, const BasicBlock *>
-      CatchRetSuccessorColorMap;
   DenseMap<MCSymbol *, std::pair<int, MCSymbol *>> LabelToStateMap;
   SmallVector<CxxUnwindMapEntry, 4> CxxUnwindMap;
   SmallVector<WinEHTryBlockMapEntry, 4> TryBlockMap;
@@ -110,6 +109,7 @@ struct WinEHFuncInfo {
 
   int EHRegNodeFrameIndex = INT_MAX;
   int EHRegNodeEndOffset = INT_MAX;
+  int EHGuardFrameIndex = INT_MAX;
   int SEHSetFrameOffset = INT_MAX;
 
   WinEHFuncInfo();
@@ -125,8 +125,5 @@ void calculateSEHStateNumbers(const Function *ParentFn,
                               WinEHFuncInfo &FuncInfo);
 
 void calculateClrEHStateNumbers(const Function *Fn, WinEHFuncInfo &FuncInfo);
-
-void calculateCatchReturnSuccessorColors(const Function *Fn,
-                                         WinEHFuncInfo &FuncInfo);
 }
 #endif // LLVM_CODEGEN_WINEHFUNCINFO_H

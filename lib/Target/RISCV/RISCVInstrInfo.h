@@ -33,12 +33,7 @@ namespace RISCVII {
   };
   // RISCV MachineOperand target flags.
   enum {
-    // Masks out the bits for the access model.
-    MO_SYMBOL_MODIFIER = (1 << 0),
-
-    // @GOT (aka @GOTENT)
-    MO_GOT = (1 << 0),
-
+    MO_NONE,
     MO_ABS_HI,
     MO_ABS_LO,
     MO_TPREL_HI,
@@ -58,9 +53,9 @@ public:
   explicit RISCVInstrInfo(RISCVSubtarget &STI);
 
   // Override TargetInstrInfo.
-  unsigned isLoadFromStackSlot(const MachineInstr *MI,
+  unsigned isLoadFromStackSlot(const MachineInstr &MI,
                                int &FrameIndex) const override;
-  unsigned isStoreToStackSlot(const MachineInstr *MI,
+  unsigned isStoreToStackSlot(const MachineInstr &MI,
                               int &FrameIndex) const override;
   void adjustStackPtr(unsigned SP, int64_t Amount,
                                      MachineBasicBlock &MBB,
@@ -74,17 +69,17 @@ public:
   unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                         MachineBasicBlock *FBB,
                         ArrayRef<MachineOperand> Cond,
-                        DebugLoc DL) const override;
+                        const DebugLoc &DL) const override;
   unsigned InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
                               MachineBasicBlock *TBB,
                               ArrayRef<MachineOperand> Cond,
-                              DebugLoc DL) const;
+                              const DebugLoc &DL) const;
   unsigned InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
                                    int64_t offset,
                                    ArrayRef<MachineOperand> Cond,
-                                   DebugLoc DL) const;
+                                   const DebugLoc &DL) const;
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
-                   DebugLoc DL, unsigned DestReg, unsigned SrcReg,
+                   const DebugLoc &DL, unsigned DestReg, unsigned SrcReg,
                    bool KillSrc) const override;
   void storeRegToStackSlot(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MBBI, unsigned SrcReg,
@@ -95,7 +90,7 @@ public:
                             MachineBasicBlock::iterator MBBI, unsigned DestReg,
                             int FrameIdx, const TargetRegisterClass *RC,
                             const TargetRegisterInfo *TRI) const override;
-  bool expandPostRAPseudo(MachineBasicBlock::iterator MBBI) const override;
+  bool expandPostRAPseudo(MachineInstr &MI) const override;
   bool
   ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
 

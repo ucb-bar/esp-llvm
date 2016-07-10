@@ -269,7 +269,7 @@ RISCVFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
 }
 
 // Eliminate ADJCALLSTACKDOWN, ADJCALLSTACKUP pseudo instructions
-void RISCVFrameLowering::
+MachineBasicBlock::iterator RISCVFrameLowering::
 eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                               MachineBasicBlock::iterator I) const {
   const RISCVInstrInfo &TII =
@@ -286,7 +286,7 @@ eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
     TII.adjustStackPtr(SP, Amount, MBB, I);
   }
 
-  MBB.erase(I);
+  return MBB.erase(I);
 }
 
 void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,

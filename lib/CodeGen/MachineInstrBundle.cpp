@@ -17,6 +17,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
+#include <utility>
 using namespace llvm;
 
 namespace {
@@ -24,7 +25,7 @@ namespace {
   public:
     static char ID; // Pass identification
     UnpackMachineBundles(std::function<bool(const Function &)> Ftor = nullptr)
-        : MachineFunctionPass(ID), PredicateFtor(Ftor) {
+        : MachineFunctionPass(ID), PredicateFtor(std::move(Ftor)) {
       initializeUnpackMachineBundlesPass(*PassRegistry::getPassRegistry());
     }
 
@@ -78,7 +79,7 @@ bool UnpackMachineBundles::runOnMachineFunction(MachineFunction &MF) {
 
 FunctionPass *
 llvm::createUnpackMachineBundles(std::function<bool(const Function &)> Ftor) {
-  return new UnpackMachineBundles(Ftor);
+  return new UnpackMachineBundles(std::move(Ftor));
 }
 
 namespace {
@@ -293,7 +294,7 @@ MachineOperandIteratorBase::PhysRegInfo
 MachineOperandIteratorBase::analyzePhysReg(unsigned Reg,
                                            const TargetRegisterInfo *TRI) {
   bool AllDefsDead = true;
-  PhysRegInfo PRI = {false, false, false, false, false, false, false};
+  PhysRegInfo PRI = {false, false, false, false, false, false, false, false};
 
   assert(TargetRegisterInfo::isPhysicalRegister(Reg) &&
          "analyzePhysReg not given a physical register!");
@@ -315,7 +316,7 @@ MachineOperandIteratorBase::analyzePhysReg(unsigned Reg,
     if (!TRI->regsOverlap(MOReg, Reg))
       continue;
 
-    bool Covered = TRI->isSuperRegisterEq(MOReg, Reg);
+    bool Covered = TRI->isSuperRegisterEq(Reg, MOReg);
     if (MO.readsReg()) {
       PRI.Read = true;
       if (Covered) {
@@ -332,8 +333,12 @@ MachineOperandIteratorBase::analyzePhysReg(unsigned Reg,
     }
   }
 
-  if (AllDefsDead && PRI.FullyDefined)
-    PRI.DeadDef = true;
+  if (AllDefsDead) {
+    if (PRI.FullyDefined || PRI.Clobbered)
+      PRI.DeadDef = true;
+    else if (PRI.Defined)
+      PRI.PartialDeadDef = true;
+  }
 
   return PRI;
 }

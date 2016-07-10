@@ -9,16 +9,20 @@
 #ifndef LLVM_TOOLS_LLVM_OBJDUMP_LLVM_OBJDUMP_H
 #define LLVM_TOOLS_LLVM_OBJDUMP_LLVM_OBJDUMP_H
 
-#include "llvm/ADT/StringRef.h"
+#include "llvm/DebugInfo/DIContext.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/DataTypes.h"
+#include "llvm/Object/Archive.h"
 
 namespace llvm {
+class StringRef;
+
 namespace object {
   class COFFObjectFile;
   class MachOObjectFile;
   class ObjectFile;
+  class Archive;
   class RelocationRef;
 }
 
@@ -31,6 +35,7 @@ extern cl::opt<bool> Disassemble;
 extern cl::opt<bool> DisassembleAll;
 extern cl::opt<bool> NoShowRawInsn;
 extern cl::opt<bool> PrivateHeaders;
+extern cl::opt<bool> FirstPrivateHeader;
 extern cl::opt<bool> ExportsTrie;
 extern cl::opt<bool> Rebase;
 extern cl::opt<bool> Bind;
@@ -54,6 +59,7 @@ extern cl::opt<bool> SectionContents;
 extern cl::opt<bool> SymbolTable;
 extern cl::opt<bool> UnwindInfo;
 extern cl::opt<bool> PrintImmHex;
+extern cl::opt<DIDumpType> DwarfDumpType;
 
 // Various helper functions.
 void error(std::error_code ec);
@@ -70,6 +76,7 @@ void printELFFileHeader(const object::ObjectFile *o);
 void printCOFFFileHeader(const object::ObjectFile *o);
 void printCOFFSymbolTable(const object::COFFObjectFile *o);
 void printMachOFileHeader(const object::ObjectFile *o);
+void printMachOLoadCommands(const object::ObjectFile *o);
 void printExportsTrie(const object::ObjectFile *o);
 void printRebaseTable(const object::ObjectFile *o);
 void printBindTable(const object::ObjectFile *o);
@@ -79,8 +86,21 @@ void printRawClangAST(const object::ObjectFile *o);
 void PrintRelocations(const object::ObjectFile *o);
 void PrintSectionHeaders(const object::ObjectFile *o);
 void PrintSectionContents(const object::ObjectFile *o);
-void PrintSymbolTable(const object::ObjectFile *o);
+void PrintSymbolTable(const object::ObjectFile *o, StringRef ArchiveName,
+                      StringRef ArchitectureName = StringRef());
+LLVM_ATTRIBUTE_NORETURN void error(Twine Message);
 LLVM_ATTRIBUTE_NORETURN void report_error(StringRef File, std::error_code EC);
+LLVM_ATTRIBUTE_NORETURN void report_error(StringRef File, llvm::Error E);
+LLVM_ATTRIBUTE_NORETURN void report_error(StringRef FileName,
+                                          StringRef ArchiveName,
+                                          llvm::Error E,
+                                          StringRef ArchitectureName
+                                                    = StringRef());
+LLVM_ATTRIBUTE_NORETURN void report_error(StringRef ArchiveName,
+                                          const object::Archive::Child &C,
+                                          llvm::Error E,
+                                          StringRef ArchitectureName
+                                                    = StringRef());
 
 } // end namespace llvm
 

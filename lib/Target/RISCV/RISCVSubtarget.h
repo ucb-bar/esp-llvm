@@ -18,10 +18,10 @@
 #include "RISCVISelLowering.h"
 #include "RISCVInstrInfo.h"
 #include "RISCVRegisterInfo.h"
+#include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetSelectionDAGInfo.h"
 #include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
@@ -52,7 +52,7 @@ private:
   Triple TargetTriple;
   RISCVInstrInfo InstrInfo;
   RISCVTargetLowering TLInfo;
-  TargetSelectionDAGInfo TSInfo;
+  SelectionDAGTargetInfo TSInfo;
   RISCVFrameLowering FrameLowering;
 
   RISCVSubtarget &initializeSubtargetDependencies(StringRef CPU, StringRef FS);
@@ -67,7 +67,7 @@ public:
     return &InstrInfo.getRegisterInfo();
   }
   const RISCVTargetLowering *getTargetLowering() const { return &TLInfo; }
-  const TargetSelectionDAGInfo *getSelectionDAGInfo() const { return &TSInfo; }
+  const SelectionDAGTargetInfo *getSelectionDAGInfo() const { return &TSInfo; }
 
   bool isRV32() const { return RISCVArchVersion == RV32; };
   bool isRV64() const { return RISCVArchVersion == RV64; };

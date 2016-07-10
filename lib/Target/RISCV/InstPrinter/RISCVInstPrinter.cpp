@@ -30,53 +30,6 @@ void RISCVInstPrinter::printAddress(unsigned Base, int64_t Disp,
   }
 }
 
-static void printExpr(const MCExpr *Expr, raw_ostream &OS) {
-  int Offset = 0;
-  const MCSymbolRefExpr *SRE;
-  
-  if (const MCBinaryExpr *BE = dyn_cast<MCBinaryExpr>(Expr)) {
-    SRE = dyn_cast<MCSymbolRefExpr>(BE->getLHS());
-    const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(BE->getRHS());
-    assert(SRE && CE && "Binary expression must be sym+const.");
-    Offset = CE->getValue();
-  }
-  else if (!(SRE = dyn_cast<MCSymbolRefExpr>(Expr)))
-    assert(false && "Unexpected MCExpr type.");
- 
-  MCSymbolRefExpr::VariantKind Kind = SRE->getKind();
-    
-  switch (Kind) {
-  default:                                 llvm_unreachable("Invalid kind!");
-  case MCSymbolRefExpr::VK_None:           break;
-  case MCSymbolRefExpr::VK_Mips_ABS_HI:    OS << "%hi(";     break;
-  case MCSymbolRefExpr::VK_Mips_ABS_LO:    OS << "%lo(";     break;
-  case MCSymbolRefExpr::VK_Mips_TPREL_HI:    OS << "%tprel_hi(";     break;
-  case MCSymbolRefExpr::VK_Mips_TPREL_LO:    OS << "%tprel_lo(";     break;
-  }
-
-  OS << SRE->getSymbol();
-      
-  if (Offset) {
-    if (Offset > 0)
-      OS << '+';
-    OS << Offset; 
-  }                   
-                          
-  if (Kind != MCSymbolRefExpr::VK_None)
-    OS << ')';
-}
-
-void RISCVInstPrinter::printOperand(const MCOperand &MC, raw_ostream &O) {
-  if (MC.isReg())
-    O << getRegisterName(MC.getReg());
-  else if (MC.isImm())
-    O << MC.getImm();
-  else if (MC.isExpr())
-    printExpr(MC.getExpr(), O);
-  else
-    llvm_unreachable("Invalid operand");
-}
-
 void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
                                    StringRef Annot, const MCSubtargetInfo &STI) {
   printInstruction(MI, O);
@@ -213,7 +166,15 @@ void RISCVInstPrinter::printCallOperand(const MCInst *MI, int OpNum,
 
 void RISCVInstPrinter::printOperand(const MCInst *MI, int OpNum,
                                       raw_ostream &O) {
-  printOperand(MI->getOperand(OpNum), O);
+  const MCOperand &MC = MI->getOperand(OpNum);
+  if (MC.isReg())
+    O << getRegisterName(MC.getReg());
+  else if (MC.isImm())
+    O << MC.getImm();
+  else if (MC.isExpr())
+    MC.getExpr()->print(O, &MAI, true);
+  else
+    llvm_unreachable("Invalid operand");
 }
 
 void RISCVInstPrinter::printBDAddrOperand(const MCInst *MI, int OpNum,

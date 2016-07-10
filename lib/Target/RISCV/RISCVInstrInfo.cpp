@@ -32,24 +32,24 @@ RISCVInstrInfo::RISCVInstrInfo(RISCVSubtarget &sti)
 // Return 0 otherwise.
 //
 // Flag is SimpleLoad for loads and SimpleStore for stores.
-static int isSimpleMove(const MachineInstr *MI, int &FrameIndex, int Flag) {
-  const MCInstrDesc &MCID = MI->getDesc();
+static int isSimpleMove(const MachineInstr &MI, int &FrameIndex, int Flag) {
+  const MCInstrDesc &MCID = MI.getDesc();
   if ((MCID.TSFlags & Flag) &&
-      MI->getOperand(1).isFI() &&
-      MI->getOperand(2).getImm() == 0 &&
-      MI->getOperand(3).getReg() == 0) {
-    FrameIndex = MI->getOperand(1).getIndex();
-    return MI->getOperand(0).getReg();
+      MI.getOperand(1).isFI() &&
+      MI.getOperand(2).getImm() == 0 &&
+      MI.getOperand(3).getReg() == 0) {
+    FrameIndex = MI.getOperand(1).getIndex();
+    return MI.getOperand(0).getReg();
   }
   return 0;
 }
 
-unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr *MI,
+unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                                int &FrameIndex) const {
   return isSimpleMove(MI, FrameIndex, RISCVII::SimpleLoad);
 }
 
-unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr *MI,
+unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
                                               int &FrameIndex) const {
   return isSimpleMove(MI, FrameIndex, RISCVII::SimpleStore);
 }
@@ -94,7 +94,7 @@ bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
 
     // Working from the bottom, when we see a non-terminator instruction, we're
     // done.
-    if (!isUnpredicatedTerminator(I))
+    if (!isUnpredicatedTerminator(*I))
       break;
 
     // A terminator that isn't a branch can't easily be handled by this
@@ -200,7 +200,7 @@ unsigned
 RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                MachineBasicBlock *FBB,
                                ArrayRef<MachineOperand> Cond,
-                               DebugLoc DL) const {
+                               const DebugLoc &DL) const {
   if (FBB) {
     //Need to build two branches then
     //one to branch to TBB on Cond
@@ -216,7 +216,7 @@ RISCVInstrInfo::InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
 unsigned
 RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, int64_t offset,
                                ArrayRef<MachineOperand> Cond,
-                               DebugLoc DL) const {
+                               const DebugLoc &DL) const {
   // Shouldn't be a fall through.
   assert(&MBB && "InsertBranch must not be told to insert a fallthrough");
   assert(Cond.size() <= 4 &&
@@ -283,7 +283,7 @@ RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
 unsigned
 RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
                                MachineBasicBlock *TBB, ArrayRef<MachineOperand> Cond,
-                               DebugLoc DL) const {
+                               const DebugLoc &DL) const {
   // Shouldn't be a fall through.
   assert(TBB && "InsertBranch must not be told to insert a fallthrough");
   assert(Cond.size() <= 4 &&
@@ -350,7 +350,7 @@ RISCVInstrInfo::InsertBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I,
 
 void
 RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
-			      MachineBasicBlock::iterator MBBI, DebugLoc DL,
+			      MachineBasicBlock::iterator MBBI, const DebugLoc &DL,
 			      unsigned DestReg, unsigned SrcReg,
 			      bool KillSrc) const {
 
@@ -456,8 +456,8 @@ RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 }
 
 bool
-RISCVInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
-  switch (MI->getOpcode()) {
+RISCVInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
 
   default:
     return false;

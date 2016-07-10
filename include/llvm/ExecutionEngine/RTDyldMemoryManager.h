@@ -16,7 +16,6 @@
 
 #include "RuntimeDyld.h"
 #include "llvm-c/ExecutionEngine.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CBindingWrapping.h"
 #include "llvm/Support/Memory.h"
 
@@ -30,6 +29,10 @@ class ExecutionEngine;
 
 class MCJITMemoryManager : public RuntimeDyld::MemoryManager {
 public:
+
+  // Don't hide the notifyObjectLoaded method from RuntimeDyld::MemoryManager.
+  using RuntimeDyld::MemoryManager::notifyObjectLoaded;
+
   /// This method is called after an object has been loaded into memory but
   /// before relocations are applied to the loaded sections.  The object load
   /// may have been initiated by MCJIT to resolve an external symbol for another
@@ -58,8 +61,19 @@ public:
   RTDyldMemoryManager() {}
   ~RTDyldMemoryManager() override;
 
-  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
-  void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override;
+  /// Register EH frames in the current process.
+  static void registerEHFramesInProcess(uint8_t *Addr, size_t Size);
+
+  /// Deregister EH frames in the current proces.
+  static void deregisterEHFramesInProcess(uint8_t *Addr, size_t Size);
+
+  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override {
+    registerEHFramesInProcess(Addr, Size);
+  }
+
+  void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr, size_t Size) override {
+    registerEHFramesInProcess(Addr, Size);
+  }
 
   /// This method returns the address of the specified function or variable in
   /// the current process.

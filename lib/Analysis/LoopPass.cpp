@@ -14,8 +14,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/LoopPass.h"
+#include "llvm/Analysis/LoopPassManager.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/OptBisect.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Timer.h"
@@ -42,7 +44,13 @@ public:
   }
 
   bool runOnLoop(Loop *L, LPPassManager &) override {
-    P.run(*L);
+    auto BBI = find_if(L->blocks().begin(), L->blocks().end(),
+                       [](BasicBlock *BB) { return BB; });
+    if (BBI != L->blocks().end() &&
+        isFunctionInPrintList((*BBI)->getParent()->getName())) {
+      AnalysisManager<Loop> DummyLAM;
+      P.run(*L, DummyLAM);
+    }
     return false;
   }
 };
@@ -101,9 +109,7 @@ void LPPassManager::cloneBasicBlockSimpleAnalysis(BasicBlock *From,
 /// deleteSimpleAnalysisValue - Invoke deleteAnalysisValue hook for all passes.
 void LPPassManager::deleteSimpleAnalysisValue(Value *V, Loop *L) {
   if (BasicBlock *BB = dyn_cast<BasicBlock>(V)) {
-    for (BasicBlock::iterator BI = BB->begin(), BE = BB->end(); BI != BE;
-         ++BI) {
-      Instruction &I = *BI;
+    for (Instruction &I : *BB) {
       deleteSimpleAnalysisValue(&I, L);
     }
   }
@@ -174,8 +180,9 @@ bool LPPassManager::runOnFunction(Function &F) {
 
   // Walk Loops
   while (!LQ.empty()) {
-
+    bool LoopWasDeleted = false;
     CurrentLoop = LQ.back();
+
     // Run all passes on the current Loop.
     for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
       LoopPass *P = getContainedPass(Index);
@@ -192,15 +199,15 @@ bool LPPassManager::runOnFunction(Function &F) {
 
         Changed |= P->runOnLoop(CurrentLoop, *this);
       }
+      LoopWasDeleted = CurrentLoop->isInvalid();
 
       if (Changed)
         dumpPassInfo(P, MODIFICATION_MSG, ON_LOOP_MSG,
-                     CurrentLoop->isUnloop()
-                         ? "<deleted>"
-                         : CurrentLoop->getHeader()->getName());
+                     LoopWasDeleted ? "<deleted>"
+                                    : CurrentLoop->getHeader()->getName());
       dumpPreservedSet(P);
 
-      if (CurrentLoop->isUnloop()) {
+      if (LoopWasDeleted) {
         // Notify passes that the loop is being deleted.
         deleteSimpleAnalysisLoop(CurrentLoop);
       } else {
@@ -222,12 +229,11 @@ bool LPPassManager::runOnFunction(Function &F) {
 
       removeNotPreservedAnalysis(P);
       recordAvailableAnalysis(P);
-      removeDeadPasses(P, CurrentLoop->isUnloop()
-                              ? "<deleted>"
-                              : CurrentLoop->getHeader()->getName(),
+      removeDeadPasses(P, LoopWasDeleted ? "<deleted>"
+                                         : CurrentLoop->getHeader()->getName(),
                        ON_LOOP_MSG);
 
-      if (CurrentLoop->isUnloop())
+      if (LoopWasDeleted)
         // Do not run other passes on this loop.
         break;
     }
@@ -235,12 +241,11 @@ bool LPPassManager::runOnFunction(Function &F) {
     // If the loop was deleted, release all the loop passes. This frees up
     // some memory, and avoids trouble with the pass manager trying to call
     // verifyAnalysis on them.
-    if (CurrentLoop->isUnloop()) {
+    if (LoopWasDeleted) {
       for (unsigned Index = 0; Index < getNumContainedPasses(); ++Index) {
         Pass *P = getContainedPass(Index);
         freePass(P, "<deleted>", ON_LOOP_MSG);
       }
-      delete CurrentLoop;
     }
 
     // Pop the loop from queue after running all passes.
@@ -332,11 +337,16 @@ void LoopPass::assignPassManager(PMStack &PMS,
   LPPM->add(this);
 }
 
-// Containing function has Attribute::OptimizeNone and transformation
-// passes should skip it.
-bool LoopPass::skipOptnoneFunction(const Loop *L) const {
+bool LoopPass::skipLoop(const Loop *L) const {
   const Function *F = L->getHeader()->getParent();
-  if (F && F->hasFnAttribute(Attribute::OptimizeNone)) {
+  if (!F)
+    return false;
+  // Check the opt bisect limit.
+  LLVMContext &Context = F->getContext();
+  if (!Context.getOptBisect().shouldRunPass(this, *L))
+    return true;
+  // Check for the OptimizeNone attribute.
+  if (F->hasFnAttribute(Attribute::OptimizeNone)) {
     // FIXME: Report this to dbgs() only once per function.
     DEBUG(dbgs() << "Skipping pass '" << getPassName()
           << "' in function " << F->getName() << "\n");

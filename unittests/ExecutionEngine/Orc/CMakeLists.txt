@@ -18,4 +18,7 @@ add_llvm_unittest(OrcJITTests
   ObjectTransformLayerTest.cpp
   OrcCAPITest.cpp
   OrcTestCommon.cpp
+  RPCUtilsTest.cpp
   )
+
+target_link_libraries(OrcJITTests ${PTHREAD_LIB})

@@ -28,11 +28,14 @@ static unsigned getShortenedInstr(unsigned Opcode) {
 
 // Return the VK_* enumeration for MachineOperand target flags Flags.
 static MCSymbolRefExpr::VariantKind getVariantKind(unsigned Flags) {
-  switch (Flags & RISCVII::MO_SYMBOL_MODIFIER) {
-    case 0:
+  switch (Flags) {
+    case RISCVII::MO_NONE:
+    case RISCVII::MO_ABS_HI:
+    case RISCVII::MO_ABS_LO:
       return MCSymbolRefExpr::VK_None;
-    case RISCVII::MO_GOT:
-      return MCSymbolRefExpr::VK_GOT;
+    case RISCVII::MO_TPREL_HI:
+    case RISCVII::MO_TPREL_LO:
+      return MCSymbolRefExpr::VK_TPREL;
   }
   llvm_unreachable("Unrecognised MO_ACCESS_MODEL");
 }
@@ -44,18 +47,22 @@ MCOperand RISCVMCInstLower::lowerSymbolOperand(const MachineOperand &MO,
                                                  const MCSymbol *Symbol,
                                                  int64_t Offset) const {
   MCSymbolRefExpr::VariantKind Kind = getVariantKind(MO.getTargetFlags());
+  RISCVMCExpr::VariantKind TargetKind = RISCVMCExpr::VK_RISCV_None;
   switch(MO.getTargetFlags()) {
-    case RISCVII::MO_ABS_HI:    Kind = MCSymbolRefExpr::VK_Mips_ABS_HI; break;
-    case RISCVII::MO_ABS_LO:    Kind = MCSymbolRefExpr::VK_Mips_ABS_LO; break;
-    case RISCVII::MO_TPREL_HI:    Kind = MCSymbolRefExpr::VK_Mips_TPREL_HI; break;
-    case RISCVII::MO_TPREL_LO:    Kind = MCSymbolRefExpr::VK_Mips_TPREL_LO; break;
+    case RISCVII::MO_ABS_HI:    TargetKind = RISCVMCExpr::VK_RISCV_HI20; break;
+    case RISCVII::MO_ABS_LO:    TargetKind = RISCVMCExpr::VK_RISCV_LO12; break;
+    case RISCVII::MO_TPREL_HI:    TargetKind = RISCVMCExpr::VK_RISCV_TPREL_HI20; break;
+    case RISCVII::MO_TPREL_LO:    TargetKind = RISCVMCExpr::VK_RISCV_TPREL_LO12; break;
   }
   const MCExpr *Expr = MCSymbolRefExpr::create(Symbol, Kind, Ctx);
   if (Offset) {
     const MCExpr *OffsetExpr = MCConstantExpr::create(Offset, Ctx);
     Expr = MCBinaryExpr::createAdd(Expr, OffsetExpr, Ctx);
   }
-  return MCOperand::createExpr(Expr);
+
+  const RISCVMCExpr *riscvExpr = RISCVMCExpr::create(TargetKind, Expr, Ctx);
+
+  return MCOperand::createExpr(riscvExpr);
 }
 
 MCOperand RISCVMCInstLower::lowerOperand(const MachineOperand &MO) const {

@@ -190,8 +190,8 @@ namespace llvm {
       void dump() const;
     };
 
-    typedef SmallVector<Segment,4> Segments;
-    typedef SmallVector<VNInfo*,4> VNInfoList;
+    typedef SmallVector<Segment, 2> Segments;
+    typedef SmallVector<VNInfo *, 2> VNInfoList;
 
     Segments segments;   // the liveness segments
     VNInfoList valnos;   // value#'s
@@ -544,6 +544,11 @@ namespace llvm {
       return true;
     }
 
+    // Returns true if any segment in the live range contains any of the
+    // provided slot indexes.  Slots which occur in holes between
+    // segments will not cause the function to return true.
+    bool isLiveAtIndexes(ArrayRef<SlotIndex> Slots) const;
+
     bool operator<(const LiveRange& other) const {
       const SlotIndex &thisIndex = beginIndex();
       const SlotIndex &otherIndex = other.beginIndex();
@@ -707,10 +712,6 @@ namespace llvm {
     /// are not considered valid and should only exist temporarily).
     void removeEmptySubRanges();
 
-    /// Construct main live range by merging the SubRanges of @p LI.
-    void constructMainRangeFromSubranges(const SlotIndexes &Indexes,
-                                         VNInfo::Allocator &VNIAllocator);
-
     /// getSize - Returns the sum of sizes of all the LiveRange's.
     ///
     unsigned getSize() const;
@@ -848,9 +849,9 @@ namespace llvm {
   public:
     explicit ConnectedVNInfoEqClasses(LiveIntervals &lis) : LIS(lis) {}
 
-    /// Classify - Classify the values in LI into connected components.
-    /// Return the number of connected components.
-    unsigned Classify(const LiveInterval *LI);
+    /// Classify the values in \p LR into connected components.
+    /// Returns the number of connected components.
+    unsigned Classify(const LiveRange &LR);
 
     /// getEqClass - Classify creates equivalence classes numbered 0..N. Return
     /// the equivalence class assigned the VNI.
@@ -863,6 +864,5 @@ namespace llvm {
     void Distribute(LiveInterval &LI, LiveInterval *LIV[],
                     MachineRegisterInfo &MRI);
   };
-
 }
 #endif

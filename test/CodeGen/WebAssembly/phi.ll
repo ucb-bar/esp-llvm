@@ -1,8 +1,8 @@
-; RUN: llc < %s -asm-verbose=false -verify-machineinstrs | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -verify-machineinstrs | FileCheck %s
 
 ; Test that phis are lowered.
 
-target datalayout = "e-p:32:32-i64:64-n32:64-S128"
+target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
 target triple = "wasm32-unknown-unknown"
 
 ; Basic phi triangle.
@@ -25,7 +25,7 @@ done:
 ; Swap phis.
 
 ; CHECK-LABEL: test1:
-; CHECK: BB1_1:
+; CHECK: .LBB1_1:
 ; CHECK: copy_local $[[NUM0:[0-9]+]]=, $[[NUM1:[0-9]+]]{{$}}
 ; CHECK: copy_local $[[NUM1]]=, $[[NUM2:[0-9]+]]{{$}}
 ; CHECK: copy_local $[[NUM2]]=, $[[NUM0]]{{$}}

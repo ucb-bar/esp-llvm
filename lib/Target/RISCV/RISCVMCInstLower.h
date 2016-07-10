@@ -10,6 +10,7 @@
 #ifndef LLVM_LIB_TARGET_RISCV_RISCVMCINSTLOWER_H
 #define LLVM_LIB_TARGET_RISCV_RISCVMCINSTLOWER_H
 
+#include "MCTargetDesc/RISCVMCExpr.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/Compiler.h"
 

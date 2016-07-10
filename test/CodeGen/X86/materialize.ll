@@ -48,7 +48,37 @@ entry:
 ; CHECK64:       popq %rax
 ; CHECK64:       .cfi_adjust_cfa_offset -8
 ; CHECK64-NEXT:  retq
+
+; On Win64 we can't adjust the stack unless there's a frame pointer.
+; CHECKWIN64-LABEL: one32_minsize:
+; CHECKWIN64:       movl $1, %eax
+; CHECKWIN64-NEXT:  retq
 }
+
+define i32 @pr26023() minsize {
+entry:
+  %x = alloca [120 x i8]
+  %0 = getelementptr inbounds [120 x i8], [120 x i8]* %x, i64 0, i64 0
+  call void asm sideeffect "", "imr,~{memory},~{dirflag},~{fpsr},~{flags}"(i8* %0)
+  %arrayidx = getelementptr inbounds [120 x i8], [120 x i8]* %x, i64 0, i64 119
+  store volatile i8 -2, i8* %arrayidx
+  call void asm sideeffect "", "r,~{dirflag},~{fpsr},~{flags}"(i32 5)
+  %1 = load volatile i8, i8* %arrayidx
+  %conv = sext i8 %1 to i32
+  ret i32 %conv
+
+; The function writes to the redzone, so push/pop cannot be used.
+; CHECK64-LABEL: pr26023:
+; CHECK64:       movl $5, %ecx
+; CHECK64:       retq
+
+; 32-bit X86 doesn't have a redzone.
+; CHECK32-LABEL: pr26023:
+; CHECK32:       pushl $5
+; CHECK32:       popl %ecx
+; CHECK32:       retl
+}
+
 
 define i64 @one64_minsize() minsize {
 entry:
@@ -95,6 +125,7 @@ entry:
 ; CHECK32-LABEL: one16:
 ; CHECK32:       xorl %eax, %eax
 ; CHECK32-NEXT:  incl %eax
+; CHECK32-NEXT:  # kill
 ; CHECK32-NEXT:  retl
 }
 
@@ -105,6 +136,7 @@ entry:
 ; CHECK32-LABEL: minus_one16:
 ; CHECK32:       xorl %eax, %eax
 ; CHECK32-NEXT:  decl %eax
+; CHECK32-NEXT:  # kill
 ; CHECK32-NEXT:  retl
 }
 

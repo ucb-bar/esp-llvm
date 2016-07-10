@@ -144,10 +144,11 @@ static void addTryBlockMapEntry(WinEHFuncInfo &FuncInfo, int TryLow,
       HT.TypeDescriptor = cast<GlobalVariable>(TypeInfo->stripPointerCasts());
     HT.Adjectives = cast<ConstantInt>(CPI->getArgOperand(1))->getZExtValue();
     HT.Handler = CPI->getParent();
-    if (isa<ConstantPointerNull>(CPI->getArgOperand(2)))
-      HT.CatchObj.Alloca = nullptr;
+    if (auto *AI =
+            dyn_cast<AllocaInst>(CPI->getArgOperand(2)->stripPointerCasts()))
+      HT.CatchObj.Alloca = AI;
     else
-      HT.CatchObj.Alloca = cast<AllocaInst>(CPI->getArgOperand(2));
+      HT.CatchObj.Alloca = nullptr;
     TBME.HandlerArray.push_back(HT);
   }
   FuncInfo.TryBlockMap.push_back(TBME);
@@ -253,13 +254,19 @@ static void calculateCXXStateNumbers(WinEHFuncInfo &FuncInfo,
       FuncInfo.FuncletBaseStateMap[CatchPad] = CatchLow;
       for (const User *U : CatchPad->users()) {
         const auto *UserI = cast<Instruction>(U);
-        if (auto *InnerCatchSwitch = dyn_cast<CatchSwitchInst>(UserI))
-          if (InnerCatchSwitch->getUnwindDest() == CatchSwitch->getUnwindDest())
+        if (auto *InnerCatchSwitch = dyn_cast<CatchSwitchInst>(UserI)) {
+          BasicBlock *UnwindDest = InnerCatchSwitch->getUnwindDest();
+          if (!UnwindDest || UnwindDest == CatchSwitch->getUnwindDest())
             calculateCXXStateNumbers(FuncInfo, UserI, CatchLow);
-        if (auto *InnerCleanupPad = dyn_cast<CleanupPadInst>(UserI))
-          if (getCleanupRetUnwindDest(InnerCleanupPad) ==
-              CatchSwitch->getUnwindDest())
+        }
+        if (auto *InnerCleanupPad = dyn_cast<CleanupPadInst>(UserI)) {
+          BasicBlock *UnwindDest = getCleanupRetUnwindDest(InnerCleanupPad);
+          // If a nested cleanup pad reports a null unwind destination and the
+          // enclosing catch pad doesn't it must be post-dominated by an
+          // unreachable instruction.
+          if (!UnwindDest || UnwindDest == CatchSwitch->getUnwindDest())
             calculateCXXStateNumbers(FuncInfo, UserI, CatchLow);
+        }
       }
     }
     int CatchHigh = FuncInfo.getLastStateNumber();
@@ -356,13 +363,19 @@ static void calculateSEHStateNumbers(WinEHFuncInfo &FuncInfo,
     // outside the __try.
     for (const User *U : CatchPad->users()) {
       const auto *UserI = cast<Instruction>(U);
-      if (auto *InnerCatchSwitch = dyn_cast<CatchSwitchInst>(UserI))
-        if (InnerCatchSwitch->getUnwindDest() == CatchSwitch->getUnwindDest())
+      if (auto *InnerCatchSwitch = dyn_cast<CatchSwitchInst>(UserI)) {
+        BasicBlock *UnwindDest = InnerCatchSwitch->getUnwindDest();
+        if (!UnwindDest || UnwindDest == CatchSwitch->getUnwindDest())
           calculateSEHStateNumbers(FuncInfo, UserI, ParentState);
-      if (auto *InnerCleanupPad = dyn_cast<CleanupPadInst>(UserI))
-        if (getCleanupRetUnwindDest(InnerCleanupPad) ==
-            CatchSwitch->getUnwindDest())
+      }
+      if (auto *InnerCleanupPad = dyn_cast<CleanupPadInst>(UserI)) {
+        BasicBlock *UnwindDest = getCleanupRetUnwindDest(InnerCleanupPad);
+        // If a nested cleanup pad reports a null unwind destination and the
+        // enclosing catch pad doesn't it must be post-dominated by an
+        // unreachable instruction.
+        if (!UnwindDest || UnwindDest == CatchSwitch->getUnwindDest())
           calculateSEHStateNumbers(FuncInfo, UserI, ParentState);
+      }
     }
   } else {
     auto *CleanupPad = cast<CleanupPadInst>(FirstNonPHI);
@@ -664,24 +677,6 @@ void WinEHPrepare::colorFunclets(Function &F) {
   }
 }
 
-void llvm::calculateCatchReturnSuccessorColors(const Function *Fn,
-                                               WinEHFuncInfo &FuncInfo) {
-  for (const BasicBlock &BB : *Fn) {
-    const auto *CatchRet = dyn_cast<CatchReturnInst>(BB.getTerminator());
-    if (!CatchRet)
-      continue;
-    // A 'catchret' returns to the outer scope's color.
-    Value *ParentPad = CatchRet->getParentPad();
-    const BasicBlock *Color;
-    if (isa<ConstantTokenNone>(ParentPad))
-      Color = &Fn->getEntryBlock();
-    else
-      Color = cast<Instruction>(ParentPad)->getParent();
-    // Record the catchret successor's funclet membership.
-    FuncInfo.CatchRetSuccessorColorMap[CatchRet] = Color;
-  }
-}
-
 void WinEHPrepare::demotePHIsOnFunclets(Function &F) {
   // Strip PHI nodes off of EH pads.
   SmallVector<PHINode *, 16> PHINodes;
@@ -792,7 +787,7 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
       // Loop over all instructions, fixing each one as we find it...
       for (Instruction &I : *BB)
         RemapInstruction(&I, VMap,
-                         RF_IgnoreMissingEntries | RF_NoModuleLevelChanges);
+                         RF_IgnoreMissingLocals | RF_NoModuleLevelChanges);
 
     // Catchrets targeting cloned blocks need to be updated separately from
     // the loop above because they are not in the current funclet.
@@ -804,7 +799,7 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
       FixupCatchrets.clear();
       for (BasicBlock *Pred : predecessors(OldBlock))
         if (auto *CatchRet = dyn_cast<CatchReturnInst>(Pred->getTerminator()))
-          if (CatchRet->getParentPad() == FuncletToken)
+          if (CatchRet->getCatchSwitchParentPad() == FuncletToken)
             FixupCatchrets.push_back(CatchRet);
 
       for (CatchReturnInst *CatchRet : FixupCatchrets)
@@ -819,7 +814,7 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
         bool EdgeTargetsFunclet;
         if (auto *CRI =
                 dyn_cast<CatchReturnInst>(IncomingBlock->getTerminator())) {
-          EdgeTargetsFunclet = (CRI->getParentPad() == FuncletToken);
+          EdgeTargetsFunclet = (CRI->getCatchSwitchParentPad() == FuncletToken);
         } else {
           ColorVector &IncomingColors = BlockColors[IncomingBlock];
           assert(!IncomingColors.empty() && "Block not colored!");
@@ -953,10 +948,11 @@ void WinEHPrepare::removeImplausibleInstructions(Function &F) {
         if (FuncletBundleOperand == FuncletPad)
           continue;
 
-        // Skip call sites which are nounwind intrinsics.
+        // Skip call sites which are nounwind intrinsics or inline asm.
         auto *CalledFn =
             dyn_cast<Function>(CS.getCalledValue()->stripPointerCasts());
-        if (CalledFn && CalledFn->isIntrinsic() && CS.doesNotThrow())
+        if (CalledFn && ((CalledFn->isIntrinsic() && CS.doesNotThrow()) ||
+                         CS.isInlineAsm()))
           continue;
 
         // This call site was not part of this funclet, remove it.

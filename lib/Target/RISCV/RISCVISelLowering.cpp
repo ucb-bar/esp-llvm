@@ -554,8 +554,6 @@ static std::pair<bool, bool> parsePhysicalReg(StringRef C, StringRef &Prefix,
 
 std::pair<unsigned, const TargetRegisterClass *> RISCVTargetLowering::
 parseRegForInlineAsmConstraint(StringRef C, MVT VT) const {
-  const TargetRegisterInfo *TRI =
-      Subtarget.getRegisterInfo();
   const TargetRegisterClass *RC;
   StringRef Prefix;
   unsigned long long Reg;
@@ -735,7 +733,7 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDLoc DL, CCValAssign &VA,
 SDValue RISCVTargetLowering::
 LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                      const SmallVectorImpl<ISD::InputArg> &Ins,
-                     SDLoc DL, SelectionDAG &DAG,
+                     const SDLoc &DL, SelectionDAG &DAG,
                      SmallVectorImpl<SDValue> &InVals) const {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo *MFI = MF.getFrameInfo();
@@ -846,7 +844,7 @@ LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
     int VaArgOffset;
 
     if (NumRegs == Idx)
-      VaArgOffset = RoundUpToAlignment(CCInfo.getNextStackOffset(), RegSize);
+      VaArgOffset = alignTo(CCInfo.getNextStackOffset(), RegSize);
     else
       VaArgOffset = -(int)(RegSize * (NumRegs - Idx));
 
@@ -1110,7 +1108,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain,
                                    CallingConv::ID CallConv, bool IsVarArg,
                                    const SmallVectorImpl<ISD::OutputArg> &Outs,
                                    const SmallVectorImpl<SDValue> &OutVals,
-                                   SDLoc DL, SelectionDAG &DAG) const {
+                                   const SDLoc &DL, SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
 
   // Assign locations to each returned value.
@@ -1323,19 +1321,21 @@ SDValue RISCVTargetLowering::lowerATOMIC_FENCE(SDValue Op, SelectionDAG &DAG) co
   SDLoc DL(Op);
   
   unsigned PI,PO,PR,PW,SI,SO,SR,SW;
-  switch(Op.getConstantOperandVal(1)) {
-    case NotAtomic:
-    case Unordered:
-    case Monotonic:
-    case Acquire:
-    case Release:
-    case AcquireRelease:
-    case SequentiallyConsistent:
+  AtomicOrdering Ord = static_cast<AtomicOrdering>(
+      cast<ConstantSDNode>(Op.getOperand(1))->getZExtValue());
+  switch(Ord) {
+    case AtomicOrdering::NotAtomic:
+    case AtomicOrdering::Unordered:
+    case AtomicOrdering::Monotonic:
+    case AtomicOrdering::Acquire:
+    case AtomicOrdering::Release:
+    case AtomicOrdering::AcquireRelease:
+    case AtomicOrdering::SequentiallyConsistent:
       PI = 1 << 3;
       PO = 1 << 2;
       PR = 1 << 1;
       PW = 1 << 0;
-  } 
+  }
 
   switch(Op.getConstantOperandVal(2)) {
     case SingleThread:
@@ -1440,13 +1440,13 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 // Call pseduo ops for ABI compliant calls (output is always ra)
 MachineBasicBlock *RISCVTargetLowering::
-emitCALL(MachineInstr *MI, MachineBasicBlock *BB) const {
+emitCALL(MachineInstr &MI, MachineBasicBlock *BB) const {
   const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
-  DebugLoc DL = MI->getDebugLoc();
+  DebugLoc DL = MI.getDebugLoc();
 
   unsigned jump;
   unsigned RA;
-  switch(MI->getOpcode()) {
+  switch(MI.getOpcode()) {
   case RISCV::CALL:
     jump = RISCV::JAL; RA = RISCV::ra; break;
   case RISCV::CALLREG:
@@ -1462,19 +1462,19 @@ emitCALL(MachineInstr *MI, MachineBasicBlock *BB) const {
   MachineInstrBuilder jumpMI = BuildMI(*BB, MI, DL, TII->get(jump), RA);
 
   //copy over other operands
-  for(unsigned i = 0; i < MI->getNumOperands(); i++){
-    jumpMI.addOperand(MI->getOperand(i));
+  for(unsigned i = 0; i < MI.getNumOperands(); i++){
+    jumpMI.addOperand(MI.getOperand(i));
   }
-  MI->eraseFromParent();
+  MI.eraseFromParent();
 
   return BB;
 }
 
 MachineBasicBlock *RISCVTargetLowering::
-emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
+emitSelectCC(MachineInstr &MI, MachineBasicBlock *BB) const {
 
   const TargetInstrInfo *TII = BB->getParent()->getSubtarget().getInstrInfo();
-  DebugLoc DL = MI->getDebugLoc();
+  DebugLoc DL = MI.getDebugLoc();
 
   // To "insert" a SELECT_CC instruction, we actually have to insert the
   // diamond control-flow pattern.  The incoming instruction knows the
@@ -1508,10 +1508,10 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   BB->addSuccessor(sinkMBB);
 
   const TargetRegisterInfo *TRI = getTargetMachine().getSubtargetImpl(*F->getFunction())->getRegisterInfo();
-  const TargetRegisterClass *RC = MI->getRegClassConstraint(1, TII, TRI);
+  const TargetRegisterClass *RC = MI.getRegClassConstraint(1, TII, TRI);
   unsigned bne = RC == &RISCV::GR64BitRegClass ? RISCV::BNE64 : RISCV::BNE;
   unsigned zero = RC == &RISCV::GR64BitRegClass ? RISCV::zero_64 : RISCV::zero;
-  BuildMI(BB, DL, TII->get(bne)).addMBB(sinkMBB).addReg(zero).addReg(MI->getOperand(1).getReg());
+  BuildMI(BB, DL, TII->get(bne)).addMBB(sinkMBB).addReg(zero).addReg(MI.getOperand(1).getReg());
 
   //  copy0MBB:
   //   %FalseValue = ...
@@ -1527,57 +1527,57 @@ emitSelectCC(MachineInstr *MI, MachineBasicBlock *BB) const {
   BB = sinkMBB;
 
   //assume there is only one use of zero
-  if(MI->getOperand(0).getReg() == RISCV::zero ||
-     MI->getOperand(0).getReg() == RISCV::zero_64){
+  if(MI.getOperand(0).getReg() == RISCV::zero ||
+     MI.getOperand(0).getReg() == RISCV::zero_64){
     //Create a virtual register for zero and make a copy into it
-    const TargetRegisterClass *RC = MI->getOperand(0).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+    const TargetRegisterClass *RC = MI.getOperand(0).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
     unsigned VReg = F->getRegInfo().createVirtualRegister(RC);
     BuildMI(*copy0MBB, copy0MBB->begin(), DL, TII->get(TargetOpcode::COPY), VReg)
-      .addReg(MI->getOperand(0).getReg());
+      .addReg(MI.getOperand(0).getReg());
     //Do the actual phi using the virtual reg now
     BuildMI(*BB, BB->begin(), DL,
             TII->get(RISCV::PHI), VReg)
-      .addReg(MI->getOperand(3).getReg()).addMBB(copy0MBB)
-      .addReg(MI->getOperand(2).getReg()).addMBB(thisMBB);
-  }else if(MI->getOperand(2).getReg() == RISCV::zero || 
-           MI->getOperand(2).getReg() == RISCV::zero_64){
+      .addReg(MI.getOperand(3).getReg()).addMBB(copy0MBB)
+      .addReg(MI.getOperand(2).getReg()).addMBB(thisMBB);
+  }else if(MI.getOperand(2).getReg() == RISCV::zero || 
+           MI.getOperand(2).getReg() == RISCV::zero_64){
     //Create a virtual register for zero and make a copy into it
-    const TargetRegisterClass *RC = MI->getOperand(2).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+    const TargetRegisterClass *RC = MI.getOperand(2).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
     unsigned VReg = F->getRegInfo().createVirtualRegister(RC);
     BuildMI(*copy0MBB, copy0MBB->begin(), DL, TII->get(TargetOpcode::COPY), VReg)
-      .addReg(MI->getOperand(2).getReg());
+      .addReg(MI.getOperand(2).getReg());
     //Do the actual phi using the virtual reg now
     BuildMI(*BB, BB->begin(), DL,
-            TII->get(RISCV::PHI), MI->getOperand(0).getReg())
-      .addReg(MI->getOperand(3).getReg()).addMBB(thisMBB)
+            TII->get(RISCV::PHI), MI.getOperand(0).getReg())
+      .addReg(MI.getOperand(3).getReg()).addMBB(thisMBB)
       .addReg(VReg).addMBB(copy0MBB);
-  }else if(MI->getOperand(3).getReg() == RISCV::zero ||
-           MI->getOperand(3).getReg() == RISCV::zero_64){
+  }else if(MI.getOperand(3).getReg() == RISCV::zero ||
+           MI.getOperand(3).getReg() == RISCV::zero_64){
     //Create a virtual register for zero and make a copy into it
-    const TargetRegisterClass *RC = MI->getOperand(3).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
+    const TargetRegisterClass *RC = MI.getOperand(3).getReg() == RISCV::zero_64 ? &RISCV::GR64BitRegClass : &RISCV::GR32BitRegClass;
     unsigned VReg = F->getRegInfo().createVirtualRegister(RC);
     BuildMI(*copy0MBB, copy0MBB->begin(), DL, TII->get(TargetOpcode::COPY), VReg)
-      .addReg(MI->getOperand(3).getReg());
+      .addReg(MI.getOperand(3).getReg());
     //Do the actual phi using the virtual reg now
     BuildMI(*BB, BB->begin(), DL,
-            TII->get(RISCV::PHI), MI->getOperand(0).getReg())
+            TII->get(RISCV::PHI), MI.getOperand(0).getReg())
       .addReg(VReg).addMBB(copy0MBB)
-      .addReg(MI->getOperand(2).getReg()).addMBB(thisMBB);
+      .addReg(MI.getOperand(2).getReg()).addMBB(thisMBB);
   }else{
     //None of the registers is zero so everything is already a virt reg
     BuildMI(*BB, BB->begin(), DL,
-            TII->get(RISCV::PHI), MI->getOperand(0).getReg())
-      .addReg(MI->getOperand(3).getReg()).addMBB(copy0MBB)
-      .addReg(MI->getOperand(2).getReg()).addMBB(thisMBB);
+            TII->get(RISCV::PHI), MI.getOperand(0).getReg())
+      .addReg(MI.getOperand(3).getReg()).addMBB(copy0MBB)
+      .addReg(MI.getOperand(2).getReg()).addMBB(thisMBB);
   }
 
-  MI->eraseFromParent();   // The pseudo instruction is gone now.
+  MI.eraseFromParent();   // The pseudo instruction is gone now.
   return BB;
 }
 
 MachineBasicBlock *RISCVTargetLowering::
-EmitInstrWithCustomInserter(MachineInstr *MI, MachineBasicBlock *MBB) const {
-  switch (MI->getOpcode()) {
+EmitInstrWithCustomInserter(MachineInstr &MI, MachineBasicBlock *MBB) const {
+  switch (MI.getOpcode()) {
   case RISCV::SELECT_CC:
   case RISCV::SELECT_CC64:
   case RISCV::FSELECT_CC_F:

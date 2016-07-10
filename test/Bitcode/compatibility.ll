@@ -47,14 +47,40 @@ $comdat.samesize = comdat samesize
 ; CHECK: @const.struct = constant %const.struct.type { i32 -1, i8 undef }
 @const.struct.packed = constant %const.struct.type.packed <{ i32 -1, i8 1 }>
 ; CHECK: @const.struct.packed = constant %const.struct.type.packed <{ i32 -1, i8 1 }>
-@const.array = constant [2 x i32] [i32 -3, i32 -4]
-; CHECK: @const.array = constant [2 x i32] [i32 -3, i32 -4]
-@const.vector = constant <2 x i32> <i32 -5, i32 -6>
-; CHECK: @const.vector = constant <2 x i32> <i32 -5, i32 -6>
+
+; CHECK: @constant.array.i8  = constant [3 x i8] c"\00\01\00"
+@constant.array.i8  = constant [3 x i8] [i8 -0, i8 1, i8 0]
+; CHECK: @constant.array.i16 = constant [3 x i16] [i16 0, i16 1, i16 0]
+@constant.array.i16 = constant [3 x i16] [i16 -0, i16 1, i16 0]
+; CHECK: @constant.array.i32 = constant [3 x i32] [i32 0, i32 1, i32 0]
+@constant.array.i32 = constant [3 x i32] [i32 -0, i32 1, i32 0]
+; CHECK: @constant.array.i64 = constant [3 x i64] [i64 0, i64 1, i64 0]
+@constant.array.i64 = constant [3 x i64] [i64 -0, i64 1, i64 0]
+; CHECK: @constant.array.f16 = constant [3 x half] [half 0xH8000, half 0xH3C00, half 0xH0000]
+@constant.array.f16 = constant [3 x half] [half -0.0, half 1.0, half 0.0]
+; CHECK: @constant.array.f32 = constant [3 x float] [float -0.000000e+00, float 1.000000e+00, float 0.000000e+00]
+@constant.array.f32 = constant [3 x float] [float -0.0, float 1.0, float 0.0]
+; CHECK: @constant.array.f64 = constant [3 x double] [double -0.000000e+00, double 1.000000e+00, double 0.000000e+00]
+@constant.array.f64 = constant [3 x double] [double -0.0, double 1.0, double 0.0]
+
+; CHECK: @constant.vector.i8  = constant <3 x i8>  <i8 0, i8 1, i8 0>
+@constant.vector.i8  = constant <3 x i8>  <i8 -0, i8 1, i8 0>
+; CHECK: @constant.vector.i16 = constant <3 x i16> <i16 0, i16 1, i16 0>
+@constant.vector.i16 = constant <3 x i16> <i16 -0, i16 1, i16 0>
+; CHECK: @constant.vector.i32 = constant <3 x i32> <i32 0, i32 1, i32 0>
+@constant.vector.i32 = constant <3 x i32> <i32 -0, i32 1, i32 0>
+; CHECK: @constant.vector.i64 = constant <3 x i64> <i64 0, i64 1, i64 0>
+@constant.vector.i64 = constant <3 x i64> <i64 -0, i64 1, i64 0>
+; CHECK: @constant.vector.f16 = constant <3 x half> <half 0xH8000, half 0xH3C00, half 0xH0000>
+@constant.vector.f16 = constant <3 x half> <half -0.0, half 1.0, half 0.0>
+; CHECK: @constant.vector.f32 = constant <3 x float> <float -0.000000e+00, float 1.000000e+00, float 0.000000e+00>
+@constant.vector.f32 = constant <3 x float> <float -0.0, float 1.0, float 0.0>
+; CHECK: @constant.vector.f64 = constant <3 x double> <double -0.000000e+00, double 1.000000e+00, double 0.000000e+00>
+@constant.vector.f64 = constant <3 x double> <double -0.0, double 1.0, double 0.0>
 
 ;; Global Variables
 ; Format: [@<GlobalVarName> =] [Linkage] [Visibility] [DLLStorageClass]
-;         [ThreadLocal] [unnamed_addr] [AddrSpace] [ExternallyInitialized]
+;         [ThreadLocal] [(unnamed_addr|local_unnamed_addr)] [AddrSpace] [ExternallyInitialized]
 ;         <global | constant> <Type> [<InitializerConstant>]
 ;         [, section "name"] [, comdat [($name)]] [, align <Alignment>]
 
@@ -116,9 +142,11 @@ $comdat.samesize = comdat samesize
 @g.localexec = thread_local(localexec) global i32 0
 ; CHECK: @g.localexec = thread_local(localexec) global i32 0
 
-; Global Variables -- unnamed_addr
+; Global Variables -- unnamed_addr and local_unnamed_addr
 @g.unnamed_addr = unnamed_addr global i32 0
 ; CHECK: @g.unnamed_addr = unnamed_addr global i32 0
+@g.local_unnamed_addr = local_unnamed_addr global i32 0
+; CHECK: @g.local_unnamed_addr = local_unnamed_addr global i32 0
 
 ; Global Variables -- AddrSpace
 @g.addrspace = addrspace(1) global i32 0
@@ -219,15 +247,42 @@ declare void @g.f1()
 @a.localexec = thread_local(localexec) alias i32, i32* @g.localexec
 ; CHECK: @a.localexec = thread_local(localexec) alias i32, i32* @g.localexec
 
-; Aliases -- unnamed_addr
+; Aliases -- unnamed_addr and local_unnamed_addr
 @a.unnamed_addr = unnamed_addr alias i32, i32* @g.unnamed_addr
 ; CHECK: @a.unnamed_addr = unnamed_addr alias i32, i32* @g.unnamed_addr
+@a.local_unnamed_addr = local_unnamed_addr alias i32, i32* @g.local_unnamed_addr
+; CHECK: @a.local_unnamed_addr = local_unnamed_addr alias i32, i32* @g.local_unnamed_addr
+
+;; IFunc
+; Format @<Name> = [Linkage] [Visibility] ifunc <IFuncTy>,
+;                  <ResolverTy>* @<Resolver>
+
+; IFunc -- Linkage
+@ifunc.external = external ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.external = ifunc void (), i8* ()* @ifunc_resolver
+@ifunc.private = private ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.private = private ifunc void (), i8* ()* @ifunc_resolver
+@ifunc.internal = internal ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.internal = internal ifunc void (), i8* ()* @ifunc_resolver
+
+; IFunc -- Visibility
+@ifunc.default = default ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.default = ifunc void (), i8* ()* @ifunc_resolver
+@ifunc.hidden = hidden ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.hidden = hidden ifunc void (), i8* ()* @ifunc_resolver
+@ifunc.protected = protected ifunc void (), i8* ()* @ifunc_resolver
+; CHECK: @ifunc.protected = protected ifunc void (), i8* ()* @ifunc_resolver
+
+define i8* @ifunc_resolver() {
+entry:
+  ret i8* null
+}
 
 ;; Functions
 ; Format: define [linkage] [visibility] [DLLStorageClass]
 ;         [cconv] [ret attrs]
 ;         <ResultType> @<FunctionName> ([argument list])
-;         [unnamed_addr] [fn Attrs] [section "name"] [comdat [($name)]]
+;         [(unnamed_addr|local_unnamed_addr)] [fn Attrs] [section "name"] [comdat [($name)]]
 ;         [align N] [gc] [prefix Constant] [prologue Constant]
 ;         [personality Constant] { ... }
 
@@ -377,6 +432,46 @@ declare cc80 void @f.cc80()
 ; CHECK: declare x86_vectorcallcc void @f.cc80()
 declare x86_vectorcallcc void @f.x86_vectorcallcc()
 ; CHECK: declare x86_vectorcallcc void @f.x86_vectorcallcc()
+declare cc81 void @f.cc81()
+; CHECK: declare hhvmcc void @f.cc81()
+declare hhvmcc void @f.hhvmcc()
+; CHECK: declare hhvmcc void @f.hhvmcc()
+declare cc82 void @f.cc82()
+; CHECK: declare hhvm_ccc void @f.cc82()
+declare hhvm_ccc void @f.hhvm_ccc()
+; CHECK: declare hhvm_ccc void @f.hhvm_ccc()
+declare cc83 void @f.cc83()
+; CHECK: declare x86_intrcc void @f.cc83()
+declare x86_intrcc void @f.x86_intrcc()
+; CHECK: declare x86_intrcc void @f.x86_intrcc()
+declare cc84 void @f.cc84()
+; CHECK: declare avr_intrcc void @f.cc84()
+declare avr_intrcc void @f.avr_intrcc()
+; CHECK: declare avr_intrcc void @f.avr_intrcc()
+declare cc85 void @f.cc85()
+; CHECK: declare avr_signalcc void @f.cc85()
+declare avr_signalcc void @f.avr_signalcc()
+; CHECK: declare avr_signalcc void @f.avr_signalcc()
+declare cc87 void @f.cc87()
+; CHECK: declare amdgpu_vs void @f.cc87()
+declare amdgpu_vs void @f.amdgpu_vs()
+; CHECK: declare amdgpu_vs void @f.amdgpu_vs()
+declare cc88 void @f.cc88()
+; CHECK: declare amdgpu_gs void @f.cc88()
+declare amdgpu_gs void @f.amdgpu_gs()
+; CHECK: declare amdgpu_gs void @f.amdgpu_gs()
+declare cc89 void @f.cc89()
+; CHECK: declare amdgpu_ps void @f.cc89()
+declare amdgpu_ps void @f.amdgpu_ps()
+; CHECK: declare amdgpu_ps void @f.amdgpu_ps()
+declare cc90 void @f.cc90()
+; CHECK: declare amdgpu_cs void @f.cc90()
+declare amdgpu_cs void @f.amdgpu_cs()
+; CHECK: declare amdgpu_cs void @f.amdgpu_cs()
+declare cc91 void @f.cc91()
+; CHECK: declare amdgpu_kernel void @f.cc91()
+declare amdgpu_kernel void @f.amdgpu_kernel()
+; CHECK: declare amdgpu_kernel void @f.amdgpu_kernel()
 declare cc1023 void @f.cc1023()
 ; CHECK: declare cc1023 void @f.cc1023()
 
@@ -432,9 +527,11 @@ declare void @f.param.dereferenceable(i8* dereferenceable(4))
 declare void @f.param.dereferenceable_or_null(i8* dereferenceable_or_null(4))
 ; CHECK: declare void @f.param.dereferenceable_or_null(i8* dereferenceable_or_null(4))
 
-; Functions -- unnamed_addr
+; Functions -- unnamed_addr and local_unnamed_addr
 declare void @f.unnamed_addr() unnamed_addr
 ; CHECK: declare void @f.unnamed_addr() unnamed_addr
+declare void @f.local_unnamed_addr() local_unnamed_addr
+; CHECK: declare void @f.local_unnamed_addr() local_unnamed_addr
 
 ; Functions -- fn Attrs (Function attributes)
 declare void @f.alignstack4() alignstack(4)
@@ -859,7 +956,8 @@ catchpad:
   ; CHECK-NEXT: br label %body
 
 body:
-  invoke void @f.ccc() to label %continue unwind label %terminate.inner
+  invoke void @f.ccc() [ "funclet"(token %catch) ]
+    to label %continue unwind label %terminate.inner
   catchret from %catch to label %return
   ; CHECK: catchret from %catch to label %return
 
@@ -1146,7 +1244,7 @@ exit:
   ; CHECK: select <2 x i1> <i1 true, i1 false>, <2 x i8> <i8 2, i8 3>, <2 x i8> <i8 3, i8 2>
 
   call void @f.nobuiltin() builtin
-  ; CHECK: call void @f.nobuiltin() #39
+  ; CHECK: call void @f.nobuiltin() #40
 
   call fastcc noalias i32* @f.noalias() noinline
   ; CHECK: call fastcc noalias i32* @f.noalias() #12
@@ -1492,6 +1590,8 @@ normal:
   ret void
 }
 
+declare void @f.writeonly() writeonly
+; CHECK: declare void @f.writeonly() #39
 
 ; CHECK: attributes #0 = { alignstack=4 }
 ; CHECK: attributes #1 = { alignstack=8 }
@@ -1532,7 +1632,8 @@ normal:
 ; CHECK: attributes #36 = { argmemonly nounwind readonly }
 ; CHECK: attributes #37 = { argmemonly nounwind }
 ; CHECK: attributes #38 = { nounwind readonly }
-; CHECK: attributes #39 = { builtin }
+; CHECK: attributes #39 = { writeonly }
+; CHECK: attributes #40 = { builtin }
 
 ;; Metadata
 
