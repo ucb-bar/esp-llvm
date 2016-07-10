@@ -13,6 +13,7 @@
 
 class InstRISCV<int size, dag outs, dag ins, string asmstr,
                   list<dag> pattern> : Instruction {
+  field bits<32> Inst;
   let Namespace = "RISCV";
 
   dag OutOperandList = outs;
@@ -47,19 +48,37 @@ class InstRISCV<int size, dag outs, dag ins, string asmstr,
 */
 
 //R-Type
-class InstR<string mnemonic, bits<7> op, bits<7> funct7, bits<3> funct3,
-            SDPatternOperator operator, RegisterOperand cls1, 
+class InstR<string mnemonic, SDPatternOperator operator, RegisterOperand cls1, 
             RegisterOperand cls2>
   : InstRISCV<4, (outs cls1:$dst), (ins cls2:$src1, cls2:$src2),
                 mnemonic#"\t$dst, $src1, $src2", 
-                [(set cls1:$dst, (operator cls2:$src1, cls2:$src2))]> {
-  field bits<32> Inst;
+                [(set cls1:$dst, (operator cls2:$src1, cls2:$src2))]>;
 
+class RV_FMT_R<bits<7> op, bits<7> funct7, bits<3> funct3> {
   bits<5> RD;
   bits<5> RS1;
   bits<5> RS2;
 
+  bits<32> Inst;
+
   let Inst{31-25} = funct7;
+  let Inst{24-20} = RS2;
+  let Inst{19-15} = RS1;
+  let Inst{14-12} = funct3;
+  let Inst{11- 7} = RD;
+  let Inst{6 - 0} = op;
+}
+
+class RV_FMT_R4<bits<7> op, bits<2> funct2, bits<3> funct3> {
+  bits<5> RD;
+  bits<5> RS1;
+  bits<5> RS2;
+  bits<5> RS3;
+
+  bits<32> Inst;
+
+  let Inst{31-27} = RS3;
+  let Inst{26-25} = funct2;
   let Inst{24-20} = RS2;
   let Inst{19-15} = RS1;
   let Inst{14-12} = funct3;
@@ -268,3 +287,5 @@ class Pseudo<dag outs, dag ins, list<dag> pattern>
   let isPseudo = 1;
   let isCodeGenOnly = 1;
 }
+
+include "RISCVInstrFormatsBits.td"

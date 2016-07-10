@@ -8,11 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 //special 64bit instructions
-def ADDW : InstR<"addw" , 0b0111011, 0b0000000, 0b000, add   , GR32, GR32>, Requires<[IsRV64]>;
-def SUBW : InstR<"subw" , 0b0111011, 0b0100000, 0b000, sub   , GR32, GR32>, Requires<[IsRV64]>;
-def SLLW : InstR<"sllw" , 0b0111011, 0b0000000, 0b001, shl   , GR32, GR32>, Requires<[IsRV64]>;
-def SRLW : InstR<"srlw" , 0b0111011, 0b0000000, 0b101, srl   , GR32, GR32>, Requires<[IsRV64]>;
-def SRAW : InstR<"sraw" , 0b0111011, 0b0100000, 0b101, sra   , GR32, GR32>, Requires<[IsRV64]>;
+def ADDW : InstR<"addw" , add   , GR32, GR32>, RV_FMT_R< 0b0111011, 0b0000000, 0b000>, Requires<[IsRV64]>;
+def SUBW : InstR<"subw" , sub   , GR32, GR32>, RV_FMT_R< 0b0111011, 0b0100000, 0b000>, Requires<[IsRV64]>;
+def SLLW : InstR<"sllw" , shl   , GR32, GR32>, RV_FMT_R< 0b0111011, 0b0000000, 0b001>, Requires<[IsRV64]>;
+def SRLW : InstR<"srlw" , srl   , GR32, GR32>, RV_FMT_R< 0b0111011, 0b0000000, 0b101>, Requires<[IsRV64]>;
+def SRAW : InstR<"sraw" , sra   , GR32, GR32>, RV_FMT_R< 0b0111011, 0b0100000, 0b101>, Requires<[IsRV64]>;
 
 //Integer arithmetic register-immediate
 def ADDIW:  InstI<"addiw",   0b0011011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV64]>;
@@ -58,16 +58,16 @@ let mayStore = 1 in {
 
 //Standard instructions operating on 64bit values
 //Integer arithmetic register-register
-def ADD64 : InstR<"add" , 0b0110011, 0b0000000, 0b000, add   , GR64, GR64>, Requires<[IsRV64]>;
-def SUB64 : InstR<"sub" , 0b0110011, 0b0100000, 0b000, sub   , GR64, GR64>, Requires<[IsRV64]>;
-def SLL64 : InstR<"sll" , 0b0110011, 0b0000000, 0b001, shl   , GR64, GR64>, Requires<[IsRV64]>;
-def SLT64 : InstR<"slt" , 0b0110011, 0b0000000, 0b010, setlt , GR32, GR64>, Requires<[IsRV64]>;
-def SLTU64: InstR<"sltu", 0b0110011, 0b0000000, 0b011, setult, GR32, GR64>, Requires<[IsRV64]>;
-def XOR64 : InstR<"xor" , 0b0110011, 0b0000000, 0b100, xor   , GR64, GR64>, Requires<[IsRV64]>;
-def SRL64 : InstR<"srl" , 0b0110011, 0b0000000, 0b101, srl   , GR64, GR64>, Requires<[IsRV64]>;
-def SRA64 : InstR<"sra" , 0b0110011, 0b0100000, 0b101, sra   , GR64, GR64>, Requires<[IsRV64]>;
-def OR64  : InstR<"or"  , 0b0110011, 0b0000000, 0b110, or    , GR64, GR64>, Requires<[IsRV64]>;
-def AND64 : InstR<"and" , 0b0110011, 0b0000000, 0b111, and   , GR64, GR64>, Requires<[IsRV64]>;
+def ADD64 : InstR<"add" , add   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b000>, Requires<[IsRV64]>;
+def SUB64 : InstR<"sub" , sub   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0100000, 0b000>, Requires<[IsRV64]>;
+def SLL64 : InstR<"sll" , shl   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b001>, Requires<[IsRV64]>;
+def SLT64 : InstR<"slt" , setlt , GR32, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b010>, Requires<[IsRV64]>;
+def SLTU64: InstR<"sltu", setult, GR32, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b011>, Requires<[IsRV64]>;
+def XOR64 : InstR<"xor" , xor   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b100>, Requires<[IsRV64]>;
+def SRL64 : InstR<"srl" , srl   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b101>, Requires<[IsRV64]>;
+def SRA64 : InstR<"sra" , sra   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0100000, 0b101>, Requires<[IsRV64]>;
+def OR64  : InstR<"or"  , or    , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b110>, Requires<[IsRV64]>;
+def AND64 : InstR<"and" , and   , GR64, GR64>, RV_FMT_R< 0b0110011, 0b0000000, 0b111>, Requires<[IsRV64]>;
 //Integer arithmetic register-immediate
 def ADDI64: InstI<"addi", 0b0010011, 0b000       , add, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;
 def XORI64: InstI<"xori", 0b0010011, 0b100       , xor, GR64, GR64, imm64sx12>, Requires<[IsRV64]>;

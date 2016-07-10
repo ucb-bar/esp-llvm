@@ -28,16 +28,16 @@
 *RISCV Instructions
 ********************/
 //Integer arithmetic register-register
-def ADD : InstR<"add" , 0b0110011, 0b0000000, 0b000, add   , GR32, GR32>, Requires<[IsRV32]>;
-def SUB : InstR<"sub" , 0b0110011, 0b0100000, 0b000, sub   , GR32, GR32>, Requires<[IsRV32]>;
-def SLL : InstR<"sll" , 0b0110011, 0b0000000, 0b001, shl   , GR32, GR32>, Requires<[IsRV32]>;
-def SLT : InstR<"slt" , 0b0110011, 0b0000000, 0b010, setlt , GR32, GR32>;
-def SLTU: InstR<"sltu", 0b0110011, 0b0000000, 0b011, setult, GR32, GR32>;
-def XOR : InstR<"xor" , 0b0110011, 0b0000000, 0b100, xor   , GR32, GR32>;
-def SRL : InstR<"srl" , 0b0110011, 0b0000000, 0b101, srl   , GR32, GR32>, Requires<[IsRV32]>;
-def SRA : InstR<"sra" , 0b0110011, 0b0100000, 0b101, sra   , GR32, GR32>, Requires<[IsRV32]>;
-def OR  : InstR<"or"  , 0b0110011, 0b0000000, 0b110, or    , GR32, GR32>;
-def AND : InstR<"and" , 0b0110011, 0b0000000, 0b111, and   , GR32, GR32>;
+def ADD : InstR<"add" , add   , GR32, GR32>, RV_BITS_ADD, Requires<[IsRV32]>;
+def SUB : InstR<"sub" , sub   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0100000, 0b000>, Requires<[IsRV32]>;
+def SLL : InstR<"sll" , shl   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b001>, Requires<[IsRV32]>;
+def SLT : InstR<"slt" , setlt , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b010>;
+def SLTU: InstR<"sltu", setult, GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b011>;
+def XOR : InstR<"xor" , xor   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b100>;
+def SRL : InstR<"srl" , srl   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b101>, Requires<[IsRV32]>;
+def SRA : InstR<"sra" , sra   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0100000, 0b101>, Requires<[IsRV32]>;
+def OR  : InstR<"or"  , or    , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b110>;
+def AND : InstR<"and" , and   , GR32, GR32>, RV_FMT_R<0b0110011, 0b0000000, 0b111>;
 //Integer arithmetic register-immediate
 def ADDI: InstI<"addi", 0b0010011, 0b000       , add, GR32, GR32, imm32sx12>, Requires<[IsRV32]>;
 def XORI: InstI<"xori", 0b0010011, 0b100       , xor, GR32, GR32, imm32sx12>;
