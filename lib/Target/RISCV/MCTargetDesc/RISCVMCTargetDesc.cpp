@@ -86,7 +86,7 @@ extern "C" void LLVMInitializeRISCVTargetMC() {
   // Register the MCInstrInfo.
   TargetRegistry::RegisterMCInstrInfo(TheRISCVTarget,
                                       createRISCVMCInstrInfo);
-  TargetRegistry::RegisterMCInstrInfo(TheRISCVTarget,
+  TargetRegistry::RegisterMCInstrInfo(TheRISCV64Target,
                                       createRISCVMCInstrInfo);
 
   // Register the MCRegisterInfo.
