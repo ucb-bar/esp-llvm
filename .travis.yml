@@ -31,13 +31,18 @@ env:
   global:
     - RISCV="/home/travis/riscv_install"
   matrix:
-    - CONFIG="../configure --enable-optimized --enable-targets=riscv --prefix=${RISCV}" TEST="check LIT_ARGS=--filter=.*RISCV.*"
     - CONFIG="cmake -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=RISCV -DCMAKE_INSTALL_PREFIX=${RISCV} ../" TEST="check-llvm-codegen-riscv check-llvm-mc-riscv"
 git:
       submodules: true
 before_install:
   - export CXX="g++-4.9" CC="gcc-4.9"
   - $CXX --version
+  - mkdir build_tools && cd build_tools
+  - CMAKE_URL="http://www.cmake.org/files/v3.5/cmake-3.5.2-Linux-x86_64.tar.gz"
+  - mkdir cmake && travis_retry wget --no-check-certificate --quiet -O - ${CMAKE_URL} | tar --strip-components=1 -xz -C cmake
+  - export PATH=`pwd`/cmake/bin:${PATH}
+  - cmake --version
+  - cd ..
 script: 
   - mkdir build
   - cd build
