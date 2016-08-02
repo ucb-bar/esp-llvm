@@ -120,7 +120,7 @@ public:
   unsigned
   getExceptionSelectorRegister(const Constant *PersonalityFn) const override;
 
-  bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const;
+  bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
   bool isFPImmLegal(const APFloat &Imm, EVT VT) const override;
   const char *getTargetNodeName(unsigned Opcode) const override;
   std::pair<unsigned, const TargetRegisterClass *>
@@ -153,7 +153,7 @@ public:
     CanLowerReturn(CallingConv::ID CallConv, MachineFunction &MF,
                    bool isVarArg,
                    const SmallVectorImpl<ISD::OutputArg> &Outs,
-                   LLVMContext &Context) const;
+                   LLVMContext &Context) const override;
 
   SDValue LowerReturn(SDValue Chain, CallingConv::ID CallConv, bool IsVarArg,
                       const SmallVectorImpl<ISD::OutputArg> &Outs,
