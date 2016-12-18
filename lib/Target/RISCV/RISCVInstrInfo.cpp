@@ -453,6 +453,30 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
+  }else if(RISCV::PCR64RegBitRegClass.contains(SrcReg) &&
+           RISCV::GR64BitRegClass.contains(DestReg)) {
+    Opcode = RISCV::CSRR_64;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::PCR64RegBitRegClass.contains(DestReg) &&
+           RISCV::GR64BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::CSRW_64;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::PCRRegBitRegClass.contains(SrcReg) &&
+           RISCV::GR32BitRegClass.contains(DestReg)) {
+    Opcode = RISCV::CSRR;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  }else if(RISCV::PCRRegBitRegClass.contains(DestReg) &&
+           RISCV::GR32BitRegClass.contains(SrcReg)) {
+    Opcode = RISCV::CSRW;
+    BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;  
   }else
     llvm_unreachable("Impossible reg-to-reg copy");
 
