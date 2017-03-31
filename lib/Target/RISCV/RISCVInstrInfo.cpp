@@ -569,6 +569,7 @@ bool RISCVInstrInfo::isBranch(const MachineInstr *MI, SmallVectorImpl<MachineOpe
   case RISCV::JAL64:
   case RISCV::JALR:
   case RISCV::JALR64:
+  case RISCV::VCJAL:
     Cond[0].setImm(RISCV::CCMASK_ANY);
     Target = &MI->getOperand(0);
     return true;
