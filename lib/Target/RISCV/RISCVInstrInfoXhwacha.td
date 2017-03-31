@@ -301,6 +301,9 @@ let isPseudo = 1 in {
   def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset\t$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
   def VPCLEAR  : InstV<(outs VPR:$dest), (ins), "vpclear\t$dest",[(set VPR:$dest, (i1 0))]>, Requires<[HasXhwacha]>;
   def VPANDAND  : InstV<(outs VPR:$dest), (ins VPR:$in1, VPR:$in2, VPR:$in3), "vpandand\t$dest, $in1, $in2, $in3",[(set VPR:$dest, (and VPR:$in1, (and VPR:$in2, VPR:$in3)))]>, Requires<[HasXhwacha]>;
+  def VPOROR  : InstV<(outs VPR:$dest), (ins VPR:$in1, VPR:$in2, VPR:$in3), "vporor\t$dest, $in1, $in2, $in3",[(set VPR:$dest, (or VPR:$in1, (or VPR:$in2, VPR:$in3)))]>, Requires<[HasXhwacha]>;
+  def VPANDXOR  : InstV<(outs VPR:$dest), (ins VPR:$in1, VPR:$in2, VPR:$in3), "vpandxor\t$dest, $in1, $in2, $in3",[(set VPR:$dest, (and VPR:$in1, (xor VPR:$in2, VPR:$in3)))]>, Requires<[HasXhwacha]>;
+  def VPXORAND  : InstV<(outs VPR:$dest), (ins VPR:$in1, VPR:$in2, VPR:$in3), "vpxorand\t$dest, $in1, $in2, $in3",[(set VPR:$dest, (xor VPR:$in1, (and VPR:$in2, VPR:$in3)))]>, Requires<[HasXhwacha]>;
 
   //compare instructions
   defm VCMPEQ  : InstVR3Cmp<"vcmpeq",  seteq>;
@@ -309,6 +312,12 @@ let isPseudo = 1 in {
   defm VCMPGT  : InstVR3CmpSwitch<"vcmplt",  setgt>;
   defm VCMPGTU : InstVR3CmpSwitch<"vcmpltu", setugt>;
 }
+// Control-flow Instructions
+let isBranch = 1, isTerminator = 1, isBarrier = 1 in{
+  def VCJAL: InstV<(outs VSR:$ret), (ins pcrel64call:$target, pred:$p),
+    "@$p\tvcjal\t$ret, $target",
+        [(set VSR:$ret, (r_jal pcrel64call:$target))]>, Requires<[HasXhwacha]>;
+        }
 
 // load immediate patterns
 def : Pat<(r_vli imm64sx32:$imm), (VADDI (i64 vs0), imm64sx32:$imm)>;
