@@ -446,6 +446,8 @@ RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, DL, get(Opcode), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
     return;
+  }else if(RISCV::VSRBitRegClass.contains(DestReg, SrcReg)) {
+    Opcode = RISCV::VADDI;
   } else if (RISCV::VVRBitRegClass.contains(DestReg, SrcReg) ||
       RISCV::VVWBitRegClass.contains(DestReg, SrcReg) ||
       RISCV::VVHBitRegClass.contains(DestReg, SrcReg) ){
