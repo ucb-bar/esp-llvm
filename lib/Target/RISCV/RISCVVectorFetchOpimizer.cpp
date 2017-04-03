@@ -1426,7 +1426,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
             auto loopHeader = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred0)->second->cds.size() ? pred1 : pred0;
             auto loopTail = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred0)->second->cds.size() ? pred0 : pred1;
             unsigned mask = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
-            BuildMI(loopHeader, loopHeader->getLastNonDebugInstr()->getDebugLoc(), TII->get(RISCV::VPSET), mask);
+            BuildMI(*loopHeader, loopHeader->getFirstTerminator(), MBB.begin()->getDebugLoc(), TII->get(RISCV::VPSET), mask);
             unsigned myPred = bbToPred.find(&MBB)->second;
             //Insert a PHI node for this MBB's predreg
             unsigned vpPHI = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
@@ -1545,22 +1545,16 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
     }
   }
   for (auto &MBB : MF) {
-    auto firstMI = MBB.getFirstNonPHI();
     unsigned predReg = 0;
     unsigned negate = 0;
-    // Remove dummy instruction
-    if(firstMI->getOpcode() == RISCV::VCMPEQ_SS &&
-        firstMI->getOperand(1).getReg() == RISCV::vs0 &&
-        firstMI->getOperand(2).getReg() == RISCV::vs0 &&
-        firstMI->getOperand(0).getReg() == firstMI->getOperand(4).getReg()){
-      predReg = firstMI->getOperand(4).getReg();
-      negate = firstMI->getOperand(3).getImm();
-      firstMI->eraseFromParent();
-    }
     for (MachineBasicBlock::iterator mi = MBB.begin(), me = MBB.end();
          mi != me;) {
       MachineInstr &MI = *mi;
       // Advance iterator here because MI may be erased.
+      if(MI.isPredicable() && !MI.isBranch()) {
+        predReg = MI.getOperand(MI.getNumOperands()-1).getReg();
+        negate = MI.getOperand(MI.getNumOperands()-2).getImm();
+      }
       ++mi;
       bool changed = false;
       for (auto &MO : MI.operands()) {
@@ -1618,8 +1612,10 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             MI.getOperand(0).getReg(), MI.getOperand(1).getReg(),
             MI.getOperand(1).isKill());
         auto newMI = MI.getPrevNode();
-        newMI->getOperand(3).setImm(negate);
-        newMI->getOperand(4).setReg(predReg);
+        if(newMI->isPredicable()) {
+          newMI->getOperand(3).setImm(negate);
+          newMI->getOperand(4).setReg(predReg);
+        }
         MI.eraseFromParent();
       }
       changeToPostRegAllocVecInst(MI);
