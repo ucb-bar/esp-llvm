@@ -315,7 +315,7 @@ let isPseudo = 1 in {
 // Control-flow Instructions
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in{
   def VCJAL: InstV<(outs VSR:$ret), (ins pcrel64call:$target, pred:$p),
-    "@$p\tvcjal\t$ret, $target",
+    "@$p\tvcjal\t 1, $ret, $target",
         [(set VSR:$ret, (r_jal pcrel64call:$target))]>, Requires<[HasXhwacha]>;
         }
 
