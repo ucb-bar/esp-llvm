@@ -504,12 +504,8 @@ RISCVInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   switch (MI->getOpcode()) {
     case RISCV::VSETCFG :
       {
-      //size_t numRegs = MI->getParent()->getParent()->getRegInfo().getUsedPhysRegsMask().count();
-      // FIXME: count the number of allocated regs
-      size_t numRegs = 4;
-      MI->getOperand(0).setImm(numRegs);
-      MI->getOperand(1).setImm(1);
-      return true;
+        // This is now handled at call lowering
+        return true;
       }
     case RISCV::VSETVL :
     {
