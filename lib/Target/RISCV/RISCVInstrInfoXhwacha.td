@@ -115,8 +115,8 @@ multiclass InstVR4<string name, SDPatternOperator op> {
 
 //configure vector unit
 let isCodeGenOnly = 1, isPseudo = 1 in {
-  def VSETCFG : InstV< (outs), (ins imm64:$xregs, imm64:$pregs),
-                "vsetcfg\t$xregs,$pregs", [(r_vsetcfg imm64:$xregs, imm64:$pregs)]>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
+  def VSETCFG : InstV< (outs GR64:$cfg), (ins imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs),
+                "vsetcfg\t$cfg,$dregs,$wregs,$hregs,$pregs", [(set GR64:$cfg, (r_vsetcfg imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs))]>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
   def VSETVL  : InstV< (outs GR64:$res), (ins GR64:$goal),
                 "vsetvl\t$res,$goal", [(set GR64:$res, (r_vsetvl GR64:$goal))]>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
 }

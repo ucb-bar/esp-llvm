@@ -26,8 +26,11 @@ def SDT_RFence              : SDTypeProfile<0, 2,[SDTCisVT<0, i32>,
                                                   SDTCisVT<1, i32>]>;
 def SDT_RFence64            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>]>;
-def SDT_RVSETCFG            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
-                                                  SDTCisVT<1, i64>]>;
+def SDT_RVSETCFG            : SDTypeProfile<1, 4,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>,
+                                                  SDTCisVT<2, i64>,
+                                                  SDTCisVT<3, i64>,
+                                                  SDTCisVT<4, i64>]>;
 def SDT_RVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>]>;
 

@@ -1532,16 +1532,34 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
   const TargetRegisterClass *vvD = &RISCV::VVRBitRegClass;
   const TargetRegisterClass *vvW = &RISCV::VVWBitRegClass;
   const TargetRegisterClass *vvH = &RISCV::VVHBitRegClass;
+  const TargetRegisterClass *vvP = &RISCV::VPRBitRegClass;
   unsigned wStart = 0;
+
+  unsigned numDRegs = 0;
+  unsigned numWRegs = 0;
+  unsigned numHRegs = 0;
+  unsigned numPRegs = 0;
   for(unsigned Reg : *vvD) {
     if(MRI->isPhysRegUsed(Reg)){
       wStart++;
+      numDRegs++;
     }
   }
   unsigned hStart = wStart;
   for(unsigned Reg : *vvW) {
     if(MRI->isPhysRegUsed(Reg)){
       hStart++;
+      numWRegs++;
+    }
+  }
+  for(unsigned Reg : *vvH) {
+    if(MRI->isPhysRegUsed(Reg)){
+      numHRegs++;
+    }
+  }
+  for(unsigned Reg : *vvP) {
+    if(MRI->isPhysRegUsed(Reg)){
+      numPRegs++;
     }
   }
   for (auto &MBB : MF) {
@@ -1621,6 +1639,13 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
       changeToPostRegAllocVecInst(MI);
     }
   }
+  NamedMDNode* vfcfg = MF.getFunction()->getParent()->getNamedMetadata("hwacha.vfcfg");
+  Type *Int64 = IntegerType::get(MF.getFunction()->getContext(), 64);
+  Metadata *cfg[4] = {ConstantAsMetadata::get(ConstantInt::get(Int64, numDRegs)),
+                      ConstantAsMetadata::get(ConstantInt::get(Int64, numWRegs)),
+                      ConstantAsMetadata::get(ConstantInt::get(Int64, numHRegs)),
+                      ConstantAsMetadata::get(ConstantInt::get(Int64, numPRegs))};
+  vfcfg->addOperand(MDNode::get(MF.getFunction()->getContext(), cfg));
   return true;
 }
 
