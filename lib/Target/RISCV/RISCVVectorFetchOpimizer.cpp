@@ -1423,8 +1423,8 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
             //TODO: need to generate the correct ands/ors based on the negation
             //Setup the loop mask with a vpset in the predecssor
             // The predecessor with fewer control dependences is correct TODO: prove this
-            auto loopHeader = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred0)->second->cds.size() ? pred1 : pred0;
-            auto loopTail = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred0)->second->cds.size() ? pred0 : pred1;
+            auto loopHeader = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred1)->second->cds.size() ? pred1 : pred0;
+            auto loopTail = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred1)->second->cds.size() ? pred0 : pred1;
             unsigned mask = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
             BuildMI(*loopHeader, loopHeader->getFirstTerminator(), MBB.begin()->getDebugLoc(), TII->get(RISCV::VPSET), mask);
             unsigned myPred = bbToPred.find(&MBB)->second;
