@@ -1631,6 +1631,17 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             MI.getOperand(1).isKill());
         auto newMI = MI.getPrevNode();
         if(newMI->isPredicable()) {
+          if(predReg == 0) {
+            if(MBB.pred_size() != 1) llvm_unreachable("predicated copies must have a predicate defined in their MBB or a single predecssor with a predicate definition");
+            auto prevBB = *(MBB.pred_begin());
+            // we only really care about the last terminator but this is fine
+            for(auto &term: prevBB->terminators()) {
+              predReg = term.getOperand(term.getNumOperands()-1).getReg();
+              negate = term.getOperand(term.getNumOperands()-2).getImm();
+              if(term.getOperand(1).getMBB() != &MBB) // if this doesn't branch to us we need to negate it
+                negate = negate ^ 1;
+            }
+          }
           newMI->getOperand(3).setImm(negate);
           newMI->getOperand(4).setReg(predReg);
         }
@@ -1673,7 +1684,8 @@ bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
         case RISCV::J64:
         case RISCV::JAL:
         case RISCV::JAL64:
-          BuildMI(MBB, &MI, MI.getDebugLoc(), TII->get(RISCV::VCJAL), RISCV::vs0).addMBB(MI.getOperand(0).getMBB()).addImm(negate).addReg(predReg);
+          if(predReg != 0) // This is an unpredicated branch so just erase the jump
+            BuildMI(MBB, &MI, MI.getDebugLoc(), TII->get(RISCV::VCJAL), RISCV::vs0).addMBB(MI.getOperand(0).getMBB()).addImm(negate).addReg(predReg);
           MI.eraseFromParent();
           break;
       }
