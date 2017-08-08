@@ -842,6 +842,14 @@ void RISCVVectorFetchMachOpt::vectorizeStoreOp(MachineInstr *I, unsigned defPred
     I->getOperand(1).ChangeToRegister(RISCV::vs0, false);
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
+    if(TRI->isPhysicalRegister(I->getOperand(0).getReg())) {
+      assert((I->getOperand(0).getReg() == RISCV::zero) &&
+        "Cannot save phyiscal registers that are not zero");
+      //create zero vector register
+      unsigned vvtemp = MRI->createVirtualRegister(&RISCV::VVRBitRegClass);
+      BuildMI(*I->getParent(), I, I->getDebugLoc(), TII->get(RISCV::VADD_VSS), vvtemp).addReg(RISCV::vs0).addReg(RISCV::vs0).addImm(0).addReg(defPredReg);
+      I->getOperand(0).ChangeToRegister(vvtemp, false);
+    }
   }
 }
 
@@ -1094,8 +1102,14 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           }
           continue;
         case RISCV::ADDI64 :
+        case RISCV::ADDI :
           vectorizeBinImmOp(I, defPredReg, RISCV::VADDI,
               RISCV::VADD_VVS, RISCV::VADD_SSS);
+          continue;
+        case RISCV::ORI64 :
+        case RISCV::ORI :
+          vectorizeBinImmOp(I, defPredReg, RISCV::VORI,
+              RISCV::VOR_VVS, RISCV::VOR_SSS);
           continue;
         case RISCV::SLTI64 :
         case RISCV::SLTI:
@@ -1164,6 +1178,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
               RISCV::VSH_F, RISCV::VSXH_F);
           continue;
         case RISCV::SW64 :
+        case RISCV::SW64_32 :
           vectorizeStoreOp(I, defPredReg,
               RISCV::VSW, RISCV::VSXW);
           continue;
