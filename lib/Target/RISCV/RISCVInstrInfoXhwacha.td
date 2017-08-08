@@ -234,6 +234,7 @@ let isPseudo = 1 in {
   //Integer arithmetic register-register
   defm VADD : InstVR3<"vadd", add, VVR>, Requires<[HasXhwacha]>;
   defm VSUB : InstVR3<"vsub", sub, VVR>, Requires<[HasXhwacha]>;
+  defm VOR : InstVR3<"vor", or, VVR>, Requires<[HasXhwacha]>;
   defm VSLL : InstVR3<"vsll", shl, VVR>, Requires<[HasXhwacha]>;
   defm VSRL : InstVR3<"vsrl", srl, VVR>, Requires<[HasXhwacha]>;
   defm VSRA : InstVR3<"vsra", sra, VVR>, Requires<[HasXhwacha]>;
@@ -251,6 +252,7 @@ let isPseudo = 1 in {
   def VSRLI: InstI<"vsrli" , ?, ?, srl, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
   def VSRAI: InstI<"vsrai" , ?, ?, sra, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
   def VADDI: InstI<"vaddi" , ?, ?, add, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
+  def VORI: InstI<"vori" , ?, ?, or, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
   def VSLTI: InstI<"vslti" , ?, ?, setlt, VSR, VSR, imm64sx32>, Requires<[HasXhwacha]>;
   def VLUI : InstV<(outs VSR:$dest), (ins imm64sx32:$imm), "vlui\t$dest, $imm",
     [(set VSR:$dest, (shl imm64sx32:$imm, (i64 32)))]>, Requires<[HasXhwacha]>;
