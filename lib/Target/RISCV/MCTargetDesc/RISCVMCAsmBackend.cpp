@@ -62,7 +62,7 @@ public:
   bool fixupNeedsRelaxation(const MCFixup &Fixup, uint64_t Value,
                             const MCRelaxableFragment *Fragment,
                             const MCAsmLayout &Layout) const override;
-  void relaxInstruction(const MCInst &Inst, MCInst &Res) const override;
+  void relaxInstruction(const MCInst &Inst, const MCSubtargetInfo &STI, MCInst &Res) const override;
   bool writeNopData(uint64_t Count, MCObjectWriter *OW) const override;
   MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
     return createRISCVObjectWriter(OS, OSABI);
@@ -119,7 +119,7 @@ RISCVMCAsmBackend::fixupNeedsRelaxation(const MCFixup &Fixup,
   return (int16_t)Value != (int64_t)Value;
 }
 
-void RISCVMCAsmBackend::relaxInstruction(const MCInst &Inst,
+void RISCVMCAsmBackend::relaxInstruction(const MCInst &Inst, const MCSubtargetInfo &STI,
                                            MCInst &Res) const {
   unsigned Opcode = getRelaxedOpcode(Inst.getOpcode());
   assert(Opcode && "Unexpected insn to relax");

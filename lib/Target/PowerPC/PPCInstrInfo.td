@@ -35,6 +35,14 @@ def SDT_PPCVecSplat : SDTypeProfile<1, 2, [ SDTCisVec<0>,
   SDTCisVec<1>, SDTCisInt<2>
 ]>;
 
+def SDT_PPCVecShift : SDTypeProfile<1, 3, [ SDTCisVec<0>,
+  SDTCisVec<1>, SDTCisVec<2>, SDTCisInt<3>
+]>;
+
+def SDT_PPCVecInsert : SDTypeProfile<1, 3, [ SDTCisVec<0>,
+  SDTCisVec<1>, SDTCisVec<2>, SDTCisInt<3>
+]>;
+
 def SDT_PPCvcmp : SDTypeProfile<1, 3, [
   SDTCisSameAs<0, 1>, SDTCisSameAs<1, 2>, SDTCisVT<3, i32>
 ]>;
@@ -144,8 +152,10 @@ def PPCaddiTlsldLAddr : SDNode<"PPCISD::ADDI_TLSLD_L_ADDR",
 def PPCaddisDtprelHA : SDNode<"PPCISD::ADDIS_DTPREL_HA", SDTIntBinOp>;
 def PPCaddiDtprelL   : SDNode<"PPCISD::ADDI_DTPREL_L", SDTIntBinOp>;
 
-def PPCvperm    : SDNode<"PPCISD::VPERM", SDT_PPCvperm, []>;
+def PPCvperm     : SDNode<"PPCISD::VPERM", SDT_PPCvperm, []>;
 def PPCxxsplt    : SDNode<"PPCISD::XXSPLT", SDT_PPCVecSplat, []>;
+def PPCxxinsert  : SDNode<"PPCISD::XXINSERT", SDT_PPCVecInsert, []>;
+def PPCvecshl    : SDNode<"PPCISD::VECSHL", SDT_PPCVecShift, []>;
 
 def PPCqvfperm   : SDNode<"PPCISD::QVFPERM", SDT_PPCqvfperm, []>;
 def PPCqvgpci    : SDNode<"PPCISD::QVGPCI", SDT_PPCqvgpci, []>;
@@ -1499,6 +1509,18 @@ let usesCustomInserter = 1 in {
     def ATOMIC_LOAD_NAND_I8 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_NAND_I8",
       [(set i32:$dst, (atomic_load_nand_8 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MIN_I8 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MIN_I8",
+      [(set i32:$dst, (atomic_load_min_8 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MAX_I8 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MAX_I8",
+      [(set i32:$dst, (atomic_load_max_8 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMIN_I8 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMIN_I8",
+      [(set i32:$dst, (atomic_load_umin_8 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMAX_I8 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMAX_I8",
+      [(set i32:$dst, (atomic_load_umax_8 xoaddr:$ptr, i32:$incr))]>;
     def ATOMIC_LOAD_ADD_I16 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_ADD_I16",
       [(set i32:$dst, (atomic_load_add_16 xoaddr:$ptr, i32:$incr))]>;
@@ -1517,6 +1539,18 @@ let usesCustomInserter = 1 in {
     def ATOMIC_LOAD_NAND_I16 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_NAND_I16",
       [(set i32:$dst, (atomic_load_nand_16 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MIN_I16 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MIN_I16",
+      [(set i32:$dst, (atomic_load_min_16 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MAX_I16 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MAX_I16",
+      [(set i32:$dst, (atomic_load_max_16 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMIN_I16 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMIN_I16",
+      [(set i32:$dst, (atomic_load_umin_16 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMAX_I16 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMAX_I16",
+      [(set i32:$dst, (atomic_load_umax_16 xoaddr:$ptr, i32:$incr))]>;
     def ATOMIC_LOAD_ADD_I32 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_ADD_I32",
       [(set i32:$dst, (atomic_load_add_32 xoaddr:$ptr, i32:$incr))]>;
@@ -1535,6 +1569,18 @@ let usesCustomInserter = 1 in {
     def ATOMIC_LOAD_NAND_I32 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_NAND_I32",
       [(set i32:$dst, (atomic_load_nand_32 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MIN_I32 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MIN_I32",
+      [(set i32:$dst, (atomic_load_min_32 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_MAX_I32 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_MAX_I32",
+      [(set i32:$dst, (atomic_load_max_32 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMIN_I32 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMIN_I32",
+      [(set i32:$dst, (atomic_load_umin_32 xoaddr:$ptr, i32:$incr))]>;
+    def ATOMIC_LOAD_UMAX_I32 : Pseudo<
+      (outs gprc:$dst), (ins memrr:$ptr, gprc:$incr), "#ATOMIC_LOAD_UMAX_I32",
+      [(set i32:$dst, (atomic_load_umax_32 xoaddr:$ptr, i32:$incr))]>;
 
     def ATOMIC_CMP_SWAP_I8 : Pseudo<
       (outs gprc:$dst), (ins memrr:$ptr, gprc:$old, gprc:$new), "#ATOMIC_CMP_SWAP_I8",

@@ -203,6 +203,7 @@ const char *Triple::getEnvironmentTypeName(EnvironmentType Kind) {
   switch (Kind) {
   case UnknownEnvironment: return "unknown";
   case GNU: return "gnu";
+  case GNUABI64: return "gnuabi64";
   case GNUEABIHF: return "gnueabihf";
   case GNUEABI: return "gnueabi";
   case GNUX32: return "gnux32";
@@ -474,6 +475,7 @@ static Triple::EnvironmentType parseEnvironment(StringRef EnvironmentName) {
   return StringSwitch<Triple::EnvironmentType>(EnvironmentName)
     .StartsWith("eabihf", Triple::EABIHF)
     .StartsWith("eabi", Triple::EABI)
+    .StartsWith("gnuabi64", Triple::GNUABI64)
     .StartsWith("gnueabihf", Triple::GNUEABIHF)
     .StartsWith("gnueabi", Triple::GNUEABI)
     .StartsWith("gnux32", Triple::GNUX32)
@@ -615,14 +617,14 @@ static Triple::ObjectFormatType getDefaultFormat(const Triple &T) {
   case Triple::sparcv9:
   case Triple::spir:
   case Triple::spir64:
-  case Triple::riscv:
-  case Triple::riscv64:
   case Triple::systemz:
   case Triple::tce:
   case Triple::thumbeb:
   case Triple::wasm32:
   case Triple::wasm64:
   case Triple::xcore:
+  case Triple::riscv:
+  case Triple::riscv64:
     return Triple::ELF;
 
   case Triple::ppc:
@@ -1153,7 +1155,6 @@ static unsigned getArchPointerBitWidth(llvm::Triple::ArchType Arch) {
   case llvm::Triple::shave:
   case llvm::Triple::wasm32:
   case llvm::Triple::renderscript32:
-  case llvm::Triple::riscv:
     return 32;
 
   case llvm::Triple::aarch64:
@@ -1249,7 +1250,6 @@ Triple Triple::get32BitArchVariant() const {
   case Triple::spir64:         T.setArch(Triple::spir);    break;
   case Triple::wasm64:         T.setArch(Triple::wasm32);  break;
   case Triple::renderscript64: T.setArch(Triple::renderscript32); break;
-  case Triple::riscv64:        T.setArch(Triple::riscv);    break;
   }
   return T;
 }
@@ -1310,7 +1310,6 @@ Triple Triple::get64BitArchVariant() const {
   case Triple::thumbeb:         T.setArch(Triple::aarch64_be); break;
   case Triple::wasm32:          T.setArch(Triple::wasm64);     break;
   case Triple::renderscript32:  T.setArch(Triple::renderscript64);     break;
-  case Triple::riscv:           T.setArch(Triple::riscv64);     break;
   }
   return T;
 }

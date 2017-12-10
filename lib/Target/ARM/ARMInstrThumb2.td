@@ -2240,7 +2240,8 @@ class T2SatI<dag oops, dag iops, InstrItinClass itin,
 def t2SSAT: T2SatI<
               (outs rGPR:$Rd),
               (ins imm1_32:$sat_imm, rGPR:$Rn, t2_shift_imm:$sh),
-              NoItinerary, "ssat", "\t$Rd, $sat_imm, $Rn$sh", []> {
+              NoItinerary, "ssat", "\t$Rd, $sat_imm, $Rn$sh", []>,
+              Requires<[IsThumb2]> {
   let Inst{31-27} = 0b11110;
   let Inst{25-22} = 0b1100;
   let Inst{20} = 0;
@@ -2251,7 +2252,7 @@ def t2SSAT: T2SatI<
 def t2SSAT16: T2SatI<
                 (outs rGPR:$Rd), (ins imm1_16:$sat_imm, rGPR:$Rn), NoItinerary,
                 "ssat16", "\t$Rd, $sat_imm, $Rn", []>,
-          Requires<[IsThumb2, HasDSP]> {
+                Requires<[IsThumb2, HasDSP]> {
   let Inst{31-27} = 0b11110;
   let Inst{25-22} = 0b1100;
   let Inst{20} = 0;
@@ -2265,7 +2266,8 @@ def t2SSAT16: T2SatI<
 def t2USAT: T2SatI<
                (outs rGPR:$Rd),
                (ins imm0_31:$sat_imm, rGPR:$Rn, t2_shift_imm:$sh),
-                NoItinerary, "usat", "\t$Rd, $sat_imm, $Rn$sh", []> {
+                NoItinerary, "usat", "\t$Rd, $sat_imm, $Rn$sh", []>,
+                Requires<[IsThumb2]> {
   let Inst{31-27} = 0b11110;
   let Inst{25-22} = 0b1110;
   let Inst{20} = 0;
@@ -2275,7 +2277,7 @@ def t2USAT: T2SatI<
 def t2USAT16: T2SatI<(outs rGPR:$Rd), (ins imm0_15:$sat_imm, rGPR:$Rn),
                      NoItinerary,
                      "usat16", "\t$Rd, $sat_imm, $Rn", []>,
-          Requires<[IsThumb2, HasDSP]> {
+                     Requires<[IsThumb2, HasDSP]> {
   let Inst{31-22} = 0b1111001110;
   let Inst{20} = 0;
   let Inst{15} = 0;
@@ -3524,7 +3526,7 @@ def t2LDMIA_RET: t2PseudoExpand<(outs GPR:$wb), (ins GPR:$Rn, pred:$p,
 
 let isBranch = 1, isTerminator = 1, isBarrier = 1 in {
 let isPredicable = 1 in
-def t2B   : T2I<(outs), (ins uncondbrtarget:$target), IIC_Br,
+def t2B   : T2I<(outs), (ins thumb_br_target:$target), IIC_Br,
                  "b", ".w\t$target",
                  [(br bb:$target)]>, Sched<[WriteBr]>,
                  Requires<[IsThumb, HasV8MBaseline]> {
@@ -3617,9 +3619,9 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1 in {
   // IOS version.
   let Uses = [SP] in
   def tTAILJMPd: tPseudoExpand<(outs),
-                   (ins uncondbrtarget:$dst, pred:$p),
+                   (ins thumb_br_target:$dst, pred:$p),
                    4, IIC_Br, [],
-                   (t2B uncondbrtarget:$dst, pred:$p)>,
+                   (t2B thumb_br_target:$dst, pred:$p)>,
                  Requires<[IsThumb2, IsMachO]>, Sched<[WriteBr]>;
 }
 
@@ -3655,7 +3657,7 @@ def t2BXJ : T2I<(outs), (ins GPRnopc:$func), NoItinerary, "bxj", "\t$func", []>,
 
 // Compare and branch on zero / non-zero
 let isBranch = 1, isTerminator = 1 in {
-  def tCBZ  : T1I<(outs), (ins tGPR:$Rn, t_cbtarget:$target), IIC_Br,
+  def tCBZ  : T1I<(outs), (ins tGPR:$Rn, thumb_cb_target:$target), IIC_Br,
                   "cbz\t$Rn, $target", []>,
               T1Misc<{0,0,?,1,?,?,?}>,
               Requires<[IsThumb, HasV8MBaseline]>, Sched<[WriteBr]> {
@@ -3667,7 +3669,7 @@ let isBranch = 1, isTerminator = 1 in {
     let Inst{2-0} = Rn;
   }
 
-  def tCBNZ : T1I<(outs), (ins tGPR:$Rn, t_cbtarget:$target), IIC_Br,
+  def tCBNZ : T1I<(outs), (ins tGPR:$Rn, thumb_cb_target:$target), IIC_Br,
                   "cbnz\t$Rn, $target", []>,
               T1Misc<{1,0,?,1,?,?,?}>,
               Requires<[IsThumb, HasV8MBaseline]>, Sched<[WriteBr]> {
@@ -4817,6 +4819,10 @@ def : t2InstAlias<"add${p} $Rd, pc, $imm",
 def t2LDRConstPool
   : t2AsmPseudo<"ldr${p} $Rt, $immediate",
                 (ins GPRnopc:$Rt, const_pool_asm_imm:$immediate, pred:$p)>;
+// Version w/ the .w suffix.
+def : t2InstAlias<"ldr${p}.w $Rt, $immediate",
+                  (t2LDRConstPool GPRnopc:$Rt,
+                  const_pool_asm_imm:$immediate, pred:$p)>;
 
 // PLD/PLDW/PLI with alternate literal form.
 def : t2InstAlias<"pld${p} $addr",

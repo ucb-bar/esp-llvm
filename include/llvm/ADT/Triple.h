@@ -176,6 +176,7 @@ public:
     UnknownEnvironment,
 
     GNU,
+    GNUABI64,
     GNUEABI,
     GNUEABIHF,
     GNUX32,
@@ -478,8 +479,9 @@ public:
 
   bool isGNUEnvironment() const {
     EnvironmentType Env = getEnvironment();
-    return Env == Triple::GNU || Env == Triple::GNUEABI ||
-           Env == Triple::GNUEABIHF || Env == Triple::GNUX32;
+    return Env == Triple::GNU || Env == Triple::GNUABI64 ||
+           Env == Triple::GNUEABI || Env == Triple::GNUEABIHF ||
+           Env == Triple::GNUX32;
   }
 
   /// Checks if the environment could be MSVC.

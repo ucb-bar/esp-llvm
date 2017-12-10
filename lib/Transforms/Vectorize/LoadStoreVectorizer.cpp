@@ -88,8 +88,8 @@ private:
 
   bool isConsecutiveAccess(Value *A, Value *B);
 
-  /// Reorders the users of I after vectorization to ensure that I dominates its
-  /// users.
+  /// After vectorization, reorder the instructions that I depends on
+  /// (the instructions defining its operands), to ensure they dominate I.
   void reorder(Instruction *I);
 
   /// Returns the first and the last instructions in Chain.
@@ -106,11 +106,13 @@ private:
   std::pair<ArrayRef<Value *>, ArrayRef<Value *>>
   splitOddVectorElts(ArrayRef<Value *> Chain, unsigned ElementSizeBits);
 
-  /// Checks if there are any instructions which may affect the memory accessed
-  /// in the chain between \p From and \p To. The elements of \p Chain should be
-  /// all loads or all stores.
-  bool isVectorizable(ArrayRef<Value *> Chain, BasicBlock::iterator From,
-                      BasicBlock::iterator To);
+  /// Checks for instructions which may affect the memory accessed
+  /// in the chain between \p From and \p To. Returns Index, where
+  /// \p Chain[0, Index) is the largest vectorizable chain prefix.
+  /// The elements of \p Chain should be all loads or all stores.
+  unsigned getVectorizablePrefixEndIdx(ArrayRef<Value *> Chain,
+                                       BasicBlock::iterator From,
+                                       BasicBlock::iterator To);
 
   /// Collects load and store instructions to vectorize.
   void collectInstructions(BasicBlock *BB);
@@ -123,10 +125,16 @@ private:
   bool vectorizeInstructions(ArrayRef<Value *> Instrs);
 
   /// Vectorizes the load instructions in Chain.
-  bool vectorizeLoadChain(ArrayRef<Value *> Chain);
+  bool vectorizeLoadChain(ArrayRef<Value *> Chain,
+                          SmallPtrSet<Value *, 16> *InstructionsProcessed);
 
   /// Vectorizes the store instructions in Chain.
-  bool vectorizeStoreChain(ArrayRef<Value *> Chain);
+  bool vectorizeStoreChain(ArrayRef<Value *> Chain,
+                           SmallPtrSet<Value *, 16> *InstructionsProcessed);
+
+  /// Check if this load/store access is misaligned accesses
+  bool accessIsMisaligned(unsigned SzInBytes, unsigned AddressSpace,
+                          unsigned Alignment);
 };
 
 class LoadStoreVectorizer : public FunctionPass {
@@ -330,18 +338,36 @@ bool Vectorizer::isConsecutiveAccess(Value *A, Value *B) {
 }
 
 void Vectorizer::reorder(Instruction *I) {
-  Instruction *InsertAfter = I;
-  for (User *U : I->users()) {
-    Instruction *User = dyn_cast<Instruction>(U);
-    if (!User || User->getOpcode() == Instruction::PHI)
-      continue;
+  SmallPtrSet<Instruction *, 16> InstructionsToMove;
+  SmallVector<Instruction *, 16> Worklist;
 
-    if (!DT.dominates(I, User)) {
-      User->removeFromParent();
-      User->insertAfter(InsertAfter);
-      InsertAfter = User;
-      reorder(User);
+  Worklist.push_back(I);
+  while (!Worklist.empty()) {
+    Instruction *IW = Worklist.pop_back_val();
+    int NumOperands = IW->getNumOperands();
+    for (int i = 0; i < NumOperands; i++) {
+      Instruction *IM = dyn_cast<Instruction>(IW->getOperand(i));
+      if (!IM || IM->getOpcode() == Instruction::PHI)
+        continue;
+
+      if (!DT.dominates(IM, I)) {
+        InstructionsToMove.insert(IM);
+        Worklist.push_back(IM);
+        assert(IM->getParent() == IW->getParent() &&
+               "Instructions to move should be in the same basic block");
+      }
     }
+  }
+
+  // All instructions to move should follow I. Start from I, not from begin().
+  for (auto BBI = I->getIterator(), E = I->getParent()->end(); BBI != E;
+       ++BBI) {
+    if (!is_contained(InstructionsToMove, &*BBI))
+      continue;
+    Instruction *IM = &*BBI;
+    --BBI;
+    IM->removeFromParent();
+    IM->insertBefore(I);
   }
 }
 
@@ -399,50 +425,53 @@ Vectorizer::splitOddVectorElts(ArrayRef<Value *> Chain,
   return std::make_pair(Chain.slice(0, NumLeft), Chain.slice(NumLeft));
 }
 
-bool Vectorizer::isVectorizable(ArrayRef<Value *> Chain,
-                                BasicBlock::iterator From,
-                                BasicBlock::iterator To) {
+unsigned Vectorizer::getVectorizablePrefixEndIdx(ArrayRef<Value *> Chain,
+                                                 BasicBlock::iterator From,
+                                                 BasicBlock::iterator To) {
   SmallVector<std::pair<Value *, unsigned>, 16> MemoryInstrs;
   SmallVector<std::pair<Value *, unsigned>, 16> ChainInstrs;
 
-  unsigned Idx = 0;
-  for (auto I = From, E = To; I != E; ++I, ++Idx) {
+  unsigned InstrIdx = 0;
+  for (auto I = From; I != To; ++I, ++InstrIdx) {
     if (isa<LoadInst>(I) || isa<StoreInst>(I)) {
       if (!is_contained(Chain, &*I))
-        MemoryInstrs.push_back({&*I, Idx});
+        MemoryInstrs.push_back({&*I, InstrIdx});
       else
-        ChainInstrs.push_back({&*I, Idx});
+        ChainInstrs.push_back({&*I, InstrIdx});
     } else if (I->mayHaveSideEffects()) {
       DEBUG(dbgs() << "LSV: Found side-effecting operation: " << *I << '\n');
-      return false;
+      return 0;
     }
   }
 
   assert(Chain.size() == ChainInstrs.size() &&
          "All instructions in the Chain must exist in [From, To).");
 
-  for (auto EntryMem : MemoryInstrs) {
-    Value *V = EntryMem.first;
-    unsigned VIdx = EntryMem.second;
-    for (auto EntryChain : ChainInstrs) {
-      Value *VV = EntryChain.first;
-      unsigned VVIdx = EntryChain.second;
-      if (isa<LoadInst>(V) && isa<LoadInst>(VV))
+  unsigned ChainIdx = 0;
+  for (auto EntryChain : ChainInstrs) {
+    Value *ChainInstrValue = EntryChain.first;
+    unsigned ChainInstrIdx = EntryChain.second;
+    for (auto EntryMem : MemoryInstrs) {
+      Value *MemInstrValue = EntryMem.first;
+      unsigned MemInstrIdx = EntryMem.second;
+      if (isa<LoadInst>(MemInstrValue) && isa<LoadInst>(ChainInstrValue))
         continue;
 
       // We can ignore the alias as long as the load comes before the store,
       // because that means we won't be moving the load past the store to
       // vectorize it (the vectorized load is inserted at the location of the
       // first load in the chain).
-      if (isa<StoreInst>(V) && isa<LoadInst>(VV) && VVIdx < VIdx)
+      if (isa<StoreInst>(MemInstrValue) && isa<LoadInst>(ChainInstrValue) &&
+          ChainInstrIdx < MemInstrIdx)
         continue;
 
       // Same case, but in reverse.
-      if (isa<LoadInst>(V) && isa<StoreInst>(VV) && VVIdx > VIdx)
+      if (isa<LoadInst>(MemInstrValue) && isa<StoreInst>(ChainInstrValue) &&
+          ChainInstrIdx > MemInstrIdx)
         continue;
 
-      Instruction *M0 = cast<Instruction>(V);
-      Instruction *M1 = cast<Instruction>(VV);
+      Instruction *M0 = cast<Instruction>(MemInstrValue);
+      Instruction *M1 = cast<Instruction>(ChainInstrValue);
 
       if (!AA.isNoAlias(MemoryLocation::get(M0), MemoryLocation::get(M1))) {
         DEBUG({
@@ -451,17 +480,17 @@ bool Vectorizer::isVectorizable(ArrayRef<Value *> Chain,
 
           dbgs() << "LSV: Found alias.\n"
                     "        Aliasing instruction and pointer:\n"
-                 << *V << " aliases " << *Ptr0 << '\n'
+                 << *MemInstrValue << " aliases " << *Ptr0 << '\n'
                  << "        Aliased instruction and pointer:\n"
-                 << *VV << " aliases " << *Ptr1 << '\n';
+                 << *ChainInstrValue << " aliases " << *Ptr1 << '\n';
         });
 
-        return false;
+        return ChainIdx;
       }
     }
+    ChainIdx++;
   }
-
-  return true;
+  return Chain.size();
 }
 
 void Vectorizer::collectInstructions(BasicBlock *BB) {
@@ -592,10 +621,19 @@ bool Vectorizer::vectorizeInstructions(ArrayRef<Value *> Instrs) {
   }
 
   bool Changed = false;
-  SmallPtrSet<Value *, 16> VectorizedValues;
+  SmallPtrSet<Value *, 16> InstructionsProcessed;
 
   for (int Head : Heads) {
-    if (Tails.count(Head))
+    if (InstructionsProcessed.count(Instrs[Head]))
+      continue;
+    bool longerChainExists = false;
+    for (unsigned TIt = 0; TIt < Tails.size(); TIt++)
+      if (Head == Tails[TIt] &&
+          !InstructionsProcessed.count(Instrs[Heads[TIt]])) {
+        longerChainExists = true;
+        break;
+      }
+    if (longerChainExists)
       continue;
 
     // We found an instr that starts a chain. Now follow the chain and try to
@@ -603,7 +641,7 @@ bool Vectorizer::vectorizeInstructions(ArrayRef<Value *> Instrs) {
     SmallVector<Value *, 16> Operands;
     int I = Head;
     while (I != -1 && (Tails.count(I) || Heads.count(I))) {
-      if (VectorizedValues.count(Instrs[I]))
+      if (InstructionsProcessed.count(Instrs[I]))
         break;
 
       Operands.push_back(Instrs[I]);
@@ -612,20 +650,18 @@ bool Vectorizer::vectorizeInstructions(ArrayRef<Value *> Instrs) {
 
     bool Vectorized = false;
     if (isa<LoadInst>(*Operands.begin()))
-      Vectorized = vectorizeLoadChain(Operands);
+      Vectorized = vectorizeLoadChain(Operands, &InstructionsProcessed);
     else
-      Vectorized = vectorizeStoreChain(Operands);
+      Vectorized = vectorizeStoreChain(Operands, &InstructionsProcessed);
 
-    // Mark the vectorized instructions so that we don't vectorize them again.
-    if (Vectorized)
-      VectorizedValues.insert(Operands.begin(), Operands.end());
     Changed |= Vectorized;
   }
 
   return Changed;
 }
 
-bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
+bool Vectorizer::vectorizeStoreChain(
+    ArrayRef<Value *> Chain, SmallPtrSet<Value *, 16> *InstructionsProcessed) {
   StoreInst *S0 = cast<StoreInst>(Chain[0]);
 
   // If the vector has an int element, default to int for the whole load.
@@ -648,8 +684,28 @@ bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
   unsigned VF = VecRegSize / Sz;
   unsigned ChainSize = Chain.size();
 
-  if (!isPowerOf2_32(Sz) || VF < 2 || ChainSize < 2)
+  if (!isPowerOf2_32(Sz) || VF < 2 || ChainSize < 2) {
+    InstructionsProcessed->insert(Chain.begin(), Chain.end());
     return false;
+  }
+
+  BasicBlock::iterator First, Last;
+  std::tie(First, Last) = getBoundaryInstrs(Chain);
+  unsigned StopChain = getVectorizablePrefixEndIdx(Chain, First, Last);
+  if (StopChain == 0) {
+    // There exists a side effect instruction, no vectorization possible.
+    InstructionsProcessed->insert(Chain.begin(), Chain.end());
+    return false;
+  }
+  if (StopChain == 1) {
+    // Failed after the first instruction. Discard it and try the smaller chain.
+    InstructionsProcessed->insert(Chain.front());
+    return false;
+  }
+
+  // Update Chain to the valid vectorizable subchain.
+  Chain = Chain.slice(0, StopChain);
+  ChainSize = Chain.size();
 
   // Store size should be 1B, 2B or multiple of 4B.
   // TODO: Target hook for size constraint?
@@ -658,11 +714,12 @@ bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
     DEBUG(dbgs() << "LSV: Size should be 1B, 2B "
                     "or multiple of 4B. Splitting.\n");
     if (SzInBytes == 3)
-      return vectorizeStoreChain(Chain.slice(0, ChainSize - 1));
+      return vectorizeStoreChain(Chain.slice(0, ChainSize - 1),
+                                 InstructionsProcessed);
 
     auto Chains = splitOddVectorElts(Chain, Sz);
-    return vectorizeStoreChain(Chains.first) |
-           vectorizeStoreChain(Chains.second);
+    return vectorizeStoreChain(Chains.first, InstructionsProcessed) |
+           vectorizeStoreChain(Chains.second, InstructionsProcessed);
   }
 
   VectorType *VecTy;
@@ -678,8 +735,8 @@ bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
   if (ChainSize > VF) {
     DEBUG(dbgs() << "LSV: Vector factor is too big."
                     " Creating two separate arrays.\n");
-    return vectorizeStoreChain(Chain.slice(0, VF)) |
-           vectorizeStoreChain(Chain.slice(VF));
+    return vectorizeStoreChain(Chain.slice(0, VF), InstructionsProcessed) |
+           vectorizeStoreChain(Chain.slice(VF), InstructionsProcessed);
   }
 
   DEBUG({
@@ -688,32 +745,28 @@ bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
       V->dump();
   });
 
+  // We won't try again to vectorize the elements of the chain, regardless of
+  // whether we succeed below.
+  InstructionsProcessed->insert(Chain.begin(), Chain.end());
+
   // Check alignment restrictions.
   unsigned Alignment = getAlignment(S0);
 
   // If the store is going to be misaligned, don't vectorize it.
-  // TODO: Check TLI.allowsMisalignedMemoryAccess
-  if ((Alignment % SzInBytes) != 0 && (Alignment % TargetBaseAlign) != 0) {
-    if (S0->getPointerAddressSpace() == 0) {
-      // If we're storing to an object on the stack, we control its alignment,
-      // so we can cheat and change it!
-      Value *V = GetUnderlyingObject(S0->getPointerOperand(), DL);
-      if (AllocaInst *AI = dyn_cast_or_null<AllocaInst>(V)) {
-        AI->setAlignment(TargetBaseAlign);
-        Alignment = TargetBaseAlign;
-      } else {
-        return false;
-      }
+  if (accessIsMisaligned(SzInBytes, AS, Alignment)) {
+    if (S0->getPointerAddressSpace() != 0)
+      return false;
+
+    // If we're storing to an object on the stack, we control its alignment,
+    // so we can cheat and change it!
+    Value *V = GetUnderlyingObject(S0->getPointerOperand(), DL);
+    if (AllocaInst *AI = dyn_cast_or_null<AllocaInst>(V)) {
+      AI->setAlignment(TargetBaseAlign);
+      Alignment = TargetBaseAlign;
     } else {
       return false;
     }
   }
-
-  BasicBlock::iterator First, Last;
-  std::tie(First, Last) = getBoundaryInstrs(Chain);
-
-  if (!isVectorizable(Chain, First, Last))
-    return false;
 
   // Set insert point.
   Builder.SetInsertPoint(&*Last);
@@ -762,7 +815,8 @@ bool Vectorizer::vectorizeStoreChain(ArrayRef<Value *> Chain) {
   return true;
 }
 
-bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
+bool Vectorizer::vectorizeLoadChain(
+    ArrayRef<Value *> Chain, SmallPtrSet<Value *, 16> *InstructionsProcessed) {
   LoadInst *L0 = cast<LoadInst>(Chain[0]);
 
   // If the vector has an int element, default to int for the whole load.
@@ -785,8 +839,28 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
   unsigned VF = VecRegSize / Sz;
   unsigned ChainSize = Chain.size();
 
-  if (!isPowerOf2_32(Sz) || VF < 2 || ChainSize < 2)
+  if (!isPowerOf2_32(Sz) || VF < 2 || ChainSize < 2) {
+    InstructionsProcessed->insert(Chain.begin(), Chain.end());
     return false;
+  }
+
+  BasicBlock::iterator First, Last;
+  std::tie(First, Last) = getBoundaryInstrs(Chain);
+  unsigned StopChain = getVectorizablePrefixEndIdx(Chain, First, Last);
+  if (StopChain == 0) {
+    // There exists a side effect instruction, no vectorization possible.
+    InstructionsProcessed->insert(Chain.begin(), Chain.end());
+    return false;
+  }
+  if (StopChain == 1) {
+    // Failed after the first instruction. Discard it and try the smaller chain.
+    InstructionsProcessed->insert(Chain.front());
+    return false;
+  }
+
+  // Update Chain to the valid vectorizable subchain.
+  Chain = Chain.slice(0, StopChain);
+  ChainSize = Chain.size();
 
   // Load size should be 1B, 2B or multiple of 4B.
   // TODO: Should size constraint be a target hook?
@@ -795,9 +869,11 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
     DEBUG(dbgs() << "LSV: Size should be 1B, 2B "
                     "or multiple of 4B. Splitting.\n");
     if (SzInBytes == 3)
-      return vectorizeLoadChain(Chain.slice(0, ChainSize - 1));
+      return vectorizeLoadChain(Chain.slice(0, ChainSize - 1),
+                                InstructionsProcessed);
     auto Chains = splitOddVectorElts(Chain, Sz);
-    return vectorizeLoadChain(Chains.first) | vectorizeLoadChain(Chains.second);
+    return vectorizeLoadChain(Chains.first, InstructionsProcessed) |
+           vectorizeLoadChain(Chains.second, InstructionsProcessed);
   }
 
   VectorType *VecTy;
@@ -813,26 +889,28 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
   if (ChainSize > VF) {
     DEBUG(dbgs() << "LSV: Vector factor is too big. "
                     "Creating two separate arrays.\n");
-    return vectorizeLoadChain(Chain.slice(0, VF)) |
-           vectorizeLoadChain(Chain.slice(VF));
+    return vectorizeLoadChain(Chain.slice(0, VF), InstructionsProcessed) |
+           vectorizeLoadChain(Chain.slice(VF), InstructionsProcessed);
   }
+
+  // We won't try again to vectorize the elements of the chain, regardless of
+  // whether we succeed below.
+  InstructionsProcessed->insert(Chain.begin(), Chain.end());
 
   // Check alignment restrictions.
   unsigned Alignment = getAlignment(L0);
 
   // If the load is going to be misaligned, don't vectorize it.
-  // TODO: Check TLI.allowsMisalignedMemoryAccess and remove TargetBaseAlign.
-  if ((Alignment % SzInBytes) != 0 && (Alignment % TargetBaseAlign) != 0) {
-    if (L0->getPointerAddressSpace() == 0) {
-      // If we're loading from an object on the stack, we control its alignment,
-      // so we can cheat and change it!
-      Value *V = GetUnderlyingObject(L0->getPointerOperand(), DL);
-      if (AllocaInst *AI = dyn_cast_or_null<AllocaInst>(V)) {
-        AI->setAlignment(TargetBaseAlign);
-        Alignment = TargetBaseAlign;
-      } else {
-        return false;
-      }
+  if (accessIsMisaligned(SzInBytes, AS, Alignment)) {
+    if (L0->getPointerAddressSpace() != 0)
+      return false;
+
+    // If we're loading from an object on the stack, we control its alignment,
+    // so we can cheat and change it!
+    Value *V = GetUnderlyingObject(L0->getPointerOperand(), DL);
+    if (AllocaInst *AI = dyn_cast_or_null<AllocaInst>(V)) {
+      AI->setAlignment(TargetBaseAlign);
+      Alignment = TargetBaseAlign;
     } else {
       return false;
     }
@@ -844,14 +922,8 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
       V->dump();
   });
 
-  BasicBlock::iterator First, Last;
-  std::tie(First, Last) = getBoundaryInstrs(Chain);
-
-  if (!isVectorizable(Chain, First, Last))
-    return false;
-
   // Set insert point.
-  Builder.SetInsertPoint(&*Last);
+  Builder.SetInsertPoint(&*First);
 
   Value *Bitcast =
       Builder.CreateBitCast(L0->getPointerOperand(), VecTy->getPointerTo(AS));
@@ -863,6 +935,7 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
   if (VecLoadTy) {
     SmallVector<Instruction *, 16> InstrsToErase;
     SmallVector<Instruction *, 16> InstrsToReorder;
+    InstrsToReorder.push_back(cast<Instruction>(Bitcast));
 
     unsigned VecWidth = VecLoadTy->getNumElements();
     for (unsigned I = 0, E = Chain.size(); I != E; ++I) {
@@ -878,7 +951,6 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
 
         // Replace the old instruction.
         UI->replaceAllUsesWith(Extracted);
-        InstrsToReorder.push_back(Extracted);
         InstrsToErase.push_back(UI);
       }
     }
@@ -890,6 +962,7 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
       I->eraseFromParent();
   } else {
     SmallVector<Instruction *, 16> InstrsToReorder;
+    InstrsToReorder.push_back(cast<Instruction>(Bitcast));
 
     for (unsigned I = 0, E = Chain.size(); I != E; ++I) {
       Value *V = Builder.CreateExtractElement(LI, Builder.getInt32(I));
@@ -902,7 +975,6 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
 
       // Replace the old instruction.
       UI->replaceAllUsesWith(Extracted);
-      InstrsToReorder.push_back(Extracted);
     }
 
     for (Instruction *ModUser : InstrsToReorder)
@@ -914,4 +986,14 @@ bool Vectorizer::vectorizeLoadChain(ArrayRef<Value *> Chain) {
   ++NumVectorInstructions;
   NumScalarsVectorized += Chain.size();
   return true;
+}
+
+bool Vectorizer::accessIsMisaligned(unsigned SzInBytes, unsigned AddressSpace,
+                                    unsigned Alignment) {
+  bool Fast = false;
+  bool Allows = TTI.allowsMisalignedMemoryAccesses(SzInBytes * 8, AddressSpace,
+                                                   Alignment, &Fast);
+  // TODO: Remove TargetBaseAlign
+  return !(Allows && Fast) && (Alignment % SzInBytes) != 0 &&
+         (Alignment % TargetBaseAlign) != 0;
 }

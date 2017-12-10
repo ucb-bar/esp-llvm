@@ -42,7 +42,7 @@ PDBFile::~PDBFile() {}
 
 uint32_t PDBFile::getBlockSize() const { return SB->BlockSize; }
 
-uint32_t PDBFile::getUnknown0() const { return SB->Unknown0; }
+uint32_t PDBFile::getFreeBlockMapBlock() const { return SB->FreeBlockMapBlock; }
 
 uint32_t PDBFile::getBlockCount() const { return SB->NumBlocks; }
 
@@ -53,7 +53,7 @@ uint32_t PDBFile::getBlockMapIndex() const { return SB->BlockMapAddr; }
 uint32_t PDBFile::getUnknown1() const { return SB->Unknown1; }
 
 uint32_t PDBFile::getNumDirectoryBlocks() const {
-  return bytesToBlocks(SB->NumDirectoryBytes, SB->BlockSize);
+  return msf::bytesToBlocks(SB->NumDirectoryBytes, SB->BlockSize);
 }
 
 uint64_t PDBFile::getBlockMapOffset() const {
@@ -75,7 +75,7 @@ uint32_t PDBFile::getFileSize() const { return Buffer->getLength(); }
 
 Expected<ArrayRef<uint8_t>> PDBFile::getBlockData(uint32_t BlockIndex,
                                                   uint32_t NumBytes) const {
-  uint64_t StreamBlockOffset = blockToOffset(BlockIndex, getBlockSize());
+  uint64_t StreamBlockOffset = msf::blockToOffset(BlockIndex, getBlockSize());
 
   ArrayRef<uint8_t> Result;
   if (auto EC = Buffer->readBytes(StreamBlockOffset, NumBytes, Result))
@@ -94,7 +94,7 @@ Error PDBFile::setBlockData(uint32_t BlockIndex, uint32_t Offset,
         raw_error_code::invalid_block_address,
         "setBlockData attempted to write out of block bounds.");
 
-  uint64_t StreamBlockOffset = blockToOffset(BlockIndex, getBlockSize());
+  uint64_t StreamBlockOffset = msf::blockToOffset(BlockIndex, getBlockSize());
   StreamBlockOffset += Offset;
   return Buffer->writeBytes(StreamBlockOffset, Data);
 }
@@ -143,7 +143,8 @@ Error PDBFile::parseStreamData() {
     uint32_t StreamSize = getStreamByteSize(I);
     // FIXME: What does StreamSize ~0U mean?
     uint64_t NumExpectedStreamBlocks =
-        StreamSize == UINT32_MAX ? 0 : bytesToBlocks(StreamSize, SB->BlockSize);
+        StreamSize == UINT32_MAX ? 0 : msf::bytesToBlocks(StreamSize,
+                                                          SB->BlockSize);
 
     // For convenience, we store the block array contiguously.  This is because
     // if someone calls setStreamMap(), it is more convenient to be able to call
@@ -171,17 +172,6 @@ Error PDBFile::parseStreamData() {
 
 llvm::ArrayRef<support::ulittle32_t> PDBFile::getDirectoryBlockArray() const {
   return DirectoryBlocks;
-}
-
-Expected<InfoStream &> PDBFile::emplacePDBInfoStream() {
-  if (Info)
-    Info.reset();
-
-  auto InfoS = MappedBlockStream::createIndexedStream(StreamPDB, *this);
-  if (!InfoS)
-    return InfoS.takeError();
-  Info = llvm::make_unique<InfoStream>(std::move(*InfoS));
-  return *Info;
 }
 
 Expected<InfoStream &> PDBFile::getPDBInfoStream() {
@@ -304,109 +294,15 @@ Expected<NameHashTable &> PDBFile::getStringTable() {
   return *StringTable;
 }
 
-Error PDBFile::setSuperBlock(const SuperBlock *Block) {
-  SB = Block;
-
-  // Check the magic bytes.
-  if (memcmp(SB->MagicBytes, MsfMagic, sizeof(MsfMagic)) != 0)
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "MSF magic header doesn't match");
-
-  // We don't support blocksizes which aren't a multiple of four bytes.
-  if (SB->BlockSize % sizeof(support::ulittle32_t) != 0)
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "Block size is not multiple of 4.");
-
-  switch (SB->BlockSize) {
-  case 512:
-  case 1024:
-  case 2048:
-  case 4096:
-    break;
-  default:
-    // An invalid block size suggests a corrupt PDB file.
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "Unsupported block size.");
-  }
+Error PDBFile::setSuperBlock(const msf::SuperBlock *Block) {
+  if (auto EC = msf::validateSuperBlock(*Block))
+    return EC;
 
   if (Buffer->getLength() % SB->BlockSize != 0)
     return make_error<RawError>(raw_error_code::corrupt_file,
                                 "File size is not a multiple of block size");
 
-  // We don't support directories whose sizes aren't a multiple of four bytes.
-  if (SB->NumDirectoryBytes % sizeof(support::ulittle32_t) != 0)
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "Directory size is not multiple of 4.");
-
-  // The number of blocks which comprise the directory is a simple function of
-  // the number of bytes it contains.
-  uint64_t NumDirectoryBlocks = getNumDirectoryBlocks();
-
-  // The directory, as we understand it, is a block which consists of a list of
-  // block numbers.  It is unclear what would happen if the number of blocks
-  // couldn't fit on a single block.
-  if (NumDirectoryBlocks > SB->BlockSize / sizeof(support::ulittle32_t))
-    return make_error<RawError>(raw_error_code::corrupt_file,
-                                "Too many directory blocks.");
-
-  return Error::success();
-}
-
-void PDBFile::setStreamSizes(ArrayRef<support::ulittle32_t> Sizes) {
-  StreamSizes = Sizes;
-}
-
-void PDBFile::setStreamMap(
-    std::vector<ArrayRef<support::ulittle32_t>> &Streams) {
-  StreamMap = Streams;
-}
-
-void PDBFile::setDirectoryBlocks(ArrayRef<support::ulittle32_t> Directory) {
-  DirectoryBlocks = Directory;
-}
-
-Error PDBFile::generateSimpleStreamMap() {
-  if (StreamSizes.empty())
-    return Error::success();
-
-  static std::vector<std::vector<support::ulittle32_t>> StaticMap;
-  StreamMap.clear();
-  StaticMap.clear();
-
-  // Figure out how many blocks are needed for all streams, and set the first
-  // used block to the highest block so that we can write the rest of the
-  // blocks contiguously.
-  uint32_t TotalFileBlocks = getBlockCount();
-  std::vector<support::ulittle32_t> ReservedBlocks;
-  ReservedBlocks.push_back(support::ulittle32_t(0));
-  ReservedBlocks.push_back(SB->BlockMapAddr);
-  ReservedBlocks.insert(ReservedBlocks.end(), DirectoryBlocks.begin(),
-                        DirectoryBlocks.end());
-
-  uint32_t BlocksNeeded = 0;
-  for (auto Size : StreamSizes)
-    BlocksNeeded += bytesToBlocks(Size, getBlockSize());
-
-  support::ulittle32_t NextBlock(TotalFileBlocks - BlocksNeeded -
-                                 ReservedBlocks.size());
-
-  StaticMap.resize(StreamSizes.size());
-  for (uint32_t S = 0; S < StreamSizes.size(); ++S) {
-    uint32_t Size = StreamSizes[S];
-    uint32_t NumBlocks = bytesToBlocks(Size, getBlockSize());
-    auto &ThisStream = StaticMap[S];
-    for (uint32_t I = 0; I < NumBlocks;) {
-      NextBlock += 1;
-      if (std::find(ReservedBlocks.begin(), ReservedBlocks.end(), NextBlock) !=
-          ReservedBlocks.end())
-        continue;
-
-      ++I;
-      assert(NextBlock < getBlockCount());
-      ThisStream.push_back(NextBlock);
-    }
-    StreamMap.push_back(ThisStream);
-  }
+  SB = Block;
   return Error::success();
 }
 

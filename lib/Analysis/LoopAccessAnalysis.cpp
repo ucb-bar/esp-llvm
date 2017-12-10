@@ -105,7 +105,7 @@ void LoopAccessReport::emitAnalysis(const LoopAccessReport &Message,
 }
 
 Value *llvm::stripIntegerCast(Value *V) {
-  if (CastInst *CI = dyn_cast<CastInst>(V))
+  if (auto *CI = dyn_cast<CastInst>(V))
     if (CI->getOperand(0)->getType()->isIntegerTy())
       return CI->getOperand(0);
   return V;
@@ -148,6 +148,19 @@ const SCEV *llvm::replaceSymbolicStrideSCEV(PredicatedScalarEvolution &PSE,
   return OrigSCEV;
 }
 
+/// Calculate Start and End points of memory access.
+/// Let's assume A is the first access and B is a memory access on N-th loop
+/// iteration. Then B is calculated as:  
+///   B = A + Step*N . 
+/// Step value may be positive or negative.
+/// N is a calculated back-edge taken count:
+///     N = (TripCount > 0) ? RoundDown(TripCount -1 , VF) : 0
+/// Start and End points are calculated in the following way:
+/// Start = UMIN(A, B) ; End = UMAX(A, B) + SizeOfElt,
+/// where SizeOfElt is the size of single memory access in bytes.
+///
+/// There is no conflict when the intervals are disjoint:
+/// NoConflict = (P2.Start >= P1.End) || (P1.Start >= P2.End)
 void RuntimePointerChecking::insert(Loop *Lp, Value *Ptr, bool WritePtr,
                                     unsigned DepSetId, unsigned ASId,
                                     const ValueToValueMap &Strides,
@@ -172,16 +185,21 @@ void RuntimePointerChecking::insert(Loop *Lp, Value *Ptr, bool WritePtr,
 
     // For expressions with negative step, the upper bound is ScStart and the
     // lower bound is ScEnd.
-    if (const SCEVConstant *CStep = dyn_cast<const SCEVConstant>(Step)) {
+    if (const auto *CStep = dyn_cast<SCEVConstant>(Step)) {
       if (CStep->getValue()->isNegative())
         std::swap(ScStart, ScEnd);
     } else {
-      // Fallback case: the step is not constant, but the we can still
+      // Fallback case: the step is not constant, but we can still
       // get the upper and lower bounds of the interval by using min/max
       // expressions.
       ScStart = SE->getUMinExpr(ScStart, ScEnd);
       ScEnd = SE->getUMaxExpr(AR->getStart(), ScEnd);
     }
+    // Add the size of the pointed element to ScEnd.
+    unsigned EltSize =
+      Ptr->getType()->getPointerElementType()->getScalarSizeInBits() / 8;
+    const SCEV *EltSizeSCEV = SE->getConstant(ScEnd->getType(), EltSize);
+    ScEnd = SE->getAddExpr(ScEnd, EltSizeSCEV);
   }
 
   Pointers.emplace_back(Ptr, ScStart, ScEnd, WritePtr, DepSetId, ASId, Sc);
@@ -839,11 +857,11 @@ static bool isNoWrapAddRec(Value *Ptr, const SCEVAddRecExpr *AR,
 
   // Make sure there is only one non-const index and analyze that.
   Value *NonConstIndex = nullptr;
-  for (auto Index = GEP->idx_begin(); Index != GEP->idx_end(); ++Index)
-    if (!isa<ConstantInt>(*Index)) {
+  for (Value *Index : make_range(GEP->idx_begin(), GEP->idx_end()))
+    if (!isa<ConstantInt>(Index)) {
       if (NonConstIndex)
         return false;
-      NonConstIndex = *Index;
+      NonConstIndex = Index;
     }
   if (!NonConstIndex)
     // The recurrence is on the pointer, ignore for now.
@@ -976,9 +994,9 @@ int64_t llvm::getPtrStride(PredicatedScalarEvolution &PSE, Value *Ptr,
 /// Take the pointer operand from the Load/Store instruction.
 /// Returns NULL if this is not a valid Load/Store instruction.
 static Value *getPointerOperand(Value *I) {
-  if (LoadInst *LI = dyn_cast<LoadInst>(I))
+  if (auto *LI = dyn_cast<LoadInst>(I))
     return LI->getPointerOperand();
-  if (StoreInst *SI = dyn_cast<StoreInst>(I))
+  if (auto *SI = dyn_cast<StoreInst>(I))
     return SI->getPointerOperand();
   return nullptr;
 }
@@ -1505,7 +1523,9 @@ bool LoopAccessInfo::canAnalyzeLoop() {
   return true;
 }
 
-void LoopAccessInfo::analyzeLoop() {
+void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
+                                 const TargetLibraryInfo *TLI,
+                                 DominatorTree *DT) {
   typedef SmallPtrSet<Value*, 16> ValueSet;
 
   // Holds the Load and Store instructions.
@@ -1522,21 +1542,17 @@ void LoopAccessInfo::analyzeLoop() {
   const bool IsAnnotatedParallel = TheLoop->isAnnotatedParallel();
 
   // For each block.
-  for (Loop::block_iterator bb = TheLoop->block_begin(),
-       be = TheLoop->block_end(); bb != be; ++bb) {
-
+  for (BasicBlock *BB : TheLoop->blocks()) {
     // Scan the BB and collect legal loads and stores.
-    for (BasicBlock::iterator it = (*bb)->begin(), e = (*bb)->end(); it != e;
-         ++it) {
-
+    for (Instruction &I : *BB) {
       // If this is a load, save it. If this instruction can read from memory
       // but is not a load, then we quit. Notice that we don't handle function
       // calls that read or write.
-      if (it->mayReadFromMemory()) {
+      if (I.mayReadFromMemory()) {
         // Many math library functions read the rounding mode. We will only
         // vectorize a loop if it contains known function calls that don't set
         // the flag. Therefore, it is safe to ignore this read from memory.
-        CallInst *Call = dyn_cast<CallInst>(it);
+        auto *Call = dyn_cast<CallInst>(&I);
         if (Call && getVectorIntrinsicIDForCall(Call, TLI))
           continue;
 
@@ -1546,7 +1562,7 @@ void LoopAccessInfo::analyzeLoop() {
             TLI->isFunctionVectorizable(Call->getCalledFunction()->getName()))
           continue;
 
-        LoadInst *Ld = dyn_cast<LoadInst>(it);
+        auto *Ld = dyn_cast<LoadInst>(&I);
         if (!Ld || (!Ld->isSimple() && !IsAnnotatedParallel)) {
           emitAnalysis(LoopAccessReport(Ld)
                        << "read with atomic ordering or volatile read");
@@ -1563,11 +1579,11 @@ void LoopAccessInfo::analyzeLoop() {
       }
 
       // Save 'store' instructions. Abort if other instructions write to memory.
-      if (it->mayWriteToMemory()) {
-        StoreInst *St = dyn_cast<StoreInst>(it);
+      if (I.mayWriteToMemory()) {
+        auto *St = dyn_cast<StoreInst>(&I);
         if (!St) {
-          emitAnalysis(LoopAccessReport(&*it) <<
-                       "instruction cannot be vectorized");
+          emitAnalysis(LoopAccessReport(St)
+                       << "instruction cannot be vectorized");
           CanVecMem = false;
           return;
         }
@@ -1834,8 +1850,9 @@ std::pair<Instruction *, Instruction *> LoopAccessInfo::addRuntimeChecks(
     Instruction *Loc,
     const SmallVectorImpl<RuntimePointerChecking::PointerCheck> &PointerChecks)
     const {
+  const DataLayout &DL = TheLoop->getHeader()->getModule()->getDataLayout();
   auto *SE = PSE->getSE();
-  SCEVExpander Exp(*SE, *DL, "induction");
+  SCEVExpander Exp(*SE, DL, "induction");
   auto ExpandedChecks =
       expandBounds(PointerChecks, TheLoop, Loc, SE, Exp, *PtrRtChecking);
 
@@ -1864,9 +1881,17 @@ std::pair<Instruction *, Instruction *> LoopAccessInfo::addRuntimeChecks(
     Value *End0 =   ChkBuilder.CreateBitCast(A.End,   PtrArithTy1, "bc");
     Value *End1 =   ChkBuilder.CreateBitCast(B.End,   PtrArithTy0, "bc");
 
-    Value *Cmp0 = ChkBuilder.CreateICmpULE(Start0, End1, "bound0");
+    // [A|B].Start points to the first accessed byte under base [A|B].
+    // [A|B].End points to the last accessed byte, plus one.
+    // There is no conflict when the intervals are disjoint:
+    // NoConflict = (B.Start >= A.End) || (A.Start >= B.End)
+    //
+    // bound0 = (B.Start < A.End)
+    // bound1 = (A.Start < B.End)
+    //  IsConflict = bound0 & bound1
+    Value *Cmp0 = ChkBuilder.CreateICmpULT(Start0, End1, "bound0");
     FirstInst = getFirstInst(FirstInst, Cmp0, Loc);
-    Value *Cmp1 = ChkBuilder.CreateICmpULE(Start1, End0, "bound1");
+    Value *Cmp1 = ChkBuilder.CreateICmpULT(Start1, End0, "bound1");
     FirstInst = getFirstInst(FirstInst, Cmp1, Loc);
     Value *IsConflict = ChkBuilder.CreateAnd(Cmp0, Cmp1, "found.conflict");
     FirstInst = getFirstInst(FirstInst, IsConflict, Loc);
@@ -1919,17 +1944,15 @@ void LoopAccessInfo::collectStridedAccess(Value *MemAccess) {
 }
 
 LoopAccessInfo::LoopAccessInfo(Loop *L, ScalarEvolution *SE,
-                               const DataLayout &DL,
                                const TargetLibraryInfo *TLI, AliasAnalysis *AA,
                                DominatorTree *DT, LoopInfo *LI)
     : PSE(llvm::make_unique<PredicatedScalarEvolution>(*SE, *L)),
       PtrRtChecking(llvm::make_unique<RuntimePointerChecking>(SE)),
       DepChecker(llvm::make_unique<MemoryDepChecker>(*PSE, L)), TheLoop(L),
-      DL(&DL), TLI(TLI), AA(AA), DT(DT), LI(LI), NumLoads(0), NumStores(0),
-      MaxSafeDepDistBytes(-1), CanVecMem(false),
+      NumLoads(0), NumStores(0), MaxSafeDepDistBytes(-1), CanVecMem(false),
       StoreToLoopInvariantAddress(false) {
   if (canAnalyzeLoop())
-    analyzeLoop();
+    analyzeLoop(AA, LI, TLI, DT);
 }
 
 void LoopAccessInfo::print(raw_ostream &OS, unsigned Depth) const {
@@ -1975,10 +1998,9 @@ void LoopAccessInfo::print(raw_ostream &OS, unsigned Depth) const {
 const LoopAccessInfo &LoopAccessLegacyAnalysis::getInfo(Loop *L) {
   auto &LAI = LoopAccessInfoMap[L];
 
-  if (!LAI) {
-    const DataLayout &DL = L->getHeader()->getModule()->getDataLayout();
-    LAI = llvm::make_unique<LoopAccessInfo>(L, SE, DL, TLI, AA, DT, LI);
-  }
+  if (!LAI)
+    LAI = llvm::make_unique<LoopAccessInfo>(L, SE, TLI, AA, DT, LI);
+
   return *LAI.get();
 }
 
@@ -2044,8 +2066,7 @@ LoopAccessInfo LoopAccessAnalysis::run(Loop &L, AnalysisManager<Loop> &AM) {
     report_fatal_error("DominatorTree must have been cached at a higher level");
   if (!LI)
     report_fatal_error("LoopInfo must have been cached at a higher level");
-  const DataLayout &DL = F.getParent()->getDataLayout();
-  return LoopAccessInfo(&L, SE, DL, TLI, AA, DT, LI);
+  return LoopAccessInfo(&L, SE, TLI, AA, DT, LI);
 }
 
 PreservedAnalyses LoopAccessInfoPrinterPass::run(Loop &L,

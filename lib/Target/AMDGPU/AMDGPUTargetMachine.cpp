@@ -134,9 +134,9 @@ static StringRef getGPUOrDefault(const Triple &TT, StringRef GPU) {
 }
 
 static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
-  if (!RM.hasValue())
-    return Reloc::PIC_;
-  return *RM;
+  // The AMDGPU toolchain only supports generating shared objects, so we
+  // must always use PIC.
+  return Reloc::PIC_;
 }
 
 AMDGPUTargetMachine::AMDGPUTargetMachine(const Target &T, const Triple &TT,
@@ -309,6 +309,7 @@ public:
   ScheduleDAGInstrs *
   createMachineScheduler(MachineSchedContext *C) const override;
 
+  void addIRPasses() override;
   bool addPreISel() override;
   void addMachineSSAOptimization() override;
   bool addInstSelector() override;
@@ -432,7 +433,6 @@ bool R600PassConfig::addPreISel() {
 
   if (EnableR600StructurizeCFG)
     addPass(createStructurizeCFGPass());
-  addPass(createR600TextureIntrinsicsReplacer());
   return false;
 }
 
@@ -498,6 +498,13 @@ void GCNPassConfig::addMachineSSAOptimization() {
   // XXX - Can we get away without running DeadMachineInstructionElim again?
   addPass(&SIFoldOperandsID);
   addPass(&DeadMachineInstructionElimID);
+}
+
+void GCNPassConfig::addIRPasses() {
+  // TODO: May want to move later or split into an early and late one.
+  addPass(createAMDGPUCodeGenPreparePass(&getGCNTargetMachine()));
+
+  AMDGPUPassConfig::addIRPasses();
 }
 
 bool GCNPassConfig::addInstSelector() {

@@ -1279,11 +1279,16 @@ static void computeKnownBitsFromOperator(Operator *I, APInt &KnownZero,
   }
   case Instruction::Call:
   case Instruction::Invoke:
+    // If range metadata is attached to this call, set known bits from that,
+    // and then intersect with known bits based on other properties of the
+    // function.
     if (MDNode *MD = cast<Instruction>(I)->getMetadata(LLVMContext::MD_range))
       computeKnownBitsFromRangeMetadata(*MD, KnownZero, KnownOne);
-    // If a range metadata is attached to this IntrinsicInst, intersect the
-    // explicit range specified by the metadata and the implicit range of
-    // the intrinsic.
+    if (Value *RV = CallSite(I).getReturnedArgOperand()) {
+      computeKnownBits(RV, KnownZero2, KnownOne2, Depth + 1, Q);
+      KnownZero |= KnownZero2;
+      KnownOne |= KnownOne2;
+    }
     if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(I)) {
       switch (II->getIntrinsicID()) {
       default: break;
@@ -2981,6 +2986,12 @@ Value *llvm::GetUnderlyingObject(Value *V, const DataLayout &DL,
         return V;
       V = GA->getAliasee();
     } else {
+      if (auto CS = CallSite(V))
+        if (Value *RV = CS.getReturnedArgOperand()) {
+          V = RV;
+          continue;
+        }
+
       // See if InstructionSimplify knows any relevant tricks.
       if (Instruction *I = dyn_cast<Instruction>(V))
         // TODO: Acquire a DominatorTree and AssumptionCache and use them.
@@ -3096,11 +3107,9 @@ bool llvm::isSafeToSpeculativelyExecute(const Value *V,
     const LoadInst *LI = cast<LoadInst>(Inst);
     if (!LI->isUnordered() ||
         // Speculative load may create a race that did not exist in the source.
-        LI->getParent()->getParent()->hasFnAttribute(
-            Attribute::SanitizeThread) ||
+        LI->getFunction()->hasFnAttribute(Attribute::SanitizeThread) ||
         // Speculative load may load data from dirty regions.
-        LI->getParent()->getParent()->hasFnAttribute(
-            Attribute::SanitizeAddress))
+        LI->getFunction()->hasFnAttribute(Attribute::SanitizeAddress))
       return false;
     const DataLayout &DL = LI->getModule()->getDataLayout();
     return isDereferenceableAndAlignedPointer(LI->getPointerOperand(),

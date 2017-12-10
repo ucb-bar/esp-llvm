@@ -4442,6 +4442,7 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
   // Determine an input position which will be dominated by the operands and
   // which will dominate the result.
   IP = AdjustInsertPositionForExpand(IP, LF, LU, Rewriter);
+  Rewriter.setInsertPoint(&*IP);
 
   // Inform the Rewriter if we have a post-increment use, so that it can
   // perform an advantageous expansion.
@@ -4473,7 +4474,7 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
                                  LF.UserInst, LF.OperandValToReplace,
                                  Loops, SE, DT);
 
-    Ops.push_back(SE.getUnknown(Rewriter.expandCodeFor(Reg, nullptr, &*IP)));
+    Ops.push_back(SE.getUnknown(Rewriter.expandCodeFor(Reg, nullptr)));
   }
 
   // Expand the ScaledReg portion.
@@ -4491,14 +4492,14 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
       // Expand ScaleReg as if it was part of the base regs.
       if (F.Scale == 1)
         Ops.push_back(
-            SE.getUnknown(Rewriter.expandCodeFor(ScaledS, nullptr, &*IP)));
+            SE.getUnknown(Rewriter.expandCodeFor(ScaledS, nullptr)));
       else {
         // An interesting way of "folding" with an icmp is to use a negated
         // scale, which we'll implement by inserting it into the other operand
         // of the icmp.
         assert(F.Scale == -1 &&
                "The only scale supported by ICmpZero uses is -1!");
-        ICmpScaledV = Rewriter.expandCodeFor(ScaledS, nullptr, &*IP);
+        ICmpScaledV = Rewriter.expandCodeFor(ScaledS, nullptr);
       }
     } else {
       // Otherwise just expand the scaled register and an explicit scale,
@@ -4508,11 +4509,11 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
       // Unless the addressing mode will not be folded.
       if (!Ops.empty() && LU.Kind == LSRUse::Address &&
           isAMCompletelyFolded(TTI, LU, F)) {
-        Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty, &*IP);
+        Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty);
         Ops.clear();
         Ops.push_back(SE.getUnknown(FullV));
       }
-      ScaledS = SE.getUnknown(Rewriter.expandCodeFor(ScaledS, nullptr, &*IP));
+      ScaledS = SE.getUnknown(Rewriter.expandCodeFor(ScaledS, nullptr));
       if (F.Scale != 1)
         ScaledS =
             SE.getMulExpr(ScaledS, SE.getConstant(ScaledS->getType(), F.Scale));
@@ -4524,7 +4525,7 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
   if (F.BaseGV) {
     // Flush the operand list to suppress SCEVExpander hoisting.
     if (!Ops.empty()) {
-      Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty, &*IP);
+      Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty);
       Ops.clear();
       Ops.push_back(SE.getUnknown(FullV));
     }
@@ -4534,7 +4535,7 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
   // Flush the operand list to suppress SCEVExpander hoisting of both folded and
   // unfolded offsets. LSR assumes they both live next to their uses.
   if (!Ops.empty()) {
-    Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty, &*IP);
+    Value *FullV = Rewriter.expandCodeFor(SE.getAddExpr(Ops), Ty);
     Ops.clear();
     Ops.push_back(SE.getUnknown(FullV));
   }
@@ -4570,7 +4571,7 @@ Value *LSRInstance::Expand(const LSRFixup &LF,
   const SCEV *FullS = Ops.empty() ?
                       SE.getConstant(IntTy, 0) :
                       SE.getAddExpr(Ops);
-  Value *FullV = Rewriter.expandCodeFor(FullS, Ty, &*IP);
+  Value *FullV = Rewriter.expandCodeFor(FullS, Ty);
 
   // We're done expanding now, so reset the rewriter.
   Rewriter.clearPostInc();
@@ -4949,7 +4950,7 @@ INITIALIZE_PASS_BEGIN(LoopStrengthReduce, "loop-reduce",
 INITIALIZE_PASS_DEPENDENCY(TargetTransformInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
-INITIALIZE_PASS_DEPENDENCY(IVUsers)
+INITIALIZE_PASS_DEPENDENCY(IVUsersWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopSimplify)
 INITIALIZE_PASS_END(LoopStrengthReduce, "loop-reduce",
@@ -4979,8 +4980,8 @@ void LoopStrengthReduce::getAnalysisUsage(AnalysisUsage &AU) const {
   // Requiring LoopSimplify a second time here prevents IVUsers from running
   // twice, since LoopSimplify was invalidated by running ScalarEvolution.
   AU.addRequiredID(LoopSimplifyID);
-  AU.addRequired<IVUsers>();
-  AU.addPreserved<IVUsers>();
+  AU.addRequired<IVUsersWrapperPass>();
+  AU.addPreserved<IVUsersWrapperPass>();
   AU.addRequired<TargetTransformInfoWrapperPass>();
 }
 
@@ -4988,7 +4989,7 @@ bool LoopStrengthReduce::runOnLoop(Loop *L, LPPassManager & /*LPM*/) {
   if (skipLoop(L))
     return false;
 
-  auto &IU = getAnalysis<IVUsers>();
+  auto &IU = getAnalysis<IVUsersWrapperPass>().getIU();
   auto &SE = getAnalysis<ScalarEvolutionWrapperPass>().getSE();
   auto &DT = getAnalysis<DominatorTreeWrapperPass>().getDomTree();
   auto &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();

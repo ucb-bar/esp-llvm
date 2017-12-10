@@ -2047,9 +2047,7 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
   SDValue Ptr = N->getBasePtr();
   ISD::LoadExtType ExtType = N->getExtensionType();
   unsigned Alignment = N->getAlignment();
-  bool isVolatile = N->isVolatile();
-  bool isNonTemporal = N->isNonTemporal();
-  bool isInvariant = N->isInvariant();
+  MachineMemOperand::Flags MMOFlags = N->getMemOperand()->getFlags();
   AAMDNodes AAInfo = N->getAAInfo();
   SDLoc dl(N);
 
@@ -2058,9 +2056,8 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
   if (N->getMemoryVT().bitsLE(NVT)) {
     EVT MemVT = N->getMemoryVT();
 
-    Lo = DAG.getExtLoad(ExtType, dl, NVT, Ch, Ptr, N->getPointerInfo(),
-                        MemVT, isVolatile, isNonTemporal, isInvariant,
-                        Alignment, AAInfo);
+    Lo = DAG.getExtLoad(ExtType, dl, NVT, Ch, Ptr, N->getPointerInfo(), MemVT,
+                        Alignment, MMOFlags, AAInfo);
 
     // Remember the chain.
     Ch = Lo.getValue(1);
@@ -2082,8 +2079,7 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
     }
   } else if (DAG.getDataLayout().isLittleEndian()) {
     // Little-endian - low bits are at low addresses.
-    Lo = DAG.getLoad(NVT, dl, Ch, Ptr, N->getPointerInfo(),
-                     isVolatile, isNonTemporal, isInvariant, Alignment,
+    Lo = DAG.getLoad(NVT, dl, Ch, Ptr, N->getPointerInfo(), Alignment, MMOFlags,
                      AAInfo);
 
     unsigned ExcessBits =
@@ -2096,8 +2092,7 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
                       DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
     Hi = DAG.getExtLoad(ExtType, dl, NVT, Ch, Ptr,
                         N->getPointerInfo().getWithOffset(IncrementSize), NEVT,
-                        isVolatile, isNonTemporal, isInvariant,
-                        MinAlign(Alignment, IncrementSize), AAInfo);
+                        MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
 
     // Build a factor node to remember that this load is independent of the
     // other one.
@@ -2115,8 +2110,7 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
     Hi = DAG.getExtLoad(ExtType, dl, NVT, Ch, Ptr, N->getPointerInfo(),
                         EVT::getIntegerVT(*DAG.getContext(),
                                           MemVT.getSizeInBits() - ExcessBits),
-                        isVolatile, isNonTemporal, isInvariant, Alignment,
-                        AAInfo);
+                        Alignment, MMOFlags, AAInfo);
 
     // Increment the pointer to the other half.
     Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
@@ -2125,8 +2119,7 @@ void DAGTypeLegalizer::ExpandIntRes_LOAD(LoadSDNode *N,
     Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, NVT, Ch, Ptr,
                         N->getPointerInfo().getWithOffset(IncrementSize),
                         EVT::getIntegerVT(*DAG.getContext(), ExcessBits),
-                        isVolatile, isNonTemporal, isInvariant,
-                        MinAlign(Alignment, IncrementSize), AAInfo);
+                        MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
 
     // Build a factor node to remember that this load is independent of the
     // other one.
@@ -2192,24 +2185,29 @@ void DAGTypeLegalizer::ExpandIntRes_MUL(SDNode *N,
     // options. This is a trivially-generalized version of the code from
     // Hacker's Delight (itself derived from Knuth's Algorithm M from section
     // 4.3.1).
-    SDValue Mask =
-      DAG.getConstant(APInt::getLowBitsSet(NVT.getSizeInBits(),
-                                           NVT.getSizeInBits() >> 1), dl, NVT);
+    unsigned Bits = NVT.getSizeInBits();
+    unsigned HalfBits = Bits >> 1;
+    SDValue Mask = DAG.getConstant(APInt::getLowBitsSet(Bits, HalfBits), dl,
+                                   NVT);
     SDValue LLL = DAG.getNode(ISD::AND, dl, NVT, LL, Mask);
     SDValue RLL = DAG.getNode(ISD::AND, dl, NVT, RL, Mask);
 
     SDValue T = DAG.getNode(ISD::MUL, dl, NVT, LLL, RLL);
     SDValue TL = DAG.getNode(ISD::AND, dl, NVT, T, Mask);
 
-    SDValue Shift =
-      DAG.getConstant(NVT.getSizeInBits() >> 1, dl,
-                      TLI.getShiftAmountTy(NVT, DAG.getDataLayout()));
+    EVT ShiftAmtTy = TLI.getShiftAmountTy(NVT, DAG.getDataLayout());
+    if (APInt::getMaxValue(ShiftAmtTy.getSizeInBits()).ult(HalfBits)) {
+      // The type from TLI is too small to fit the shift amount we want.
+      // Override it with i32. The shift will have to be legalized.
+      ShiftAmtTy = MVT::i32;
+    }
+    SDValue Shift = DAG.getConstant(HalfBits, dl, ShiftAmtTy);
     SDValue TH = DAG.getNode(ISD::SRL, dl, NVT, T, Shift);
     SDValue LLH = DAG.getNode(ISD::SRL, dl, NVT, LL, Shift);
     SDValue RLH = DAG.getNode(ISD::SRL, dl, NVT, RL, Shift);
 
     SDValue U = DAG.getNode(ISD::ADD, dl, NVT,
-                            DAG.getNode(ISD::MUL, dl, NVT, LLH, RLL), TL);
+                            DAG.getNode(ISD::MUL, dl, NVT, LLH, RLL), TH);
     SDValue UL = DAG.getNode(ISD::AND, dl, NVT, U, Mask);
     SDValue UH = DAG.getNode(ISD::SRL, dl, NVT, U, Shift);
 
@@ -2218,14 +2216,14 @@ void DAGTypeLegalizer::ExpandIntRes_MUL(SDNode *N,
     SDValue VH = DAG.getNode(ISD::SRL, dl, NVT, V, Shift);
 
     SDValue W = DAG.getNode(ISD::ADD, dl, NVT,
-                            DAG.getNode(ISD::MUL, dl, NVT, LL, RL),
+                            DAG.getNode(ISD::MUL, dl, NVT, LLH, RLH),
                             DAG.getNode(ISD::ADD, dl, NVT, UH, VH));
-    Lo = DAG.getNode(ISD::ADD, dl, NVT, TH,
+    Lo = DAG.getNode(ISD::ADD, dl, NVT, TL,
                      DAG.getNode(ISD::SHL, dl, NVT, V, Shift));
 
     Hi = DAG.getNode(ISD::ADD, dl, NVT, W,
                      DAG.getNode(ISD::ADD, dl, NVT,
-                                 DAG.getNode(ISD::MUL, dl, NVT, RH, LL), 
+                                 DAG.getNode(ISD::MUL, dl, NVT, RH, LL),
                                  DAG.getNode(ISD::MUL, dl, NVT, RL, LH)));
     return;
   }
@@ -2578,9 +2576,9 @@ void DAGTypeLegalizer::ExpandIntRes_XMULO(SDNode *N,
 
   SDValue Temp = DAG.CreateStackTemporary(PtrVT);
   // Temporary for the overflow value, default it to zero.
-  SDValue Chain = DAG.getStore(DAG.getEntryNode(), dl,
-                               DAG.getConstant(0, dl, PtrVT), Temp,
-                               MachinePointerInfo(), false, false, 0);
+  SDValue Chain =
+      DAG.getStore(DAG.getEntryNode(), dl, DAG.getConstant(0, dl, PtrVT), Temp,
+                   MachinePointerInfo());
 
   TargetLowering::ArgListTy Args;
   TargetLowering::ArgListEntry Entry;
@@ -2611,8 +2609,8 @@ void DAGTypeLegalizer::ExpandIntRes_XMULO(SDNode *N,
   std::pair<SDValue, SDValue> CallInfo = TLI.LowerCallTo(CLI);
 
   SplitInteger(CallInfo.first, Lo, Hi);
-  SDValue Temp2 = DAG.getLoad(PtrVT, dl, CallInfo.second, Temp,
-                              MachinePointerInfo(), false, false, false, 0);
+  SDValue Temp2 =
+      DAG.getLoad(PtrVT, dl, CallInfo.second, Temp, MachinePointerInfo());
   SDValue Ofl = DAG.getSetCC(dl, N->getValueType(1), Temp2,
                              DAG.getConstant(0, dl, PtrVT),
                              ISD::SETNE);
@@ -3039,8 +3037,7 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
   SDValue Ch  = N->getChain();
   SDValue Ptr = N->getBasePtr();
   unsigned Alignment = N->getAlignment();
-  bool isVolatile = N->isVolatile();
-  bool isNonTemporal = N->isNonTemporal();
+  MachineMemOperand::Flags MMOFlags = N->getMemOperand()->getFlags();
   AAMDNodes AAInfo = N->getAAInfo();
   SDLoc dl(N);
   SDValue Lo, Hi;
@@ -3050,16 +3047,15 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
   if (N->getMemoryVT().bitsLE(NVT)) {
     GetExpandedInteger(N->getValue(), Lo, Hi);
     return DAG.getTruncStore(Ch, dl, Lo, Ptr, N->getPointerInfo(),
-                             N->getMemoryVT(), isVolatile, isNonTemporal,
-                             Alignment, AAInfo);
+                             N->getMemoryVT(), Alignment, MMOFlags, AAInfo);
   }
 
   if (DAG.getDataLayout().isLittleEndian()) {
     // Little-endian - low bits are at low addresses.
     GetExpandedInteger(N->getValue(), Lo, Hi);
 
-    Lo = DAG.getStore(Ch, dl, Lo, Ptr, N->getPointerInfo(),
-                      isVolatile, isNonTemporal, Alignment, AAInfo);
+    Lo = DAG.getStore(Ch, dl, Lo, Ptr, N->getPointerInfo(), Alignment, MMOFlags,
+                      AAInfo);
 
     unsigned ExcessBits =
       N->getMemoryVT().getSizeInBits() - NVT.getSizeInBits();
@@ -3069,10 +3065,9 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
     unsigned IncrementSize = NVT.getSizeInBits()/8;
     Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
                       DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
-    Hi = DAG.getTruncStore(Ch, dl, Hi, Ptr,
-                           N->getPointerInfo().getWithOffset(IncrementSize),
-                           NEVT, isVolatile, isNonTemporal,
-                           MinAlign(Alignment, IncrementSize), AAInfo);
+    Hi = DAG.getTruncStore(
+        Ch, dl, Hi, Ptr, N->getPointerInfo().getWithOffset(IncrementSize), NEVT,
+        MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
     return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Lo, Hi);
   }
 
@@ -3100,8 +3095,8 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
   }
 
   // Store both the high bits and maybe some of the low bits.
-  Hi = DAG.getTruncStore(Ch, dl, Hi, Ptr, N->getPointerInfo(),
-                         HiVT, isVolatile, isNonTemporal, Alignment, AAInfo);
+  Hi = DAG.getTruncStore(Ch, dl, Hi, Ptr, N->getPointerInfo(), HiVT, Alignment,
+                         MMOFlags, AAInfo);
 
   // Increment the pointer to the other half.
   Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
@@ -3110,8 +3105,7 @@ SDValue DAGTypeLegalizer::ExpandIntOp_STORE(StoreSDNode *N, unsigned OpNo) {
   Lo = DAG.getTruncStore(Ch, dl, Lo, Ptr,
                          N->getPointerInfo().getWithOffset(IncrementSize),
                          EVT::getIntegerVT(*DAG.getContext(), ExcessBits),
-                         isVolatile, isNonTemporal,
-                         MinAlign(Alignment, IncrementSize), AAInfo);
+                         MinAlign(Alignment, IncrementSize), MMOFlags, AAInfo);
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, Lo, Hi);
 }
 
@@ -3187,7 +3181,7 @@ SDValue DAGTypeLegalizer::ExpandIntOp_UINT_TO_FP(SDNode *N) {
     SDValue Fudge = DAG.getExtLoad(
         ISD::EXTLOAD, dl, DstVT, DAG.getEntryNode(), FudgePtr,
         MachinePointerInfo::getConstantPool(DAG.getMachineFunction()), MVT::f32,
-        false, false, false, Alignment);
+        Alignment);
     return DAG.getNode(ISD::FADD, dl, DstVT, SignedConv, Fudge);
   }
 

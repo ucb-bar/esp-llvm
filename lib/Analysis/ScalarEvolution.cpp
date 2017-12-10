@@ -4822,6 +4822,10 @@ bool ScalarEvolution::isSCEVExprNeverPoison(const Instruction *I) {
   // from different loops, so that we know which loop to prove that I is
   // executed in.
   for (unsigned OpIndex = 0; OpIndex < I->getNumOperands(); ++OpIndex) {
+    // I could be an extractvalue from a call to an overflow intrinsic.
+    // TODO: We can do better here in some cases.
+    if (!isSCEVable(I->getOperand(OpIndex)->getType()))
+      return false;
     const SCEV *Op = getSCEV(I->getOperand(OpIndex));
     if (auto *AddRec = dyn_cast<SCEVAddRecExpr>(Op)) {
       bool AllOtherOpsLoopInvariant = true;
@@ -5225,6 +5229,13 @@ const SCEV *ScalarEvolution::createSCEV(Value *V) {
     if (isa<Instruction>(U))
       return createNodeForSelectOrPHI(cast<Instruction>(U), U->getOperand(0),
                                       U->getOperand(1), U->getOperand(2));
+    break;
+
+  case Instruction::Call:
+  case Instruction::Invoke:
+    if (Value *RV = CallSite(U).getReturnedArgOperand())
+      return getSCEV(RV);
+    break;
   }
 
   return getUnknown(V);

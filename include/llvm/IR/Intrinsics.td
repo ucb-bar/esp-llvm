@@ -54,6 +54,12 @@ class NoCapture<int argNo> : IntrinsicProperty {
   int ArgNo = argNo;
 }
 
+// Returned - The specified argument is always the return value of the
+// intrinsic.
+class Returned<int argNo> : IntrinsicProperty {
+  int ArgNo = argNo;
+}
+
 // ReadOnly - The specified argument pointer is not written to through the
 // pointer by the intrinsic.
 class ReadOnly<int argNo> : IntrinsicProperty {
@@ -662,13 +668,12 @@ def int_masked_gather: Intrinsic<[llvm_anyvector_ty],
                                  [LLVMVectorOfPointersToElt<0>, llvm_i32_ty,
                                   LLVMVectorSameWidth<0, llvm_i1_ty>,
                                   LLVMMatchType<0>],
-                                 [IntrReadMem, IntrArgMemOnly]>;
+				  [IntrReadMem]>;
 
 def int_masked_scatter: Intrinsic<[],
                                   [llvm_anyvector_ty,
                                    LLVMVectorOfPointersToElt<0>, llvm_i32_ty,
-                                   LLVMVectorSameWidth<0, llvm_i1_ty>],
-                                  [IntrArgMemOnly]>;
+                                   LLVMVectorSameWidth<0, llvm_i1_ty>]>;
 
 // Test whether a pointer is associated with a type metadata identifier.
 def int_type_test : Intrinsic<[llvm_i1_ty], [llvm_ptr_ty, llvm_metadata_ty],

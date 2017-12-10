@@ -238,6 +238,11 @@ public:
     return false;
   }
 
+  /// Return true if the target can handle a standalone remainder operation.
+  virtual bool hasStandaloneRem(EVT VT) const {
+    return true;
+  }
+
   /// Return true if sqrt(x) is as cheap or cheaper than 1 / rsqrt(x)
   bool isFsqrtCheap() const {
     return FsqrtIsCheap;
@@ -2343,6 +2348,10 @@ public:
   /// Return if the N is a constant or constant vector equal to the false value
   /// from getBooleanContents().
   bool isConstFalseVal(const SDNode *N) const;
+
+  /// Return a constant of type VT that contains a true value that respects
+  /// getBooleanContents()
+  SDValue getConstTrueVal(SelectionDAG &DAG, EVT VT, const SDLoc &DL) const;
 
   /// Return if \p N is a True value when extended to \p VT.
   bool isExtendedTrueVal(const ConstantSDNode *N, EVT VT, bool Signed) const;

@@ -51,9 +51,10 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializePostDomOnlyPrinterPass(Registry);
   initializeAAResultsWrapperPassPass(Registry);
   initializeGlobalsAAWrapperPassPass(Registry);
-  initializeIVUsersPass(Registry);
+  initializeIVUsersWrapperPassPass(Registry);
   initializeInstCountPass(Registry);
   initializeIntervalPartitionPass(Registry);
+  initializeLazyBlockFrequencyInfoPassPass(Registry);
   initializeLazyValueInfoWrapperPassPass(Registry);
   initializeLintPass(Registry);
   initializeLoopInfoWrapperPassPass(Registry);
@@ -63,6 +64,7 @@ void llvm::initializeAnalysis(PassRegistry &Registry) {
   initializeModuleDebugInfoPrinterPass(Registry);
   initializeModuleSummaryIndexWrapperPassPass(Registry);
   initializeObjCARCAAWrapperPassPass(Registry);
+  initializeOptimizationRemarkEmitterWrapperPassPass(Registry);
   initializePostDominatorTreeWrapperPassPass(Registry);
   initializeRegionInfoPassPass(Registry);
   initializeRegionViewerPass(Registry);

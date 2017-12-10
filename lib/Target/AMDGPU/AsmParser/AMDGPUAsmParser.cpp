@@ -2554,6 +2554,8 @@ AMDGPUAsmParser::parseDPPCtrl(OperandVector &Operands) {
           Int = 0x142;
         } else if (Int == 31) {
           Int = 0x143;
+        } else {
+          return MatchOperand_ParseFail;
         }
       } else {
         return MatchOperand_ParseFail;
@@ -2782,6 +2784,8 @@ unsigned AMDGPUAsmParser::validateTargetOperandClass(MCParsedAsmOperand &Op,
     // name of the expression is not a valid token, the match will fail,
     // so we need to handle it here.
     return Operand.isSSrc32() ? Match_Success : Match_InvalidOperand;
+  case MCK_SoppBrTarget:
+    return Operand.isSoppBrTarget() ? Match_Success : Match_InvalidOperand;
   default: return Match_InvalidOperand;
   }
 }

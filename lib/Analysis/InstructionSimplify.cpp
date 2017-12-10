@@ -621,6 +621,11 @@ static Constant *stripAndComputeConstantOffsets(const DataLayout &DL, Value *&V,
         break;
       V = GA->getAliasee();
     } else {
+      if (auto CS = CallSite(V))
+        if (Value *RV = CS.getReturnedArgOperand()) {
+          V = RV;
+          continue;
+        }
       break;
     }
     assert(V->getType()->getScalarType()->isPointerTy() &&
@@ -3395,7 +3400,10 @@ static Value *SimplifySelectInst(Value *CondVal, Value *TrueVal,
     return TrueVal;
 
   if (const auto *ICI = dyn_cast<ICmpInst>(CondVal)) {
-    unsigned BitWidth = Q.DL.getTypeSizeInBits(TrueVal->getType());
+    // FIXME: This code is nearly duplicated in InstCombine. Using/refactoring
+    // decomposeBitTestICmp() might help.
+    unsigned BitWidth =
+        Q.DL.getTypeSizeInBits(TrueVal->getType()->getScalarType());
     ICmpInst::Predicate Pred = ICI->getPredicate();
     Value *CmpLHS = ICI->getOperand(0);
     Value *CmpRHS = ICI->getOperand(1);
@@ -3939,6 +3947,22 @@ static Value *SimplifyRelativeLoad(Constant *Ptr, Constant *Offset,
   return ConstantExpr::getBitCast(LoadedLHSPtr, Int8PtrTy);
 }
 
+static bool maskIsAllZeroOrUndef(Value *Mask) {
+  auto *ConstMask = dyn_cast<Constant>(Mask);
+  if (!ConstMask)
+    return false;
+  if (ConstMask->isNullValue() || isa<UndefValue>(ConstMask))
+    return true;
+  for (unsigned I = 0, E = ConstMask->getType()->getVectorNumElements(); I != E;
+       ++I) {
+    if (auto *MaskElt = ConstMask->getAggregateElement(I))
+      if (MaskElt->isNullValue() || isa<UndefValue>(MaskElt))
+        continue;
+    return false;
+  }
+  return true;
+}
+
 template <typename IterTy>
 static Value *SimplifyIntrinsic(Function *F, IterTy ArgBegin, IterTy ArgEnd,
                                 const Query &Q, unsigned MaxRecurse) {
@@ -3984,6 +4008,15 @@ static Value *SimplifyIntrinsic(Function *F, IterTy ArgBegin, IterTy ArgEnd,
         isa<Constant>(RHS))
       return SimplifyRelativeLoad(cast<Constant>(LHS), cast<Constant>(RHS),
                                   Q.DL);
+  }
+
+  // Simplify calls to llvm.masked.load.*
+  if (IID == Intrinsic::masked_load) {
+    Value *MaskArg = ArgBegin[2];
+    Value *PassthruArg = ArgBegin[3];
+    // If the mask is all zeros or undef, the "passthru" argument is the result.
+    if (maskIsAllZeroOrUndef(MaskArg))
+      return PassthruArg;
   }
 
   // Perform idempotent optimizations
@@ -4244,7 +4277,8 @@ static bool replaceAndRecursivelySimplifyImpl(Instruction *I, Value *SimpleV,
 
     // Gracefully handle edge cases where the instruction is not wired into any
     // parent block.
-    if (I->getParent())
+    if (I->getParent() && !I->isEHPad() && !isa<TerminatorInst>(I) &&
+        !I->mayHaveSideEffects())
       I->eraseFromParent();
   } else {
     Worklist.insert(I);
@@ -4272,7 +4306,8 @@ static bool replaceAndRecursivelySimplifyImpl(Instruction *I, Value *SimpleV,
 
     // Gracefully handle edge cases where the instruction is not wired into any
     // parent block.
-    if (I->getParent())
+    if (I->getParent() && !I->isEHPad() && !isa<TerminatorInst>(I) &&
+        !I->mayHaveSideEffects())
       I->eraseFromParent();
   }
   return Simplified;

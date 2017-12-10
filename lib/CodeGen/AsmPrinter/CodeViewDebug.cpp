@@ -214,10 +214,7 @@ TypeIndex CodeViewDebug::getScopeIndex(const DIScope *Scope) {
 }
 
 TypeIndex CodeViewDebug::getFuncIdForSubprogram(const DISubprogram *SP) {
-  // It's possible to ask for the FuncId of a function which doesn't have a
-  // subprogram: inlining a function with debug info into a function with none.
-  if (!SP)
-    return TypeIndex::None();
+  assert(SP);
 
   // Check if we've already translated this subprogram.
   auto I = TypeIndices.find({SP, nullptr});
@@ -271,8 +268,9 @@ TypeIndex CodeViewDebug::getMemberFunctionType(const DISubprogram *SP,
   return recordTypeIndexForDINode(SP, TI, Class);
 }
 
-TypeIndex CodeViewDebug::recordTypeIndexForDINode(const DINode *Node, TypeIndex TI,
-                                             const DIType *ClassTy) {
+TypeIndex CodeViewDebug::recordTypeIndexForDINode(const DINode *Node,
+                                                  TypeIndex TI,
+                                                  const DIType *ClassTy) {
   auto InsertResult = TypeIndices.insert({{Node, ClassTy}, TI});
   (void)InsertResult;
   assert(InsertResult.second && "DINode was already assigned a type index");
@@ -620,11 +618,12 @@ void CodeViewDebug::emitDebugInfoForFunction(const Function *GV,
 
   std::string FuncName;
   auto *SP = GV->getSubprogram();
+  assert(SP);
   setCurrentSubprogram(SP);
 
   // If we have a display name, build the fully qualified name by walking the
   // chain of scopes.
-  if (SP != nullptr && !SP->getDisplayName().empty())
+  if (!SP->getDisplayName().empty())
     FuncName =
         getFullyQualifiedName(SP->getScope().resolve(), SP->getDisplayName());
 
@@ -863,7 +862,7 @@ void CodeViewDebug::collectVariableInfo(const DISubprogram *SP) {
 void CodeViewDebug::beginFunction(const MachineFunction *MF) {
   assert(!CurFn && "Can't process two functions at once!");
 
-  if (!Asm || !MMI->hasDebugInfo())
+  if (!Asm || !MMI->hasDebugInfo() || !MF->getFunction()->getSubprogram())
     return;
 
   DebugHandlerBase::beginFunction(MF);
@@ -987,9 +986,55 @@ TypeIndex CodeViewDebug::lowerTypeArray(const DICompositeType *Ty) {
   TypeIndex IndexType = Asm->MAI->getPointerSize() == 8
                             ? TypeIndex(SimpleTypeKind::UInt64Quad)
                             : TypeIndex(SimpleTypeKind::UInt32Long);
-  uint64_t Size = Ty->getSizeInBits() / 8;
-  ArrayRecord Record(ElementTypeIndex, IndexType, Size, Ty->getName());
-  return TypeTable.writeArray(Record);
+
+  uint64_t ElementSize = getBaseTypeSize(ElementTypeRef) / 8;
+
+  bool UndefinedSubrange = false;
+
+  // FIXME:
+  // There is a bug in the front-end where an array of a structure, which was
+  // declared as incomplete structure first, ends up not getting a size assigned
+  // to it. (PR28303)
+  // Example:
+  //   struct A(*p)[3];
+  //   struct A { int f; } a[3];
+  //
+  // This needs to be fixed in the front-end, but in the meantime we don't want
+  // to trigger an assertion because of this.
+  if (Ty->getSizeInBits() == 0) {
+    UndefinedSubrange = true;
+  }
+
+  // Add subranges to array type.
+  DINodeArray Elements = Ty->getElements();
+  for (int i = Elements.size() - 1; i >= 0; --i) {
+    const DINode *Element = Elements[i];
+    assert(Element->getTag() == dwarf::DW_TAG_subrange_type);
+
+    const DISubrange *Subrange = cast<DISubrange>(Element);
+    assert(Subrange->getLowerBound() == 0 &&
+           "codeview doesn't support subranges with lower bounds");
+    int64_t Count = Subrange->getCount();
+
+    // Variable Length Array (VLA) has Count equal to '-1'.
+    // Replace with Count '1', assume it is the minimum VLA length.
+    // FIXME: Make front-end support VLA subrange and emit LF_DIMVARLU.
+    if (Count == -1) {
+      Count = 1;
+      UndefinedSubrange = true;
+    }
+
+    StringRef Name = (i == 0) ? Ty->getName() : "";
+    // Update the element size and element type index for subsequent subranges.
+    ElementSize *= Count;
+    ElementTypeIndex = TypeTable.writeArray(
+        ArrayRecord(ElementTypeIndex, IndexType, ElementSize, Name));
+  }
+
+  (void)UndefinedSubrange;
+  assert(UndefinedSubrange || ElementSize == (Ty->getSizeInBits() / 8));
+
+  return ElementTypeIndex;
 }
 
 TypeIndex CodeViewDebug::lowerTypeBasic(const DIBasicType *Ty) {
@@ -1771,7 +1816,8 @@ TypeIndex CodeViewDebug::getCompleteTypeIndex(DITypeRef TypeRef) {
 }
 
 /// Emit all the deferred complete record types. Try to do this in FIFO order,
-/// and do this until fixpoint, as each complete record type typically references
+/// and do this until fixpoint, as each complete record type typically
+/// references
 /// many other record types.
 void CodeViewDebug::emitDeferredCompleteTypes() {
   SmallVector<const DICompositeType *, 4> TypesToEmit;
@@ -1891,7 +1937,8 @@ void CodeViewDebug::beginInstruction(const MachineInstr *MI) {
   DebugHandlerBase::beginInstruction(MI);
 
   // Ignore DBG_VALUE locations and function prologue.
-  if (!Asm || MI->isDebugValue() || MI->getFlag(MachineInstr::FrameSetup))
+  if (!Asm || !CurFn || MI->isDebugValue() ||
+      MI->getFlag(MachineInstr::FrameSetup))
     return;
   DebugLoc DL = MI->getDebugLoc();
   if (DL == PrevInstLoc || !DL)

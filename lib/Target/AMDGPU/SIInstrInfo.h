@@ -91,6 +91,12 @@ protected:
                                        unsigned OpIdx1) const override;
 
 public:
+
+  enum TargetOperandFlags {
+    MO_NONE = 0,
+    MO_GOTPCREL = 1
+  };
+
   explicit SIInstrInfo(const SISubtarget &);
 
   const SIRegisterInfo &getRegisterInfo() const {
@@ -143,7 +149,7 @@ public:
   bool findCommutedOpIndices(MachineInstr &MI, unsigned &SrcOpIdx1,
                              unsigned &SrcOpIdx2) const override;
 
-  bool AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+  bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                      MachineBasicBlock *&FBB,
                      SmallVectorImpl<MachineOperand> &Cond,
                      bool AllowModify) const override;
@@ -310,6 +316,14 @@ public:
     return get(Opcode).TSFlags & SIInstrFlags::MIMG;
   }
 
+  static bool isGather4(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & SIInstrFlags::Gather4;
+  }
+
+  bool isGather4(uint16_t Opcode) const {
+    return get(Opcode).TSFlags & SIInstrFlags::Gather4;
+  }
+
   static bool isFLAT(const MachineInstr &MI) {
     return MI.getDesc().TSFlags & SIInstrFlags::FLAT;
   }
@@ -326,6 +340,14 @@ public:
     return get(Opcode).TSFlags & SIInstrFlags::WQM;
   }
 
+  static bool isDisableWQM(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & SIInstrFlags::DisableWQM;
+  }
+
+  bool isDisableWQM(uint16_t Opcode) const {
+    return get(Opcode).TSFlags & SIInstrFlags::DisableWQM;
+  }
+
   static bool isVGPRSpill(const MachineInstr &MI) {
     return MI.getDesc().TSFlags & SIInstrFlags::VGPRSpill;
   }
@@ -340,6 +362,14 @@ public:
 
   bool isDPP(uint16_t Opcode) const {
     return get(Opcode).TSFlags & SIInstrFlags::DPP;
+  }
+
+  static bool isScalarUnit(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & (SIInstrFlags::SALU | SIInstrFlags::SMRD);
+  }
+
+  static bool usesVM_CNT(const MachineInstr &MI) {
+    return MI.getDesc().TSFlags & SIInstrFlags::VM_CNT;
   }
 
   bool isVGPRCopy(const MachineInstr &MI) const {

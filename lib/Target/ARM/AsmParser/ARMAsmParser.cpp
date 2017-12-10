@@ -676,6 +676,24 @@ public:
   bool isImm() const override {
     return Kind == k_Immediate;
   }
+
+  bool isARMBranchTarget() const {
+    if (!isImm()) return false;
+
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(getImm()))
+      return CE->getValue() % 4 == 0;
+    return true;
+  }
+
+
+  bool isThumbBranchTarget() const {
+    if (!isImm()) return false;
+
+    if (const MCConstantExpr *CE = dyn_cast<MCConstantExpr>(getImm()))
+      return CE->getValue() % 2 == 0;
+    return true;
+  }
+
   // checks whether this operand is an unsigned offset which fits is a field
   // of specified width and scaled by a specific number of bits
   template<unsigned width, unsigned scale>
@@ -1713,7 +1731,7 @@ public:
     if (!CE) return false;
     uint64_t Value = CE->getValue();
     // i64 value with each byte being either 0 or 0xff.
-    for (unsigned i = 0; i < 8; ++i)
+    for (unsigned i = 0; i < 8; ++i, Value >>= 8)
       if ((Value & 0xff) != 0 && (Value & 0xff) != 0xff) return false;
     return true;
   }
@@ -1726,6 +1744,16 @@ public:
       Inst.addOperand(MCOperand::createImm(CE->getValue()));
     else
       Inst.addOperand(MCOperand::createExpr(Expr));
+  }
+
+  void addARMBranchTargetOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    addExpr(Inst, getImm());
+  }
+
+  void addThumbBranchTargetOperands(MCInst &Inst, unsigned N) const {
+    assert(N == 1 && "Invalid number of operands!");
+    addExpr(Inst, getImm());
   }
 
   void addCondCodeOperands(MCInst &Inst, unsigned N) const {
@@ -6905,6 +6933,9 @@ bool ARMAsmParser::processInstruction(MCInst &Inst,
     else if (Inst.getOpcode() == ARM::t2LDRConstPool)
       TmpInst.setOpcode(ARM::t2LDRpci);
     const ARMOperand &PoolOperand =
+      (static_cast<ARMOperand &>(*Operands[2]).isToken() &&
+       static_cast<ARMOperand &>(*Operands[2]).getToken() == ".w") ?
+      static_cast<ARMOperand &>(*Operands[4]) :
       static_cast<ARMOperand &>(*Operands[3]);
     const MCExpr *SubExprVal = PoolOperand.getConstantPoolImm();
     // If SubExprVal is a constant we may be able to use a MOV

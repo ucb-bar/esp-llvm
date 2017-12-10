@@ -126,7 +126,7 @@ bool RISCVBSel::runOnMachineFunction(MachineFunction &Fn) {
 
         MachineBasicBlock *FBB = 0;
         Cond.clear();
-        if(TII->AnalyzeBranch(MBB, Dest, FBB, Cond, false)){
+        if(TII->analyzeBranch(MBB, Dest, FBB, Cond, false)){
           //we can't fix this branch since we can't even analyze it
           MBBStartOffset += TII->GetInstSizeInBytes(I);
           continue;

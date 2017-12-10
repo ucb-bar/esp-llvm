@@ -244,6 +244,11 @@ public:
 
   bool isFPVectorizationPotentiallyUnsafe() { return false; }
 
+  bool allowsMisalignedMemoryAccesses(unsigned BitWidth,
+                                      unsigned AddressSpace,
+                                      unsigned Alignment,
+                                      bool *Fast) { return false; }
+
   TTI::PopcntSupportKind getPopcntSupport(unsigned IntTyWidthInBit) {
     return TTI::PSK_Software;
   }
@@ -251,6 +256,11 @@ public:
   bool haveFastSqrt(Type *Ty) { return false; }
 
   unsigned getFPOpCost(Type *Ty) { return TargetTransformInfo::TCC_Basic; }
+
+  int getIntImmCodeSizeCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
+                            Type *Ty) {
+    return 0;
+  }
 
   unsigned getIntImmCost(const APInt &Imm, Type *Ty) { return TTI::TCC_Basic; }
 

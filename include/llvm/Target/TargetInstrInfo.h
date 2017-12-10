@@ -55,10 +55,11 @@ class TargetInstrInfo : public MCInstrInfo {
   void operator=(const TargetInstrInfo &) = delete;
 public:
   TargetInstrInfo(unsigned CFSetupOpcode = ~0u, unsigned CFDestroyOpcode = ~0u,
-                  unsigned CatchRetOpcode = ~0u)
+                  unsigned CatchRetOpcode = ~0u, unsigned ReturnOpcode = ~0u)
       : CallFrameSetupOpcode(CFSetupOpcode),
         CallFrameDestroyOpcode(CFDestroyOpcode),
-        CatchRetOpcode(CatchRetOpcode) {}
+        CatchRetOpcode(CatchRetOpcode),
+        ReturnOpcode(ReturnOpcode) {}
 
   virtual ~TargetInstrInfo();
 
@@ -151,6 +152,7 @@ public:
   unsigned getCallFrameDestroyOpcode() const { return CallFrameDestroyOpcode; }
 
   unsigned getCatchReturnOpcode() const { return CatchRetOpcode; }
+  unsigned getReturnOpcode() const { return ReturnOpcode; }
 
   /// Returns the actual stack pointer adjustment made by an instruction
   /// as part of a call sequence. By default, only call frame setup/destroy
@@ -464,7 +466,7 @@ public:
   ///
   /// The CFG information in MBB.Predecessors and MBB.Successors must be valid
   /// before calling this function.
-  virtual bool AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+  virtual bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                              MachineBasicBlock *&FBB,
                              SmallVectorImpl<MachineOperand> &Cond,
                              bool AllowModify = false) const {
@@ -510,7 +512,7 @@ public:
   /// If AllowModify is true, then this routine is allowed to modify the basic
   /// block (e.g. delete instructions after the unconditional branch).
   ///
-  virtual bool AnalyzeBranchPredicate(MachineBasicBlock &MBB,
+  virtual bool analyzeBranchPredicate(MachineBasicBlock &MBB,
                                       MachineBranchPredicate &MBP,
                                       bool AllowModify = false) const {
     return true;
@@ -1440,6 +1442,7 @@ public:
 private:
   unsigned CallFrameSetupOpcode, CallFrameDestroyOpcode;
   unsigned CatchRetOpcode;
+  unsigned ReturnOpcode;
 };
 
 /// \brief Provide DenseMapInfo for TargetInstrInfo::RegSubRegPair.

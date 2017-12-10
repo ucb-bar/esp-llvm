@@ -230,7 +230,7 @@ public:
   bool classifyLEAReg(MachineInstr &MI, const MachineOperand &Src,
                       unsigned LEAOpcode, bool AllowSP, unsigned &NewSrc,
                       bool &isKill, bool &isUndef,
-                      MachineOperand &ImplicitOp) const;
+                      MachineOperand &ImplicitOp, LiveVariables *LV) const;
 
   /// convertToThreeAddress - This method must be implemented by targets that
   /// set the M_CONVERTIBLE_TO_3_ADDR flag.  When this flag is set, the target
@@ -304,7 +304,7 @@ public:
 
   // Branch analysis.
   bool isUnpredicatedTerminator(const MachineInstr &MI) const override;
-  bool AnalyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
+  bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                      MachineBasicBlock *&FBB,
                      SmallVectorImpl<MachineOperand> &Cond,
                      bool AllowModify) const override;
@@ -312,7 +312,7 @@ public:
   bool getMemOpBaseRegImmOfs(MachineInstr &LdSt, unsigned &BaseReg,
                              int64_t &Offset,
                              const TargetRegisterInfo *TRI) const override;
-  bool AnalyzeBranchPredicate(MachineBasicBlock &MBB,
+  bool analyzeBranchPredicate(MachineBasicBlock &MBB,
                               TargetInstrInfo::MachineBranchPredicate &MBP,
                               bool AllowModify = false) const override;
 

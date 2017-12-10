@@ -77,7 +77,7 @@ unsigned RISCVInstrInfo::GetInstSizeInBytes(MachineInstr *I) const {
   return (STI.isRV64() || STI.isRV32()) ? 4 : 4;
 }
 
-bool RISCVInstrInfo::AnalyzeBranch(MachineBasicBlock &MBB,
+bool RISCVInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                      MachineBasicBlock *&TBB,
                                      MachineBasicBlock *&FBB,
                                      SmallVectorImpl<MachineOperand> &Cond,

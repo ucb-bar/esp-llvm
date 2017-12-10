@@ -210,23 +210,23 @@ class VTX_READ_128_eg <bits<8> buffer_id, list<dag> pattern>
 // VTX Read from parameter memory space
 //===----------------------------------------------------------------------===//
 
-def VTX_READ_PARAM_8_eg : VTX_READ_8_eg <0,
+def VTX_READ_PARAM_8_eg : VTX_READ_8_eg <3,
   [(set i32:$dst_gpr, (load_param_exti8 ADDRVTX_READ:$src_gpr))]
 >;
 
-def VTX_READ_PARAM_16_eg : VTX_READ_16_eg <0,
+def VTX_READ_PARAM_16_eg : VTX_READ_16_eg <3,
   [(set i32:$dst_gpr, (load_param_exti16 ADDRVTX_READ:$src_gpr))]
 >;
 
-def VTX_READ_PARAM_32_eg : VTX_READ_32_eg <0,
+def VTX_READ_PARAM_32_eg : VTX_READ_32_eg <3,
   [(set i32:$dst_gpr, (load_param ADDRVTX_READ:$src_gpr))]
 >;
 
-def VTX_READ_PARAM_64_eg : VTX_READ_64_eg <0,
+def VTX_READ_PARAM_64_eg : VTX_READ_64_eg <3,
   [(set v2i32:$dst_gpr, (load_param ADDRVTX_READ:$src_gpr))]
 >;
 
-def VTX_READ_PARAM_128_eg : VTX_READ_128_eg <0,
+def VTX_READ_PARAM_128_eg : VTX_READ_128_eg <3,
   [(set v4i32:$dst_gpr, (load_param ADDRVTX_READ:$src_gpr))]
 >;
 
@@ -394,7 +394,7 @@ def FLT_TO_UINT_eg : FLT_TO_UINT_Common<0x9A> {
 def UINT_TO_FLT_eg : UINT_TO_FLT_Common<0x9C>;
 
 def GROUP_BARRIER : InstR600 <
-    (outs), (ins), "  GROUP_BARRIER", [(int_AMDGPU_barrier_local), (int_AMDGPU_barrier_global)], AnyALU>,
+    (outs), (ins), "  GROUP_BARRIER", [(int_r600_group_barrier)], AnyALU>,
     R600ALU_Word0,
     R600ALU_Word1_OP2 <0x54> {
 
@@ -422,11 +422,6 @@ def GROUP_BARRIER : InstR600 <
 
   let ALUInst = 1;
 }
-
-def : Pat <
-	(int_AMDGPU_barrier_global),
-	(GROUP_BARRIER)
->;
 
 //===----------------------------------------------------------------------===//
 // LDS Instructions

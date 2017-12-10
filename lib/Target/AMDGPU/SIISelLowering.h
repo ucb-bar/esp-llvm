@@ -36,7 +36,8 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue LowerFrameIndex(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
-  SDValue LowerFastFDIV(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFastUnsafeFDIV(SDValue Op, SelectionDAG &DAG) const;
+  SDValue lowerFDIV_FAST(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFDIV32(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFDIV64(SDValue Op, SelectionDAG &DAG) const;
   SDValue LowerFDIV(SDValue Op, SelectionDAG &DAG) const;
@@ -122,6 +123,9 @@ public:
 
   unsigned getRegisterByName(const char* RegName, EVT VT,
                              SelectionDAG &DAG) const override;
+
+  MachineBasicBlock *splitKillBlock(MachineInstr &MI,
+                                    MachineBasicBlock *BB) const;
 
   MachineBasicBlock *
   EmitInstrWithCustomInserter(MachineInstr &MI,

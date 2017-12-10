@@ -21,22 +21,13 @@ using namespace llvm;
 using namespace llvm::codeview;
 using namespace llvm::pdb;
 
-namespace {
-struct Header {
-  support::ulittle32_t Version;
-  support::ulittle32_t Signature;
-  support::ulittle32_t Age;
-  PDB_UniqueId Guid;
-};
-}
-
 InfoStream::InfoStream(std::unique_ptr<MappedBlockStream> Stream)
     : Stream(std::move(Stream)) {}
 
 Error InfoStream::reload() {
   codeview::StreamReader Reader(*Stream);
 
-  const Header *H;
+  const HeaderInfo *H;
   if (auto EC = Reader.readObject(H))
     return joinErrors(
         std::move(EC),
@@ -84,20 +75,10 @@ uint32_t InfoStream::getAge() const { return Age; }
 
 PDB_UniqueId InfoStream::getGuid() const { return Guid; }
 
-void InfoStream::setVersion(PdbRaw_ImplVer Ver) {
-  Version = static_cast<uint32_t>(Ver);
-}
-
-void InfoStream::setSignature(uint32_t Sig) { Signature = Sig; }
-
-void InfoStream::setAge(uint32_t Age) { this->Age = Age; }
-
-void InfoStream::setGuid(PDB_UniqueId Guid) { this->Guid = Guid; }
-
 Error InfoStream::commit() {
   StreamWriter Writer(*Stream);
 
-  Header H;
+  HeaderInfo H;
   H.Age = Age;
   H.Signature = Signature;
   H.Version = Version;
