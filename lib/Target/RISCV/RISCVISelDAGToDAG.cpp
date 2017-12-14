@@ -213,7 +213,7 @@ public:
   }
 
   // Override SelectionDAGISel.
-  virtual bool runOnMachineFunction(MachineFunction &MF);
+  bool runOnMachineFunction(MachineFunction &MF) override;
   void Select(SDNode *Node) override;
   virtual void processFunctionAfterISel(MachineFunction &MF);
   bool SelectInlineAsmMemoryOperand(const SDValue &Op, unsigned ConstraintID,

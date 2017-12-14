@@ -217,8 +217,6 @@ unsigned
 RISCVInstrInfo::InsertConstBranchAtInst(MachineBasicBlock &MBB, MachineInstr *I, int64_t offset,
                                ArrayRef<MachineOperand> Cond,
                                const DebugLoc &DL) const {
-  // Shouldn't be a fall through.
-  assert(&MBB && "InsertBranch must not be told to insert a fallthrough");
   assert(Cond.size() <= 4 &&
          "RISCV branch conditions have less than four components!");
 
