@@ -67,9 +67,9 @@ The LLVM RISCV backend is built just as the normal LLVM system.
 	$ git submodule update --init
 	$ mkdir build
 	$ cd build
-  $ cmake -DCMAKE_INSTALL_PREFIX=/opt/riscv -DLLVM_TARGETS_TO_BUILD="RISCV" ../
-  $ make
-  $ make install
+        $ cmake -DCMAKE_INSTALL_PREFIX=/opt/riscv -DLLVM_TARGETS_TO_BUILD="RISCV" ../
+        $ make
+        $ make install
 
 Now if `/opt/riscv` is on your path you should be able to use clang and LLVM with
 RISC-V support.
