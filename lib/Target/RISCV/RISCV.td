@@ -23,6 +23,9 @@ def FeatureStdExtA
                        "'A' (Atomic Instructions)">;
 def HasStdExtA : Predicate<"Subtarget->hasStdExtA()">,
                            AssemblerPredicate<"FeatureStdExtA">;
+                           
+def FeatureXhwacha : SubtargetFeature<"Xhwacha", "HasXhwacha", "true",
+                                "Supports Hwacha Vector Fetch Architecture.">;
 
 def FeatureStdExtF
     : SubtargetFeature<"f", "HasStdExtF", "true",

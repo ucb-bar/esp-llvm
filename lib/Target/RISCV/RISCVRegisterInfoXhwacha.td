@@ -1,21 +1,47 @@
+// Define a register class that contains values of type TYPE and an
+// associated operand called NAME.  SIZE is the size and alignment
+// of the registers and REGLIST is the list of individual registers.
+multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable, int copyCost = 1, int prio = 0> {
+  def AsmOperand : AsmOperandClass {
+    let Name = name;
+    let ParserMethod = "parse"##name;
+    let RenderMethod = "addRegOperands";
+  }
+  def Bit : RegisterClass<"RISCV", types, size, regList> {
+    let Size = size;
+    let isAllocatable = allocatable;
+    let CopyCost = copyCost;
+    let AllocationPriority = prio;
+  }
+  def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
+    let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");
+  }
+}
+
 class VPR32<bits<16> num, string n, list<Register> a> : Register<n> {
   let Namespace = "RISCV";
   let HWEncoding = num;
   let Aliases = a;
 }
+
+class VR32<bits<16> num, string n> : Register<n> {
+  let Namespace = "RISCV";
+  let HWEncoding = num;
+}
+
 // Scalar Registers
 foreach Index = 0-63 in {
-  def vs#Index : RISCVReg<Index, "vs"#Index>, DwarfRegNum<[Index]>;
+  def vs#Index : VR32<Index, "vs"#Index>, DwarfRegNum<[Index]>;
 }
 
 // Address Registers
 foreach Index = 0-31 in {
-  def va#Index : RISCVReg<Index, "va"#Index>, DwarfRegNum<[Index]>;
+  def va#Index : VR32<Index, "va"#Index>, DwarfRegNum<[Index]>;
 }
 
 // Predicate Registers
 foreach Index = 0-15 in { // Colin FIXME: do we need separate regclass
-  def vp#Index : RISCVReg<Index, "vp"#Index>, DwarfRegNum<[Index]>;
+  def vp#Index : VR32<Index, "vp"#Index>, DwarfRegNum<[Index]>;
 }
 
 // Vector Registers
