@@ -35,6 +35,8 @@ struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
 
   const uint32_t *getNoPreservedMask() const override;
 
+  const TargetRegisterClass *getCrossCopyRegClass(const TargetRegisterClass *RC) const override;
+
   void eliminateFrameIndex(MachineBasicBlock::iterator MI, int SPAdj,
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;

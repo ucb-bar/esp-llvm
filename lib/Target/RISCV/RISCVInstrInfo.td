@@ -26,6 +26,11 @@ def SDT_RISCVSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<1, 2>,
                                              SDTCisSameAs<0, 4>,
                                              SDTCisSameAs<4, 5>]>;
 
+def SDT_RVSETCFG            : SDTypeProfile<0, 2,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>]>;
+def SDT_RVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
+                                                  SDTCisVT<1, i64>]>;
+
 // Target-independent nodes, but with target-specific formats.
 def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart,
                            [SDNPHasChain, SDNPOutGlue]>;
@@ -52,6 +57,10 @@ def riscv_tail      : SDNode<"RISCVISD::TAIL", SDT_RISCVCall,
 def riscv_sllw      : SDNode<"RISCVISD::SLLW", SDTIntShiftOp>;
 def riscv_sraw      : SDNode<"RISCVISD::SRAW", SDTIntShiftOp>;
 def riscv_srlw      : SDNode<"RISCVISD::SRLW", SDTIntShiftOp>;
+
+//TODO NAMESPACE to riscv_
+def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
+def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.

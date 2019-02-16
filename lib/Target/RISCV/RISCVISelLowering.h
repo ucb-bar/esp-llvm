@@ -30,6 +30,12 @@ enum NodeType : unsigned {
   CALL,
   SELECT_CC,
   BuildPairF64,
+
+  //Vector instructions we need to have in the dag for calls
+  CALLV,
+  VSETCFG,
+  VSETVL,
+
   SplitF64,
   TAIL,
   // RV64I shifts, directly matching the semantics of the named RISC-V

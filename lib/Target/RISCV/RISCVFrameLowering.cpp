@@ -18,6 +18,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "RISCVXhwachaUtilities.h"
 
 using namespace llvm;
 
@@ -93,6 +94,7 @@ static unsigned getSPReg(const RISCVSubtarget &STI) { return RISCV::X2; }
 void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
+  const RISCVInstrInfo &TII = *STI.getInstrInfo();
 
   MachineFrameInfo &MFI = MF.getFrameInfo();
   auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
@@ -132,6 +134,11 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   if (hasFP(MF))
     adjustReg(MBB, MBBI, DL, FPReg, SPReg,
               StackSize - RVFI->getVarArgsSaveSize(), MachineInstr::FrameSetup);
+
+  bool isOpenCLKernel = isOpenCLKernelFunction(MF.getFunction());
+  if(isOpenCLKernel)
+    BuildMI(MBB, MBBI, DL, TII.get(RISCV::VPSET), RISCV::vp0);
+
 }
 
 void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,

@@ -56,6 +56,14 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   }
 }
 
+const TargetRegisterClass *
+RISCVRegisterInfo::getCrossCopyRegClass(const TargetRegisterClass *RC) const {
+  if(RC == &RISCV::VSRBitRegClass ||
+     RC == &RISCV::VARBitRegClass)
+    return &RISCV::GPRRegClass;
+  return RC;
+}
+
 BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
   BitVector Reserved(getNumRegs());
