@@ -47,7 +47,7 @@ void Scalarization::markAllCDChildren(const BasicBlock* mbb, SmallVector<const I
       BasicBlock::const_iterator MII = bb->begin();
       BasicBlock::const_iterator MIE = bb->end();
       for(; MII != MIE; ++MII) {
-        worklist.push_back(MII);
+        worklist.push_back(&*MII);
       }
     }
     markAllCDChildren((*child_itr)->bb,worklist);
@@ -58,12 +58,12 @@ void Scalarization::Calculate(Function &F) {
   SmallVector<const Instruction*, 128> worklist;
   //Initialization
   for(Function::iterator MBBI = F.begin(), MBBE = F.end(); MBBI != MBBE; ++MBBI) {
-    conv.insert(std::make_pair(MBBI, true));
+    conv.insert(std::make_pair(&*MBBI, true));
     for(BasicBlock::iterator MII = MBBI->begin(), MIE = MBBI->end(); MII != MIE; ++MII) {
-      invar.insert(std::make_pair(MII, true));
+      invar.insert(std::make_pair(&*MII, true));
       if(isa<IntrinsicInst>(MII))
         if(cast<IntrinsicInst>(MII)->getIntrinsicID() == Intrinsic::hwacha_veidx) 
-          worklist.push_back(MII);
+          worklist.push_back(&*MII);
 
       //if(MII->getOpcode() == RISCV::VEIDX) 
         //worklist.push_back(MII);

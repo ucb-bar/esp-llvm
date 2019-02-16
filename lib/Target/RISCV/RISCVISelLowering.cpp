@@ -109,12 +109,14 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
   if(Subtarget.isRV64()){
     setOperationAction(ISD::SETCC, MVT::i16, Promote);//only use 32bit setcc
     setOperationAction(ISD::SETCC, MVT::i32, Legal);//only use 32bit setcc
+    setOperationAction(ISD::Constant, MVT::i16, Promote);
     setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
   }else {
     setOperationAction(ISD::SETCC, MVT::i16, Promote);//only use 32bit setcc
     setOperationAction(ISD::SETCC, MVT::i32, Legal);//folds into brcond
     setOperationAction(ISD::SETCC, MVT::i64, Expand);//only use 32bit
+    setOperationAction(ISD::Constant, MVT::i16, Promote);
     setOperationAction(ISD::Constant, MVT::i32, Legal);
     setOperationAction(ISD::Constant, MVT::i64, Legal);
   }
@@ -395,6 +397,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &tm,
     setLoadExtAction(ISD::EXTLOAD, VT, MVT::f80, Expand);
 
   setLoadExtAction(ISD::EXTLOAD, MVT::f32,  MVT::f16, Expand);
+  setTruncStoreAction(MVT::i16,  MVT::i8, Promote);
   // Floating-point truncation and stores need to be done separately.
   setTruncStoreAction(MVT::f32,  MVT::f16, Expand);
   setTruncStoreAction(MVT::f64,  MVT::f32, Expand);
@@ -1497,14 +1500,13 @@ lowerConstantFP(SDValue Op, SelectionDAG &DAG) const {
         SDValue Result =
           DAG.getExtLoad(ISD::EXTLOAD, dl, OrigVT,
                          DAG.getEntryNode(),
-                         CPIdx, MachinePointerInfo::getConstantPool(),
-                         VT, false, false, false, Alignment);
+                         CPIdx, MachinePointerInfo::getConstantPool(DAG.getMachineFunction()),
+                         VT, Alignment);
         return Result;
       }
       SDValue Result =
         DAG.getLoad(OrigVT, dl, DAG.getEntryNode(), CPIdx,
-                    MachinePointerInfo::getConstantPool(), false, false, false,
-                    Alignment);
+                    MachinePointerInfo::getConstantPool(DAG.getMachineFunction()), Alignment);
       return Result;
   }
   llvm_unreachable("Unable to load FP constant");

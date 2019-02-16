@@ -64,7 +64,7 @@ void MachineScalarization::Calculate(MachineFunction &F) {
   SmallVector<const MachineInstr*, 128> worklist;
   //Initialization
   for(MachineFunction::iterator MBBI = F.begin(), MBBE = F.end(); MBBI != MBBE; ++MBBI) {
-    conv.insert(std::make_pair(MBBI, true));
+    conv.insert(std::make_pair(&*MBBI, true));
     for(MachineBasicBlock::iterator MII = MBBI->begin(), MIE = MBBI->end(); MII != MIE; ++MII) {
       invar.insert(std::make_pair(MII, true));
       if(MII->isVariant())

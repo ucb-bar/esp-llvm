@@ -23,7 +23,7 @@ using namespace llvm;
 char ProgramDependenceGraph::ID = 0;
 INITIALIZE_PASS_BEGIN(ProgramDependenceGraph, "pdg",
                 " Program Dependence graph Construction", true, true)
-INITIALIZE_PASS_DEPENDENCY(PostDominatorTree)
+INITIALIZE_PASS_DEPENDENCY(PostDominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_END(ProgramDependenceGraph, "pdg",
                 " Program Dependence graph Construction", true, true)
@@ -43,8 +43,8 @@ void ProgramDependenceGraph::Calculate(Function &F) {
   //Loop over CFG
   for(Function::iterator A = F.begin(), E = F.end(); A != E; ++A) {
         std::set<std::pair<const BasicBlock*, bool> > condSet;
-        PDGNode *newNode = new PDGNode(A,condSet, this);
-        BBtoCDS.insert(std::make_pair(A,newNode));
+        PDGNode *newNode = new PDGNode(&*A,condSet, this);
+        BBtoCDS.insert(std::make_pair(&*A,newNode));
 
     if(isa<BranchInst>(A->getTerminator())){
       BranchInst *term = (BranchInst*)A->getTerminator();
@@ -52,8 +52,8 @@ void ProgramDependenceGraph::Calculate(Function &F) {
         BasicBlock *B = term->getSuccessor(i);
         //i==0 F branch
         //i==1 T branch
-        if(!PDT->properlyDominates(B,A))
-          s.insert(std::make_pair(std::make_pair(A,B),i));
+        if(!PDT->properlyDominates(B,&*A))
+          s.insert(std::make_pair(std::make_pair(&*A,B),i));
       }
     }
     //TODO: why do we replicate MBB functionality
@@ -157,7 +157,7 @@ void ProgramDependenceGraph::Calculate(Function &F) {
 bool ProgramDependenceGraph::runOnFunction(Function &F) {
   releaseMemory();
 
-  PDT = &getAnalysis<PostDominatorTree>();
+  PDT = &getAnalysis<PostDominatorTreeWrapperPass>().getPostDomTree();
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   MF = &F;
 
@@ -170,7 +170,7 @@ bool ProgramDependenceGraph::runOnFunction(Function &F) {
 
 void ProgramDependenceGraph::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesAll();
-  AU.addRequired<PostDominatorTree>();
+  AU.addRequired<PostDominatorTreeWrapperPass>();
   AU.addRequired<LoopInfoWrapperPass>();
   FunctionPass::getAnalysisUsage(AU);
 }

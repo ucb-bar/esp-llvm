@@ -143,11 +143,13 @@ bool RISCVInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
       // FIXME: add X86-style branch swap
       FBB = TBB;
       //Find the fallthrough block
+      /*
       for(MachineBasicBlock *fall : MBB.successors()) {
         //We only have two sucessors in RISCV
         if(ThisTarget->getMBB() != fall)
           FBB = fall;
       }
+      */
       TBB = ThisTarget->getMBB();
       Cond.push_back(MachineOperand::CreateImm(ThisCond[0].getImm()));
       //push remaining operands
@@ -500,8 +502,8 @@ RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
 }
 
 bool
-RISCVInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
-  switch (MI->getOpcode()) {
+RISCVInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
     case RISCV::VSETCFG :
       {
         // This is now handled at call lowering
@@ -509,8 +511,8 @@ RISCVInstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
       }
     case RISCV::VSETVL :
     {
-      BuildMI(*(MI->getParent()), MI, MI->getDebugLoc(), get(RISCV::LI), MI->getOperand(0).getReg()).addImm(4);
-      MI->getOperand(1).ChangeToRegister(MI->getOperand(0).getReg(),false);
+      BuildMI(*(MI.getParent()), MI, MI.getDebugLoc(), get(RISCV::LI), MI.getOperand(0).getReg()).addImm(4);
+      MI.getOperand(1).ChangeToRegister(MI.getOperand(0).getReg(),false);
     }
   default:
     return false;

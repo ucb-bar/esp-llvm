@@ -59,7 +59,7 @@ namespace {
     void getAnalysisUsage(AnalysisUsage &AU) const override {
       AU.addRequired<CallGraphWrapperPass>();
       AU.addRequired<Scalarization>();
-      AU.addRequired<ScalarEvolution>();
+      AU.addRequired<ScalarEvolutionWrapperPass>();
       ModulePass::getAnalysisUsage(AU);
     }
     virtual CallGraphNode *processOpenCLKernel(Function *F);
@@ -175,7 +175,7 @@ INITIALIZE_PASS_BEGIN(RISCVVectorFetchIROpt, "vfiropt",
                       "RISCV Vector Fetch IROpt", false, false)
 INITIALIZE_PASS_DEPENDENCY(CallGraphWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(Scalarization)
-INITIALIZE_PASS_DEPENDENCY(ScalarEvolution)
+INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_END(RISCVVectorFetchIROpt, "vfiropt",
                     "RISCV Vector Fetch IROpt", false, false)
 
@@ -187,7 +187,7 @@ bool RISCVVectorFetchIROpt::runOnModule(Module &M) {
     CallGraph& cg = getAnalysis<CallGraphWrapperPass>().getCallGraph();
 
     scc_iterator<CallGraph*> cgSccIter = scc_begin(&cg);
-    CallGraphSCC curSCC(&cgSccIter);
+    CallGraphSCC curSCC(cg, &cgSccIter);
     while (!cgSccIter.isAtEnd())
     {
         const std::vector<CallGraphNode*>& nodeVec = *cgSccIter;
@@ -218,8 +218,9 @@ CallGraphNode *RISCVVectorFetchIROpt::VectorFetchOpt(CallGraphNode *CGN) {
 
   if(!F) return nullptr;
   if(F->isIntrinsic()) return nullptr;
+  if(F->empty()) return nullptr;
   MS = &getAnalysis<Scalarization>(*F);
-  SE = &getAnalysis<ScalarEvolution>(*F);
+  SE = &getAnalysis<ScalarEvolutionWrapperPass>(*F).getSE();
 
   if(isOpenCLKernelFunction(*F)) {
     if (CallGraphNode *CGN = processOpenCLKernel(F)) {
@@ -359,12 +360,12 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
         if(newSCEV != SE->getCouldNotCompute()){
           if(found) {
-            addrs.insert(std::make_pair(MII, newSCEV));
+            addrs.insert(std::make_pair(&*MII, newSCEV));
             printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
           } else { // entirely scalar memop so we hoist it differently
             // TODO: Hoisting scalar stores requires checking that all values
             // in SCEV are known at the call site
-            scalars.insert(std::make_pair(MII, newSCEV));
+            scalars.insert(std::make_pair(&*MII, newSCEV));
             printf("HOISTED SCALAR\n");fflush(stdout);fflush(stderr);
           }
         }
@@ -389,10 +390,10 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
         if(newSCEV != SE->getCouldNotCompute()){
           if(found) {
-            addrs.insert(std::make_pair(MII, newSCEV));
+            addrs.insert(std::make_pair(&*MII, newSCEV));
             printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
           } else { // entirely scalar memop so we hoist it differently
-            scalars.insert(std::make_pair(MII, newSCEV));
+            scalars.insert(std::make_pair(&*MII, newSCEV));
             printf("HOISTED SCALAR\n");fflush(stdout);fflush(stderr);
           }
         }
@@ -423,7 +424,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     NF->addAttribute(FTy->getNumParams()+i, Attribute::ByVal);
   }
 
-  F->getParent()->getFunctionList().insert(F, NF);
+  F->getParent()->getFunctionList().insert(F->getIterator(), NF);
   NF->takeName(F);
   // Get the callgraph information that we need to update to reflect our
   // changes.
@@ -458,7 +459,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
          I != E; ++I, ++AI, ++ArgIndex) {
       if(ArgIndex <= FTy->getNumParams()) {
         Args.push_back(*AI); // Old unchanged args
-        argMap[I] = *AI;
+        argMap[&*I] = *AI;
       }
     }
     AttributeSet aregAttrs();
@@ -530,8 +531,8 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   for (Function::arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
     // This is an unmodified argument, move the name and users over to the
     // new version.
-    I->replaceAllUsesWith(I2);
-    I2->takeName(I);
+    (&*I)->replaceAllUsesWith(&*I2);
+    (&*I2)->takeName(&*I);
     ++I2;
     continue;
   }
@@ -540,10 +541,10 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
     Instruction *newMemOp;
     if(isa<LoadInst>(it->first)) {
-      newMemOp = new LoadInst(I2, "vec_addr_base", it->first);
+      newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
     }
     if(isa<StoreInst>(it->first)) {
-      newMemOp = new StoreInst(it->first->getOperand(0), I2, "vec_addr_base", it->first);
+      newMemOp = new StoreInst(it->first->getOperand(0), &*I2, "vec_addr_base", it->first);
     }
     it->first->replaceAllUsesWith(newMemOp);
     newMemOp->takeName(it->first);
@@ -553,7 +554,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
     Instruction *newMemOp;
     if(isa<LoadInst>(it->first)) {
-      newMemOp = new LoadInst(I2, "vec_addr_base", it->first);
+      newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
       it->first->replaceAllUsesWith(newMemOp);
       newMemOp->takeName(it->first);
       it->first->eraseFromParent();

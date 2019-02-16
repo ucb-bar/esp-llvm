@@ -62,6 +62,7 @@ add_llvm_library(LLVMAnalysis
   PHITransAddr.cpp
   PostDominators.cpp
   ProfileSummaryInfo.cpp
+  ProgramDependenceGraph.cpp
   PtrUseVisitor.cpp
   RegionInfo.cpp
   RegionPass.cpp
@@ -70,6 +71,7 @@ add_llvm_library(LLVMAnalysis
   ScalarEvolutionAliasAnalysis.cpp
   ScalarEvolutionExpander.cpp
   ScalarEvolutionNormalization.cpp
+  Scalarization.cpp
   SparsePropagation.cpp
   TargetLibraryInfo.cpp
   TargetTransformInfo.cpp

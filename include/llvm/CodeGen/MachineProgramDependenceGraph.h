@@ -74,12 +74,12 @@ public:
 
 class MachinePDGNode {
 public:
-  const MachineBasicBlock *bb;
+  MachineBasicBlock *bb;
   MachineProgramDependenceGraph::CDSet cds;
   std::set<std::pair<MachinePDGNode*,bool> > children;
   MachineProgramDependenceGraph *parent;
 
-  MachinePDGNode(const MachineBasicBlock *bb, MachineProgramDependenceGraph::CDSet cds, 
+  MachinePDGNode(MachineBasicBlock *bb, MachineProgramDependenceGraph::CDSet cds, 
       MachineProgramDependenceGraph *parent):
     bb(bb), cds(cds), parent(parent) {}
   void addChild(std::pair<MachinePDGNode*,bool> kid){

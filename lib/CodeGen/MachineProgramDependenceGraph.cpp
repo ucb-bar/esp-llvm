@@ -54,13 +54,13 @@ void MachineProgramDependenceGraph::Calculate(MachineFunction &F) {
   //Loop over CFG
   for(MachineFunction::iterator A = F.begin(), E = F.end(); A != E; ++A) {
         std::set<std::pair<const MachineBasicBlock*, bool> > condSet;
-        MachinePDGNode *newNode = new MachinePDGNode(A,condSet, this);
-        BBtoCDS.insert(std::make_pair(A,newNode));
+        MachinePDGNode *newNode = new MachinePDGNode(&*A, condSet, this);
+        BBtoCDS.insert(std::make_pair(&*A,newNode));
 
     //TODO: why do we replicate MBB functionality
     MachineBasicBlock *TBB = nullptr, *FBB = nullptr;
     SmallVector<MachineOperand, 4> Cond;
-    bool B = TII->AnalyzeBranch(*A, TBB, FBB, Cond);
+    bool B = TII->analyzeBranch(*A, TBB, FBB, Cond);
     (void) B;
     //assert(!B && "PDG requires analyzable cfg!");
     if (Cond.empty()) {
@@ -71,10 +71,10 @@ void MachineProgramDependenceGraph::Calculate(MachineFunction &F) {
         // Two-way conditional Branch: This is the case we care about
         //i==0 F branch
         //i==1 T branch
-        if(!PDT->properlyDominates(TBB,A))
-          s.insert(std::make_pair(std::make_pair(A,TBB),1));
-        if(!PDT->properlyDominates(FBB,A))
-          s.insert(std::make_pair(std::make_pair(A,FBB),0));
+        if(!PDT->properlyDominates(TBB,&*A))
+          s.insert(std::make_pair(std::make_pair(&*A,TBB),1));
+        if(!PDT->properlyDominates(FBB,&*A))
+          s.insert(std::make_pair(std::make_pair(&*A,FBB),0));
       } else {
         // Single successor branch shouldn't exist (update terminator first)
       }

@@ -9,8 +9,10 @@
 
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCParser/MCParsedAsmOperand.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCStreamer.h"
@@ -221,12 +223,12 @@ public:
   bool isPairFP64() const { return isReg(PairFP64Reg); }
   bool isPairFP128() const { return isReg(PairFP128Reg); }
   bool isFP128() const { return isReg(FP128Reg); }
-  bool isVSR() const { return isReg() && isRegClass(RISCV::VSRBitRegClassID); }
-  bool isVAR() const { return isReg() && isRegClass(RISCV::VARBitRegClassID); }
-  bool isVPR() const { return isReg() && isRegClass(RISCV::VPRBitRegClassID); }
-  bool isVVR() const { return isReg() && isRegClass(RISCV::VVRBitRegClassID); }
-  bool isVVW() const { return isReg() && isRegClass(RISCV::VVWBitRegClassID); }
-  bool isVVH() const { return isReg() && isRegClass(RISCV::VVHBitRegClassID); }
+  bool isVSR() const { return isReg(VSRReg); }
+  bool isVAR() const { return isReg(VARReg); }
+  bool isVPR() const { return isReg(VPRReg); }
+  bool isVVR() const { return isReg(VVRReg); }
+  bool isVVW() const { return isReg(VVWReg); }
+  bool isVVH() const { return isReg(VVHReg); }
   bool isU4Imm() const { return isImm(0, 15); }
   bool isU12Imm() const { return isImm(0, 4096); }
   bool isS12Imm() const { return isImm(-2048, 2047); }
@@ -327,7 +329,7 @@ private:
   const MCSubtargetInfo &STI;
   MCAsmParser &Parser;
   struct Register {
-    char Prefix;
+    StringRef Prefix;
     unsigned Number;
     SMLoc StartLoc, EndLoc;
   };
@@ -335,11 +337,11 @@ private:
   bool parseRegister(Register &Reg);
   bool parseParenSuffix(StringRef Name, OperandVector &Operands);
 
-  OperandMatchResultTy parseRegister(Register &Reg, char Prefix,
+  OperandMatchResultTy parseRegister(Register &Reg, StringRef Prefix,
                                      const unsigned *Regs,
                                      bool IsAddress = false);
 
-  OperandMatchResultTy parseRegister(OperandVector &Operands, char Prefix,
+  OperandMatchResultTy parseRegister(OperandVector &Operands, StringRef Prefix,
                                      const unsigned *Regs,
                                      RISCVOperand::RegisterKind Kind,
                                      bool IsAddress = false);
@@ -373,25 +375,25 @@ public:
 
   // Used by the TableGen code to parse particular operand types.
   OperandMatchResultTy parseGR32(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', GR32Regs, RISCVOperand::GR32Reg);
+    return parseRegister(Operands, StringRef("x"), GR32Regs, RISCVOperand::GR32Reg);
   }
 
   OperandMatchResultTy parseGR64(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', GR64Regs, RISCVOperand::GR64Reg);
+    return parseRegister(Operands, StringRef("x"), GR64Regs, RISCVOperand::GR64Reg);
   }
 
   OperandMatchResultTy parsePairGR64(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', PairGR64Regs,
+    return parseRegister(Operands, StringRef("x"), PairGR64Regs,
                          RISCVOperand::PairGR64Reg);
   }
 
   OperandMatchResultTy parsePairGR128(OperandVector &Operands) {
-    return parseRegister(Operands, 'x', PairGR128Regs,
+    return parseRegister(Operands, StringRef("x"), PairGR128Regs,
                          RISCVOperand::PairGR128Reg);
   }
 
   OperandMatchResultTy parsePCReg(OperandVector &Operands) {
-    return parseRegister(Operands, 'p', PCReg, RISCVOperand::PCReg);
+    return parseRegister(Operands, StringRef("p"), PCReg, RISCVOperand::PCReg);
   }
 
   OperandMatchResultTy parseFP16(OperandVector &Operands) {
@@ -400,20 +402,20 @@ public:
 
 
   OperandMatchResultTy parseFP32(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', FP32Regs, RISCVOperand::FP32Reg);
+    return parseRegister(Operands, StringRef("f"), FP32Regs, RISCVOperand::FP32Reg);
   }
 
   OperandMatchResultTy parseFP64(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', FP64Regs, RISCVOperand::FP64Reg);
+    return parseRegister(Operands, StringRef("f"), FP64Regs, RISCVOperand::FP64Reg);
   }
 
   OperandMatchResultTy parsePairFP64(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', PairFP64Regs,
+    return parseRegister(Operands, StringRef("f"), PairFP64Regs,
                          RISCVOperand::PairFP64Reg);
   }
 
   OperandMatchResultTy parsePairFP128(OperandVector &Operands) {
-    return parseRegister(Operands, 'f', PairFP128Regs,
+    return parseRegister(Operands, StringRef("f"), PairFP128Regs,
                          RISCVOperand::PairFP128Reg);
   }
 
@@ -506,7 +508,7 @@ public:
       return MatchOperand_NoMatch;
     }
     //fallback
-    return parseRegister(Operands, 'p', PCRRegs, RISCVOperand::PCRReg);
+    return parseRegister(Operands, StringRef("p"), PCRRegs, RISCVOperand::PCRReg);
   }
 
   OperandMatchResultTy
@@ -575,7 +577,7 @@ public:
       return MatchOperand_NoMatch;
     }
     //fallback
-    return parseRegister(Operands, 'p', PCR64Regs, RISCVOperand::PCR64Reg);
+    return parseRegister(Operands, StringRef("p"), PCR64Regs, RISCVOperand::PCR64Reg);
   }
 
 };
@@ -600,13 +602,18 @@ bool RISCVAsmParser::parseRegister(Register &Reg) {
 
   // Check the prefix.
   StringRef Name = Parser.getTok().getString();
-  if (Name.size() < 2)
-    return true;
-  Reg.Prefix = Name[0];
-
-  // Treat the rest of the register name as a register number.
-  if (Name.substr(1).getAsInteger(10, Reg.Number))
-    return true;
+  if(Name[0] == 'v') {
+    Reg.Prefix = Name.substr(0,2);
+    if(Name.substr(2).getAsInteger(10, Reg.Number))
+      return true;
+  } else {
+    if (Name.size() < 2)
+      return true;
+    Reg.Prefix = Name.substr(0,1);
+    // Treat the rest of the register name as a register number.
+    if (Name.substr(1).getAsInteger(10, Reg.Number))
+      return true;
+  }
 
   Reg.EndLoc = Parser.getTok().getLoc();
   Parser.Lex();
@@ -645,11 +652,11 @@ bool RISCVAsmParser::parseParenSuffix(StringRef Name, OperandVector &Operands) {
 // entries indicating an invalid register.  IsAddress says whether the
 // register appears in an address context.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
+RISCVAsmParser::parseRegister(Register &Reg, StringRef Prefix,
                                 const unsigned *Regs, bool IsAddress) {
   if (parseRegister(Reg))
     return MatchOperand_NoMatch;
-  if (Reg.Prefix != Prefix || Reg.Number > 31 || Regs[Reg.Number] == 0) {
+  if (!Reg.Prefix.equals_lower(Prefix) || Reg.Number > 255 || Regs[Reg.Number] == 0) {
     Error(Reg.StartLoc, "invalid register");
     return MatchOperand_ParseFail;
   }
@@ -667,7 +674,7 @@ RISCVAsmParser::parseRegister(Register &Reg, char Prefix,
 // register represented by Regs and IsAddress says whether the register is
 // being parsed in an address context, meaning that %r0 evaluates as 0.
 RISCVAsmParser::OperandMatchResultTy
-RISCVAsmParser::parseRegister(OperandVector &Operands, char Prefix,
+RISCVAsmParser::parseRegister(OperandVector &Operands, StringRef Prefix,
                               const unsigned *Regs,
                               RISCVOperand::RegisterKind Kind, bool IsAddress) {
   Register Reg;
@@ -701,7 +708,7 @@ RISCVAsmParser::parseAddress(OperandVector &Operands, const unsigned *Regs,
 
     // Parse the first register.
     Register Reg;
-    OperandMatchResultTy Result = parseRegister(Reg, 'x', GR32Regs, true);
+    OperandMatchResultTy Result = parseRegister(Reg, StringRef("x"), GR32Regs, true);
     if (Result != MatchOperand_Success)
       return Result;
 
@@ -716,7 +723,7 @@ RISCVAsmParser::parseAddress(OperandVector &Operands, const unsigned *Regs,
       }
 
       Index = Reg.Number;
-      Result = parseRegister(Reg, 'x', GR32Regs, true);
+      Result = parseRegister(Reg, StringRef("x"), GR32Regs, true);
       if (Result != MatchOperand_Success)
         return Result;
     }
@@ -742,12 +749,21 @@ bool RISCVAsmParser::ParseDirective(AsmToken DirectiveID) {
 bool RISCVAsmParser::ParseRegister(unsigned &RegNo, SMLoc &StartLoc,
                                      SMLoc &EndLoc) {
   Register Reg;
+  const MCRegisterInfo *TRC = getContext().getRegisterInfo();
   if (parseRegister(Reg))
     return Error(Reg.StartLoc, "register expected");
-  if (Reg.Prefix == 'x' && Reg.Number < 32)
+  if (Reg.Prefix.equals_lower("x") && Reg.Number < 32)
     RegNo = GR32Regs[Reg.Number];
-  else if (Reg.Prefix == 'f' && Reg.Number < 32)
+  else if (Reg.Prefix.equals_lower("f") && Reg.Number < 32)
     RegNo = FP32Regs[Reg.Number];
+  else if (Reg.Prefix.equals_lower("vs") && Reg.Number < 64)
+    RegNo = TRC->getRegClass(RISCV::VSRBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("va") && Reg.Number < 32)
+    RegNo = TRC->getRegClass(RISCV::VARBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("vp") && Reg.Number < 16)
+    RegNo = TRC->getRegClass(RISCV::VPRBitRegClassID).getRegister(Reg.Number);
+  else if (Reg.Prefix.equals_lower("vv") && Reg.Number < 256)
+    RegNo = TRC->getRegClass(RISCV::VVRBitRegClassID).getRegister(Reg.Number);
   else
     return Error(Reg.StartLoc, "invalid register");
   StartLoc = Reg.StartLoc;

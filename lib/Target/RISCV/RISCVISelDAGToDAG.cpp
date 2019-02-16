@@ -22,10 +22,6 @@ using namespace llvm;
 
 #define DEBUG_TYPE "riscv-isel"
 
-namespace llvm {
-  void initializeRISCVDAGToDAGISelPass(PassRegistry&);
-}
-
 namespace {
 // Used to build addressing modes.
 struct RISCVAddressingMode {
@@ -206,12 +202,10 @@ class RISCVDAGToDAGISel : public SelectionDAGISel {
                               uint64_t UpperVal, uint64_t LowerVal);
 
 public:
-  explicit RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
+  RISCVDAGToDAGISel(RISCVTargetMachine &TM, CodeGenOpt::Level OptLevel)
     : SelectionDAGISel(TM, OptLevel),
       Lowering(*TM.getSubtargetImpl()->getTargetLowering()),
-      Subtarget(*TM.getSubtargetImpl()) {
-        initializeRISCVDAGToDAGISelPass(*PassRegistry::getPassRegistry());
-      }
+      Subtarget(*TM.getSubtargetImpl()) { }
 
   // Override MachineFunctionPass.
   const char *getPassName() const override {
@@ -241,17 +235,6 @@ bool RISCVDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 FunctionPass *llvm::createRISCVISelDag(RISCVTargetMachine &TM,
                                          CodeGenOpt::Level OptLevel) {
   return new RISCVDAGToDAGISel(TM, OptLevel);
-}
-
-static void initializePassOnce(PassRegistry &Registry) {
-  const char *Name = "RISCV DAG->DAG Pattern Instruction Selection";
-  PassInfo *PI = new PassInfo(Name, "riscv-codegen", &SelectionDAGISel::ID,
-                              nullptr, false, false);
-  Registry.registerPass(*PI, true);
-}
-
-void llvm::initializeRISCVDAGToDAGISelPass(PassRegistry &Registry) {
-  CALL_ONCE_INITIALIZATION(initializePassOnce);
 }
 
 // Return true if Val should be selected as a displacement for an address

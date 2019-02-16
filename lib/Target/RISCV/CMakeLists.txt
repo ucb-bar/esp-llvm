@@ -15,15 +15,16 @@ add_llvm_target(RISCVCodeGen
   RISCVBranchSelector.cpp
   RISCVConstantPoolValue.cpp
   RISCVFrameLowering.cpp
-  RISCVInstrInfo.cpp
   RISCVISelDAGToDAG.cpp
   RISCVISelLowering.cpp
-  RISCVMachineFunctionInfo.cpp
+  RISCVInstrInfo.cpp
   RISCVMCInstLower.cpp
+  RISCVMachineFunctionInfo.cpp
   RISCVRegisterInfo.cpp
   RISCVSubtarget.cpp
   RISCVTargetMachine.cpp
-  RISCVMachineFunctionInfo.cpp
+  RISCVVectorFetchOpimizer.cpp
+  RISCVXhwachaUtilities.cpp
   )
 
 add_dependencies(LLVMRISCVCodeGen intrinsics_gen)

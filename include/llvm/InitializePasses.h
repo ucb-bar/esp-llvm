@@ -302,6 +302,7 @@ void initializeSampleProfileLoaderLegacyPassPass(PassRegistry&);
 void initializeSanitizerCoverageModulePass(PassRegistry&);
 void initializeScalarEvolutionWrapperPassPass(PassRegistry&);
 void initializeScalarizerPass(PassRegistry&);
+void initializeScalarizationPass(PassRegistry&);
 void initializeScopedNoAliasAAWrapperPassPass(PassRegistry&);
 void initializeSeparateConstOffsetFromGEPPass(PassRegistry &);
 void initializeShadowStackGCLoweringPass(PassRegistry&);

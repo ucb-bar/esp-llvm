@@ -428,4 +428,5 @@ include "RISCVInstrInfoF.td"
 include "RISCVInstrInfoA.td"
 include "RISCVInstrInfoD.td"
 include "RISCVInstrInfoH.td"
+include "RISCVInstrInfoXhwacha.td"
 

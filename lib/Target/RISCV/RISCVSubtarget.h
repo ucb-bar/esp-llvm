@@ -45,6 +45,7 @@ protected:
   bool HasA;
   bool HasF;
   bool HasD;
+  bool HasXhwacha;
 
   bool UseSoftFloat;
 
@@ -76,6 +77,7 @@ public:
   bool hasA() const { return HasA; };
   bool hasF() const { return HasF; };
   bool hasD() const { return HasD; };
+  bool hasXhwacha() const { return HasXhwacha; };
 
   bool useSoftFloat() const { return UseSoftFloat; }
 
