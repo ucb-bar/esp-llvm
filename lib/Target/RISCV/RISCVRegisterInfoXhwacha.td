@@ -1,23 +1,3 @@
-// Define a register class that contains values of type TYPE and an
-// associated operand called NAME.  SIZE is the size and alignment
-// of the registers and REGLIST is the list of individual registers.
-multiclass RISCVRegClass<string name, list<ValueType> types, int size, dag regList, bit allocatable, int copyCost = 1, int prio = 0> {
-  def AsmOperand : AsmOperandClass {
-    let Name = name;
-    let ParserMethod = "parse"##name;
-    let RenderMethod = "addRegOperands";
-  }
-  def Bit : RegisterClass<"RISCV", types, size, regList> {
-    let Size = size;
-    let isAllocatable = allocatable;
-    let CopyCost = copyCost;
-    let AllocationPriority = prio;
-  }
-  def "" : RegisterOperand<!cast<RegisterClass>(name##"Bit")> {
-    let ParserMatchClass = !cast<AsmOperandClass>(name##"AsmOperand");
-  }
-}
-
 class VPR32<bits<16> num, string n, list<Register> a> : Register<n> {
   let Namespace = "RISCV";
   let HWEncoding = num;
@@ -829,17 +809,53 @@ foreach Index = 0-255 in {
   def vv254H : VPR32<254, "vvh254", []>, DwarfRegNum<[254]>;
   def vv255H : VPR32<255, "vvh255", []>, DwarfRegNum<[255]>;
 
-// Register Sets
-// Don't allow copying of vector registers by setting CopyCost
-  defm VSR : RISCVRegClass<"VSR", [i64,f64], 64, (add
-    (sequence "vs%u", 0, 63)), 1, -1>;
-  defm VAR : RISCVRegClass<"VAR", [i64], 64, (add
-    (sequence "va%u", 0, 31)), 1, -1>;
-  defm VPR : RISCVRegClass<"VPR", [i1], 64, (add
-    (sequence "vp%u", 0, 15)), 1, -1>;
-  defm VVR : RISCVRegClass<"VVR", [i64,f64], 64, (add
-    (sequence "vv%uD", 0, 255)), 1, -1,3>;
-  defm VVW : RISCVRegClass<"VVW", [i64,f64], 64, (add
-    (sequence "vv%uW", 0, 255)), 1, -1,2>;
-  defm VVH : RISCVRegClass<"VVH", [i64,f64], 64, (add
-    (sequence "vv%uH", 0, 255)), 1, -1,1>;
+  // Register Sets
+  // Don't allow copying of vector registers by setting CopyCost
+  def VSR : RegisterClass<"RISCV", [i64,f64], 64, (add
+    (sequence "vs%u", 0, 63))>
+  {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 0;
+  }
+
+  def VAR : RegisterClass<"RISCV", [i64], 64, (add
+    (sequence "va%u", 0, 31))>
+   {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 0;
+  }
+
+  def VPR : RegisterClass<"RISCV", [i1], 64, (add
+    (sequence "vp%u", 0, 15))>
+   {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 0;
+  }
+
+  def VVR : RegisterClass<"RISCV", [i64,f64], 64, (add
+    (sequence "vv%uD", 0, 255))>
+  {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 3;
+  }
+
+  def VVW : RegisterClass<"RISCV", [i64,f64], 64, (add
+    (sequence "vv%uW", 0, 255))>
+   {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 2;
+  }
+
+  def VVH : RegisterClass<"RISCV", [i64,f64], 64, (add
+    (sequence "vv%uH", 0, 255))>
+   {
+    let isAllocatable = 1;
+    let CopyCost = -1;
+    let AllocationPriority = 1;
+  }
+

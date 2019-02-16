@@ -10,7 +10,7 @@
 //V-Type, simple instr type for vector pseudo instrs
 class InstV<dag outs, dag ins, string mnemonic, list<dag> pattern>
   : RVInst<outs, ins,
-                mnemonic, pattern> {
+                mnemonic, pattern, InstFormatOther> {
   let isPseudo = 1;
   let isCodeGenOnly = 1;
 
