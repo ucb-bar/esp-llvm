@@ -42,6 +42,14 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   return CSR_SaveList;
 }
 
+const TargetRegisterClass *
+RISCVRegisterInfo::getCrossCopyRegClass(const TargetRegisterClass *RC) const {
+  if(RC == &RISCV::VSRBitRegClass ||
+     RC == &RISCV::VARBitRegClass)
+    return &RISCV::GPRRegClass;
+  return RC;
+}
+
 BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
 
