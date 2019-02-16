@@ -1,4 +1,5 @@
-class VPR32<bits<16> num, string n, list<Register> a> : RISCVReg<n> {
+class VPR32<bits<16> num, string n, list<Register> a> : Register<n> {
+  let Namespace = "RISCV";
   let HWEncoding = num;
   let Aliases = a;
 }
