@@ -735,6 +735,11 @@ public:
     return hasProperty(MCID::Convergent, Type);
   }
 
+  /// Return true if this instruction is variant.
+  bool isVariant(QueryType Type = AnyInBundle) const {
+    return hasProperty(MCID::Variant, Type);
+  }
+
   /// Returns true if the specified instruction has a delay slot
   /// which must be filled by the code generator.
   bool hasDelaySlot(QueryType Type = AnyInBundle) const {
