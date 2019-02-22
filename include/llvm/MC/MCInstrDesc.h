@@ -149,6 +149,7 @@ enum Flag {
   ExtractSubreg,
   InsertSubreg,
   Convergent,
+  Variant,
   Add,
   Trap,
   VariadicOpsAreDefs,

@@ -78,8 +78,14 @@ namespace llvm {
   /// MachineDominators - This pass is a machine dominators analysis pass.
   extern char &MachineDominatorsID;
 
-/// MachineDominanaceFrontier - This pass is a machine dominators analysis pass.
+  /// MachineDominanaceFrontier - This pass is a machine dominators analysis pass.
   extern char &MachineDominanceFrontierID;
+
+  /// MachineProgramDependenceGraph - This pass constructs a program dependence graph.
+  extern char &MachineProgramDependenceGraphID;
+
+  /// MachineScalarization - This pass analyses convergence and scalarization.
+  extern char &MachineScalarizationID;
 
   /// MachineRegionInfo - This pass computes SESE regions for machine functions.
   extern char &MachineRegionInfoPassID;
