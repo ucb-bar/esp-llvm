@@ -91,8 +91,36 @@ void RISCVInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     return;
   }
 
-  // FPR->FPR copies
   unsigned Opc;
+
+  //Vector register copies
+  if(RISCV::VSRRegClass.contains(DstReg) &&
+           RISCV::GPRRegClass.contains(SrcReg)) {
+    Opc = RISCV::VMSS_X;
+    BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if(RISCV::VARRegClass.contains(DstReg) &&
+           RISCV::GPRRegClass.contains(SrcReg)) {
+    Opc = RISCV::VMSA;
+    BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
+      .addReg(SrcReg, getKillRegState(KillSrc));
+    return;
+  } else if(RISCV::VSRRegClass.contains(DstReg, SrcReg)) {
+    Opc = RISCV::VADDI;
+  } else if (RISCV::VVRRegClass.contains(DstReg, SrcReg) ||
+      RISCV::VVWRegClass.contains(DstReg, SrcReg) ||
+      RISCV::VVHRegClass.contains(DstReg, SrcReg) ){
+    Opc = RISCV::VADD_VVS;
+    BuildMI(MBB, MBBI, DL, get(Opc), DstReg)
+      .addReg(SrcReg, getKillRegState(KillSrc))
+      .addReg(RISCV::vs0, getKillRegState(KillSrc))
+      .addImm(0)
+      .addReg(RISCV::vp0); //TODO: do copy's need to be predicated
+    return;
+  }
+
+  // FPR->FPR copies
   if (RISCV::FPR32RegClass.contains(DstReg, SrcReg))
     Opc = RISCV::FSGNJ_S;
   else if (RISCV::FPR64RegClass.contains(DstReg, SrcReg))
@@ -465,14 +493,10 @@ bool RISCVInstrInfo::isAsCheapAsAMove(const MachineInstr &MI) const {
 bool RISCVInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
   switch (MI.getOpcode()) {
     case RISCV::VSETCFG :
-      {
-      //size_t numRegs = MI->getParent()->getParent()->getRegInfo().getUsedPhysRegsMask().count();
-      // FIXME: count the number of allocated regs
-      size_t numRegs = 4;
-      MI.getOperand(0).setImm(numRegs);
-      MI.getOperand(1).setImm(1);
+    {
+      // This is now handled at call lowering
       return true;
-      }
+    }
     case RISCV::VSETVL :
     {
       BuildMI(*(MI.getParent()), MI, MI.getDebugLoc(), get(RISCV::PseudoLI), MI.getOperand(0).getReg()).addImm(4);
