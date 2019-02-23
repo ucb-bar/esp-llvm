@@ -58,8 +58,8 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 
 const TargetRegisterClass *
 RISCVRegisterInfo::getCrossCopyRegClass(const TargetRegisterClass *RC) const {
-  if(RC == &RISCV::VSRBitRegClass ||
-     RC == &RISCV::VARBitRegClass)
+  if(RC == &RISCV::VSRRegClass ||
+     RC == &RISCV::VARRegClass)
     return &RISCV::GPRRegClass;
   return RC;
 }

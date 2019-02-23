@@ -8,17 +8,30 @@
 //===----------------------------------------------------------------------===//
 
 
-def imm64sx32 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<32>(N->getSExtValue());}]> {
+def imm64sx32 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<32>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<32>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<32>";
 }
 
-def imm64 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<64>(N->getSExtValue());}]> {
+def imm64 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<64>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<64>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<64>";
 }
+
+// Transformation Function - get the lower 32 bits.
+def LO32 : SDNodeXForm<imm, [{
+    return getImm(N, N->getZExtValue() & 0xFFFFFFFF);
+}]>;
+
+// Transformation Function - get the higher 32 bits for large immediate loading
+def HI32 : SDNodeXForm<imm, [{
+    uint64_t value = N->getZExtValue() & 0x0000080000000 ? 
+                     (N->getZExtValue() >> 32)+1:
+                     (N->getZExtValue() >> 32);
+    return getImm(N, value);
+}]>;
 
 //V-Type, simple instr type for vector pseudo instrs
 class InstV<dag outs, dag ins, string opcodestr, string argstr, list<dag> pattern>
@@ -55,14 +68,6 @@ def SDT_RVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
 
 def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
 def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
-
-
-def memreg64 : Operand<i64> {
-  let MIOperandInfo = (ops GPR);
-  //let EncoderMethod = "getMemRegEncoding";
-  let OperandType = "OPERAND_MEMORY";
-  let PrintMethod = "printMemRegOperand";
-}
 
 def SDT_RISCVVSETCFG   : SDTypeProfile<1, 4,[SDTCisVT<0, i64>,
                               SDTCisVT<1, i64>,
@@ -172,7 +177,7 @@ multiclass InstVR4<string name, SDPatternOperator op> {
   }
 }
 
- def HasXhwacha :Predicate<"Subtarget.hasXhwacha()">,
+ def HasXhwacha :Predicate<"Subtarget->hasXhwacha()">,
                  AssemblerPredicate<"FeatureXhwacha">;
 
 //all bits in this file should be considered fake
@@ -188,7 +193,7 @@ let isCodeGenOnly = 1, isPseudo = 1 in {
 }
 
 let isCall = 1, isCodeGenOnly = 1 in {
-    def VFetch : InstV< (outs), (ins memreg64:$target), "vf", "$target", [(r_callv regaddr:$target)]>, Requires<[HasXhwacha]>;
+    def VFetch : InstV< (outs), (ins GPR:$target), "vf", "$target", [(r_callv regaddr:$target)]>, Requires<[HasXhwacha]>;
   }
 
 //Moves

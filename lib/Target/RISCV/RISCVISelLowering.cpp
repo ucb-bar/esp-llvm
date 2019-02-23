@@ -17,6 +17,7 @@
 #include "RISCVRegisterInfo.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "RISCVXhwachaUtilities.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -155,6 +156,13 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
     for (auto Op : FPOpToExtend)
       setOperationAction(Op, MVT::f32, Expand);
   }
+
+  if(Subtarget.hasXhwacha()) {
+    // Constnat loading can be handled very quickly in hwacha worker thread
+    setOperationAction(ISD::ConstantFP, MVT::f32, Custom);
+    setOperationAction(ISD::ConstantFP, MVT::f64, Custom);
+  }
+
 
   if (Subtarget.hasStdExtF() && Subtarget.is64Bit())
     setOperationAction(ISD::BITCAST, MVT::i32, Custom);
@@ -1661,6 +1669,16 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Analyze the operands of the call, assigning locations to each operand.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
+
+  bool isOpenCLKernel = false;
+  NamedMDNode* openCLMetadata;
+  if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
+    auto *CalleeFn = cast<Function>(E->getGlobal());
+    isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+    openCLMetadata = CalleeFn->getParent()->getNamedMetadata("hwacha.vfcfg");
+  }
+
+
   analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI);
 
   // Check if it's really possible to do a tail call.
@@ -1819,14 +1837,24 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   if(isOpenCLKernel) {
+    // Read out the configuration from metadata
+    if(openCLMetadata->getNumOperands() < 2)
+      llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
+    auto* vfcfgD = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(0))->getValue());
+    auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(1))->getValue());
+    auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(2))->getValue());
+    auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(3))->getValue());
+
     SmallVector<SDValue, 8> vsetcfgOps;
-    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
-    vsetcfgOps.push_back(DAG.getConstant(0, DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(vfcfgD->getValue(), DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(vfcfgS->getValue(), DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(vfcfgH->getValue(), DL, MVT::i64, true));
+    vsetcfgOps.push_back(DAG.getConstant(vfcfgP->getValue(), DL, MVT::i64, true));
     vsetcfgOps.push_back(Chain);
     vsetcfgOps.push_back(Glue);
-    Chain = SDValue(DAG.getMachineNode(RISCV::VSETCFG, DL, MVT::Other, MVT::Glue,
-          vsetcfgOps), 0);
-    Glue = Chain.getValue(1);
+    Chain = SDValue(DAG.getMachineNode(RISCV::VSETCFG, DL, MVT::i64, MVT::Other, MVT::Glue,
+          vsetcfgOps), 1);
+    Glue = Chain.getValue(2);
     //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
     Chain = SDValue(DAG.getMachineNode(RISCV::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
         DAG.getConstant(0, DL, MVT::i64, true), Chain, Glue), 1);// take the chain as res

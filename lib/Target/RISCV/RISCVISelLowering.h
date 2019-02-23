@@ -35,6 +35,11 @@ enum NodeType : unsigned {
   CALLV,
   VSETCFG,
   VSETVL,
+  VLUI,
+  VLI,
+  VADDI,
+  HI32,
+  LO32,
 
   SplitF64,
   TAIL,
