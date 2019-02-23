@@ -112,3 +112,10 @@ void RISCVInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
       static_cast<RISCVFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
   O << RISCVFPRndMode::roundingModeToString(FRMArg);
 }
+
+void RISCVInstPrinter::printPredOperand(const MCInst *MI, unsigned OpNo,
+                                   const MCSubtargetInfo &STI, raw_ostream &O) {
+  if(MI->getOperand(OpNo).getImm() == 1)
+    O << "!";
+  printOperand(MI, OpNo+1, STI, O, 0);
+}
