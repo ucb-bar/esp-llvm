@@ -28,6 +28,7 @@ add_llvm_target(RISCVCodeGen
   RISCVTargetMachine.cpp
   RISCVTargetObjectFile.cpp
   RISCVXhwachaUtilities.cpp
+  RISCVVectorFetchOpimizer.cpp
   )
 
 add_subdirectory(AsmParser)

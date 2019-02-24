@@ -21,6 +21,12 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/CodeGen/MachineProgramDependenceGraph.h"
+#include "llvm/CodeGen/MachineProgramDependenceGraphPrinter.h"
+#include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Pass.h"
+
 using namespace llvm;
 
 extern "C" void LLVMInitializeRISCVTarget() {
@@ -28,6 +34,13 @@ extern "C" void LLVMInitializeRISCVTarget() {
   RegisterTargetMachine<RISCVTargetMachine> Y(getTheRISCV64Target());
   auto PR = PassRegistry::getPassRegistry();
   initializeRISCVExpandPseudoPass(*PR);
+}
+
+namespace llvm {
+  ModulePass *createRISCVVectorFetchIROpt();
+  MachineFunctionPass *createRISCVVectorFetchMachOpt();
+  MachineFunctionPass *createRISCVVectorFetchRegFix();
+  MachineFunctionPass *createRISCVVectorFetchPreEmitOpt();
 }
 
 static std::string computeDataLayout(const Triple &TT) {
@@ -64,7 +77,9 @@ namespace {
 class RISCVPassConfig : public TargetPassConfig {
 public:
   RISCVPassConfig(RISCVTargetMachine &TM, PassManagerBase &PM)
-      : TargetPassConfig(TM, PM) {}
+      : TargetPassConfig(TM, PM) {
+        EnableTailMerge = false;
+      }
 
   RISCVTargetMachine &getRISCVTargetMachine() const {
     return getTM<RISCVTargetMachine>();
@@ -75,6 +90,9 @@ public:
   void addPreEmitPass() override;
   void addPreEmitPass2() override;
   void addPreRegAlloc() override;
+
+  bool addPreISel() override;
+  void addPostRegAlloc() override;
 };
 }
 
@@ -93,7 +111,10 @@ bool RISCVPassConfig::addInstSelector() {
   return false;
 }
 
-void RISCVPassConfig::addPreEmitPass() { addPass(&BranchRelaxationPassID); }
+void RISCVPassConfig::addPreEmitPass() {
+  addPass(&BranchRelaxationPassID);
+  addPass(createRISCVVectorFetchPreEmitOpt());
+}
 
 void RISCVPassConfig::addPreEmitPass2() {
   // Schedule the expansion of AMOs at the last possible moment, avoiding the
@@ -104,4 +125,18 @@ void RISCVPassConfig::addPreEmitPass2() {
 
 void RISCVPassConfig::addPreRegAlloc() {
   addPass(createRISCVMergeBaseOffsetOptPass());
+  addPass(createMachineProgramDependenceGraphPrinterPass());
+  addPass(createRISCVVectorFetchMachOpt(), false, true);
+}
+
+bool RISCVPassConfig::addPreISel() {
+  addPass(createRISCVVectorFetchIROpt());
+  addPass(createDeadCodeEliminationPass());
+  addPass(createDeadArgEliminationPass());
+  return false;
+}
+
+
+void RISCVPassConfig::addPostRegAlloc() {
+  addPass(createRISCVVectorFetchRegFix());
 }
