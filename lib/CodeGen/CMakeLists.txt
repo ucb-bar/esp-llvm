@@ -86,8 +86,11 @@ add_llvm_library(LLVMCodeGen
   MachineOutliner.cpp
   MachinePipeliner.cpp
   MachinePostDominators.cpp
+  MachineProgramDependenceGraph.cpp
+  MachineProgramDependenceGraphPrinter.cpp
   MachineRegionInfo.cpp
   MachineRegisterInfo.cpp
+  MachineScalarization.cpp
   MachineScheduler.cpp
   MachineSink.cpp
   MachineSSAUpdater.cpp
