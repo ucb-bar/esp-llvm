@@ -188,13 +188,7 @@ struct RISCVOperand : public MCParsedAsmOperand {
     Token,
     Register,
     Immediate,
-    SystemRegister,
-    VSRReg,
-    VARReg,
-    VPRReg,
-    VVRReg,
-    VVWReg,
-    VVHReg
+    SystemRegister
   } Kind;
 
   bool IsRV64;
@@ -252,12 +246,6 @@ public:
   bool isImm() const override { return Kind == Immediate; }
   bool isMem() const override { return false; }
   bool isSystemRegister() const { return Kind == SystemRegister; }
-  bool isVSR() const { return Kind == VSRReg; }
-  bool isVAR() const { return Kind == VARReg; }
-  bool isVPR() const { return Kind == VPRReg; }
-  bool isVVR() const { return Kind == VVRReg; }
-  bool isVVW() const { return Kind == VVWReg; }
-  bool isVVH() const { return Kind == VVHReg; }
 
   static bool evaluateConstantImm(const MCExpr *Expr, int64_t &Imm,
                                   RISCVMCExpr::VariantKind &VK) {

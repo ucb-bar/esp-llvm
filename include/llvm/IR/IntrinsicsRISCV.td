@@ -69,8 +69,4 @@ def int_riscv_masked_cmpxchg_i64
                                 llvm_i64_ty, llvm_i64_ty],
                 [IntrArgMemOnly, NoCapture<0>, ImmArg<4>]>;
 
-let TargetPrefix = "hwacha" in {
-  def int_hwacha_veidx : Intrinsic<[llvm_i64_ty], [], []>;
-}
-
 } // TargetPrefix = "riscv"
