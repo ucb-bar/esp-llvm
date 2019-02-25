@@ -595,7 +595,6 @@ MachineFunctionPass *llvm::createRISCVVectorFetchMachOpt() {
   return new RISCVVectorFetchMachOpt();
 }
 
-
 bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
@@ -605,8 +604,8 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   TRI = MF.getSubtarget().getRegisterInfo();
   MRI = &MF.getRegInfo();
 
-  if(isOpenCLKernelFunction(*(MF.getFunction()))) {
-    unsigned defPredReg = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+  if(isOpenCLKernelFunction(MF.getFunction())) {
+    unsigned defPredReg = MRI->createVirtualRegister(&RISCV::VPRRegClass);
     processOpenCLKernel(MF, defPredReg);
     convertToPredicates(MF, defPredReg);
   }
@@ -614,71 +613,74 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   return Changed;
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredReg,
     unsigned VVV, unsigned VVS, unsigned VSV, unsigned VSS, unsigned SSS) {
   if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
     //Can only handle zero case
-    assert((I->getOperand(1).getReg() == RISCV::zero ||
-            I->getOperand(1).getReg() == RISCV::zero_64) &&
+    assert((I->getOperand(1).getReg() == RISCV::X0 ||
+            I->getOperand(1).getReg() == RISCV::X0) &&
            "Cannot convert binop with phys reg arg that is non zero");
     I->getOperand(1).setReg(RISCV::vs0);
     if(MS->invar[I]) {
       I->setDesc(TII->get(SSS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
     } else {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VSS));
       } else {
         I->setDesc(TII->get(VSV));
       }
       // Destination is always vector
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
       I->addOperand(MachineOperand::CreateImm(0));
       I->addOperand(MachineOperand::CreateReg(defPredReg, false));
     }
   } else if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
     //Can only handle zero case
-    assert((I->getOperand(2).getReg() == RISCV::zero ||
-            I->getOperand(2).getReg() == RISCV::zero_64) &&
+    assert((I->getOperand(2).getReg() == RISCV::X0 ||
+            I->getOperand(2).getReg() == RISCV::X0) &&
            "Cannot convert binop with phys reg arg that is non zero");
     I->getOperand(2).setReg(RISCV::vs0);
     if(MS->invar[I]) {
       I->setDesc(TII->get(SSS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
     } else {
-      if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+      if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VSS));
       } else {
         I->setDesc(TII->get(VVS));
       }
       // Destination is always vector
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
       I->addOperand(MachineOperand::CreateImm(0));
       I->addOperand(MachineOperand::CreateReg(defPredReg, false));
     }
   } else if(MS->invar[I]) {
     I->setDesc(TII->get(SSS));
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
   } else {
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VSS));
       } else {
         I->setDesc(TII->get(VSV));
       }
     } else {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VVS));
       } else {
         I->setDesc(TII->get(VVV));
       }
     }
     // Destination is always vector
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
   }
 }
+
+
 
 void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
     const TargetRegisterClass *destRC, unsigned defPredReg,
@@ -686,29 +688,29 @@ void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
   const TargetRegisterClass *destClass = destRC;
   if(MS->invar[I]) {
     //if we were invariant but have a vector src it means there was a vector load
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass ||
-       MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass) {
-      destClass = &RISCV::VVRBitRegClass;
-    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass ||
-              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWBitRegClass) {
-      destClass = &RISCV::VVWBitRegClass;
-    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass ||
-              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHBitRegClass) {
-      destClass = &RISCV::VVHBitRegClass;
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
+       MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRRegClass) {
+      destClass = &RISCV::VVRRegClass;
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
+              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWRegClass) {
+      destClass = &RISCV::VVWRegClass;
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass ||
+              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHRegClass) {
+      destClass = &RISCV::VVHRegClass;
     } else
-      destClass = &RISCV::VSRBitRegClass;
+      destClass = &RISCV::VSRRegClass;
   }
-  if(destClass == &RISCV::VVRBitRegClass ||
-     destClass == &RISCV::VVWBitRegClass ||
-     destClass == &RISCV::VVHBitRegClass) {
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+  if(destClass == &RISCV::VVRRegClass ||
+     destClass == &RISCV::VVWRegClass ||
+     destClass == &RISCV::VVHRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VSS));
       } else {
         I->setDesc(TII->get(VSV));
       }
     } else {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VVS));
       } else {
         I->setDesc(TII->get(VVV));
@@ -722,6 +724,7 @@ void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
   MRI->setRegClass(I->getOperand(0).getReg(), destClass);
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeFPTriOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
         unsigned VVVV, unsigned VVVS, unsigned VVSV,
         unsigned VVSS, unsigned VSVV, unsigned VSVS, unsigned VSSV,
@@ -729,47 +732,47 @@ void RISCVVectorFetchMachOpt::vectorizeFPTriOp(MachineInstr *I, const TargetRegi
   const TargetRegisterClass *destClass = destRC;
   if(MS->invar[I]) {
     //if we were invariant but have a vector src it means there was a vector load
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass ||
-       MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass ||
-       MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVRBitRegClass) {
-      destClass = &RISCV::VVRBitRegClass;
-    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass ||
-              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWBitRegClass ||
-              MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVWBitRegClass) {
-      destClass = &RISCV::VVWBitRegClass;
-    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass ||
-              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHBitRegClass ||
-              MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVHBitRegClass) {
-      destClass = &RISCV::VVHBitRegClass;
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
+       MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRRegClass ||
+       MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVRRegClass) {
+      destClass = &RISCV::VVRRegClass;
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
+              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWRegClass ||
+              MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVWRegClass) {
+      destClass = &RISCV::VVWRegClass;
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass ||
+              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHRegClass ||
+              MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVHRegClass) {
+      destClass = &RISCV::VVHRegClass;
     } else
-      destClass = &RISCV::VSRBitRegClass;
+      destClass = &RISCV::VSRRegClass;
   }
-  if(destClass == &RISCV::VVRBitRegClass ||
-     destClass == &RISCV::VVWBitRegClass ||
-     destClass == &RISCV::VVHBitRegClass) {
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass) {
+  if(destClass == &RISCV::VVRRegClass ||
+     destClass == &RISCV::VVWRegClass ||
+     destClass == &RISCV::VVHRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
+        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass) {
           I->setDesc(TII->get(VSSS));
         } else {
           I->setDesc(TII->get(VSSV));
         }
       } else {
-        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass) {
+        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass) {
           I->setDesc(TII->get(VSVS));
         } else {
           I->setDesc(TII->get(VSVV));
         }
       }
     } else {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
-        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass) {
+      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
+        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass) {
           I->setDesc(TII->get(VVSS));
         } else {
           I->setDesc(TII->get(VVSV));
         }
       } else {
-        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass) {
+        if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass) {
           I->setDesc(TII->get(VVVS));
         } else {
           I->setDesc(TII->get(VVVV));
@@ -784,26 +787,27 @@ void RISCVVectorFetchMachOpt::vectorizeFPTriOp(MachineInstr *I, const TargetRegi
   MRI->setRegClass(I->getOperand(0).getReg(), destClass);
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPredReg,
     unsigned IMM, unsigned VVS, unsigned SSS) {
   if(MS->invar[I]) {
     // Generate one instruction
     // vADDi vsdest, vssrc, imm
     I->setDesc(TII->get(IMM));
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
   } else {
     // Generate two instructions
     // 1. vaddi vstemp, vs0, imm
-    unsigned vstemp = MRI->createVirtualRegister(&RISCV::VSRBitRegClass);
+    unsigned vstemp = MRI->createVirtualRegister(&RISCV::VSRRegClass);
     MachineOperand &imm = I->getOperand(2);
     BuildMI(*I->getParent(), I, I->getDebugLoc(), TII->get(RISCV::VADDI), vstemp).addReg(RISCV::vs0).addImm(imm.getImm());
     // 1. vADD vvdest, vssrc, vstemp
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       I->setDesc(TII->get(SSS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
     } else {
       I->setDesc(TII->get(VVS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
       I->addOperand(MachineOperand::CreateImm(0));
       I->addOperand(MachineOperand::CreateReg(defPredReg, false));
     }
@@ -811,17 +815,18 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
   }
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VEC, unsigned IDX, unsigned SCALAR) {
   //TODO: support invariant memops becoming scalar memops
-  if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+  if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {
     I->setDesc(TII->get(VEC));
     MRI->setRegClass(I->getOperand(0).getReg(), destRC);
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
-  } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+  } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
     I->setDesc(TII->get(SCALAR));
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
   } else {
     I->setDesc(TII->get(IDX));
     // Destination is always vector
@@ -834,10 +839,11 @@ void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegis
   }
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeStoreOp(MachineInstr *I, unsigned defPredReg,
     unsigned VEC, unsigned IDX) {
   //TODO: support invariant memops becoming scalar memops
-  if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass) {
+  if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {
     I->setDesc(TII->get(VEC));
     I->RemoveOperand(2);
     I->addOperand(MachineOperand::CreateImm(0));
@@ -850,28 +856,29 @@ void RISCVVectorFetchMachOpt::vectorizeStoreOp(MachineInstr *I, unsigned defPred
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
     if(TRI->isPhysicalRegister(I->getOperand(0).getReg())) {
-      assert((I->getOperand(0).getReg() == RISCV::zero) &&
+      assert((I->getOperand(0).getReg() == RISCV::X0) &&
         "Cannot save phyiscal registers that are not zero");
       //create zero vector register
-      unsigned vvtemp = MRI->createVirtualRegister(&RISCV::VVRBitRegClass);
+      unsigned vvtemp = MRI->createVirtualRegister(&RISCV::VVRRegClass);
       BuildMI(*I->getParent(), I, I->getDebugLoc(), TII->get(RISCV::VADD_VSS), vvtemp).addReg(RISCV::vs0).addReg(RISCV::vs0).addImm(0).addReg(defPredReg);
       I->getOperand(0).ChangeToRegister(vvtemp, false);
     }
   }
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeCvtOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VV, unsigned VS, unsigned SS) {
   const TargetRegisterClass *destClass = destRC;
   if(MS->invar[I]) {
     //if we were invariant but have a vector src it means there was a vector load
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass) {
       destClass = destRC;
     } else
-      destClass = &RISCV::VSRBitRegClass;
+      destClass = &RISCV::VSRRegClass;
   }
   if(destClass == destRC) {
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       I->setDesc(TII->get(VS));
     } else {
       I->setDesc(TII->get(VV));
@@ -884,19 +891,21 @@ void RISCVVectorFetchMachOpt::vectorizeCvtOp(MachineInstr *I, const TargetRegist
   MRI->setRegClass(I->getOperand(0).getReg(), destClass);
 }
 
+
 void RISCVVectorFetchMachOpt::vectorizeIntCvtOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VV, unsigned VS, unsigned SS) {
   if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
     //handle cvt from zero specially
-    assert((I->getOperand(1).getReg() == RISCV::zero) &&
+    assert((I->getOperand(1).getReg() == RISCV::X0) &&
            "Cannot convert op with phys reg arg that is non zero");
     I->setDesc(TII->get(SS));
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
     I->getOperand(1).setReg(RISCV::vs0);
     return;
   }
   vectorizeCvtOp(I, destRC, defPredReg, VV, VS, SS);
 }
+
 
 unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned VV, unsigned VS, unsigned SV, unsigned SS) {
   if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
@@ -904,16 +913,16 @@ unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned V
     if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
       assert(I->getOperand(2).getReg() == RISCV::vs0);
       return SS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
       return SS;
     } else {
       return SV;
     }
-  } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass){
+  } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass){
     if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
       assert(I->getOperand(2).getReg() == RISCV::vs0);
       return SS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
       return SS;
     } else {
       return SV;
@@ -922,13 +931,14 @@ unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned V
     if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
       assert(I->getOperand(2).getReg() == RISCV::vs0);
       return VS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
       return VS;
     } else {
       return VV;
     }
   }
 }
+
 
 void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned defPredReg) {
   std::vector<unsigned> vregs;
@@ -943,26 +953,26 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
     // In each BB change each instruction
     for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
       printf("Inst:");I->dump();fflush(stdout);fflush(stderr);
-      printf("invar?%d\n",MS->invar[I]);fflush(stdout);fflush(stderr);
+      printf("invar?%d\n",MS->invar[&*I]);fflush(stdout);fflush(stderr);
       // All inputs are vs registers and outputs are vv registers
       switch(I->getOpcode()) {
         case TargetOpcode::COPY : // TODO: look at whether to copy into different reg class based on subreg
           // If this is physical to virt copy do nothing
           if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
-            if(RISCV::VARBitRegClass.contains(I->getOperand(1).getReg()))
-              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VARBitRegClass);
-            if(I->getOperand(1).getReg() == RISCV::zero || I->getOperand(1).getReg() == RISCV::zero_64) {
+            if(RISCV::VARRegClass.contains(I->getOperand(1).getReg()))
+              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VARRegClass);
+            if(I->getOperand(1).getReg() == RISCV::X0 || I->getOperand(1).getReg() == RISCV::X0) {
               I->getOperand(1).setReg(RISCV::vs0);
-              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
             }
 
             continue;
           }
-          if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass ||
-             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARBitRegClass ||
-             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass ||
-             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWBitRegClass ||
-             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHBitRegClass
+          if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass ||
+             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass ||
+             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
+             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
+             MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass
               ) {
             MRI->setRegClass(I->getOperand(0).getReg(),
               MRI->getRegClass(I->getOperand(1).getReg()));
@@ -970,11 +980,11 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           }
           continue;
         case TargetOpcode::SUBREG_TO_REG :// v registers hold all values with no sub regs for now
-          if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRBitRegClass ||
-             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VARBitRegClass ||
-             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass ||
-             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWBitRegClass ||
-             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHBitRegClass
+          if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass ||
+             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VARRegClass ||
+             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRRegClass ||
+             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWRegClass ||
+             MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHRegClass
               ) {
             //turn in into a copy
             unsigned srcReg = I->getOperand(2).getReg();
@@ -991,26 +1001,26 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           // Phi nodes may be muxing scalar and vector inputs so we need to move scalar values into vectors
           // But since Phi nodes need to be first in the basic block we should find
           // where this operand is defined, and insert the vadd there.
-          if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass &&
-             MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass){
-            MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+          if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass &&
+             MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass){
+            MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
             continue;
-          } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRBitRegClass &&
-             MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVRBitRegClass){
-            MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRBitRegClass);
+          } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass &&
+             MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VVRRegClass){
+            MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
             continue;
           // In the remaining cases we should consider normal scalar registers to also be VSRs
           // This case showed up when we had backwards branches to the same BB.
-          } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRBitRegClass ||
-                    MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::GR32BitRegClass ||
-                    MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::GR64BitRegClass){
+          } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass ||
+                    MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::GPRRegClass ||
+                    MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::GPRRegClass){
             assert(MRI->hasOneDef(I->getOperand(1).getReg()) && "vsreg has more than one def");
             const TargetRegisterClass *otherClass = MRI->getRegClass(I->getOperand(3).getReg());
-            if(otherClass == &RISCV::GR32BitRegClass || otherClass == &RISCV::GR64BitRegClass) {
-              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+            if(otherClass == &RISCV::GPRRegClass || otherClass == &RISCV::GPRRegClass) {
+              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
               continue;
             }
-            MRI->setRegClass(I->getOperand(1).getReg(), &RISCV::VSRBitRegClass);
+            MRI->setRegClass(I->getOperand(1).getReg(), &RISCV::VSRRegClass);
             for(MachineInstr &def : MRI->def_instructions(I->getOperand(1).getReg())) {
               unsigned vstemp = MRI->createVirtualRegister(otherClass);
               // TODO: we could propogate this info the source folding this add with another operation perhaps
@@ -1026,17 +1036,17 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
               I->getOperand(1).setReg(vstemp);
             }
             MRI->setRegClass(I->getOperand(0).getReg(), otherClass);
-          } else if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRBitRegClass ||
-                    MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::GR32BitRegClass ||
-                    MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::GR64BitRegClass){
+          } else if(MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::VSRRegClass ||
+                    MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::GPRRegClass ||
+                    MRI->getRegClass(I->getOperand(3).getReg()) == &RISCV::GPRRegClass){
             assert(MRI->hasOneDef(I->getOperand(3).getReg()) && "vsreg has more than one def");
             const TargetRegisterClass *otherClass = MRI->getRegClass(I->getOperand(1).getReg());
             unsigned opcode = RISCV::VADD_VSS;
-            if(otherClass == &RISCV::GR32BitRegClass || otherClass == &RISCV::GR64BitRegClass) {
-              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+            if(otherClass == &RISCV::GPRRegClass || otherClass == &RISCV::GPRRegClass) {
+              MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
               continue;
             }
-            MRI->setRegClass(I->getOperand(3).getReg(), &RISCV::VSRBitRegClass);
+            MRI->setRegClass(I->getOperand(3).getReg(), &RISCV::VSRRegClass);
             for(MachineInstr &def : MRI->def_instructions(I->getOperand(3).getReg())) {
               unsigned vstemp = MRI->createVirtualRegister(otherClass);
               // TODO: we could propogate this info the source folding this add with another operation perhaps
@@ -1054,218 +1064,206 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
             MRI->setRegClass(I->getOperand(0).getReg(), otherClass);
           }
           continue;
-        case RISCV::ADD64 :
-          vectorizeBinOp(I, defPredReg,
+        case RISCV::ADD   :
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VADD_VVV, RISCV::VADD_VVS, RISCV::VADD_VSV,
               RISCV::VADD_VSS, RISCV::VADD_SSS);
           continue;
-        case RISCV::SUB64 :
-          vectorizeBinOp(I, defPredReg,
+        case RISCV::SUB   :
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VSUB_VVV, RISCV::VSUB_VVS, RISCV::VSUB_VSV,
               RISCV::VSUB_VSS, RISCV::VSUB_SSS);
           continue;
-        case RISCV::MUL64 :
-          vectorizeBinOp(I, defPredReg,
+        case RISCV::MUL   :
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VMUL_VVV, RISCV::VMUL_VVS, RISCV::VMUL_VSV,
               RISCV::VMUL_VSS, RISCV::VMUL_SSS);
           continue;
         case RISCV::SLT :
-        case RISCV::SLT64 :
-          vectorizeBinOp(I, defPredReg,
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VSLT_VVV, RISCV::VSLT_VVS, RISCV::VSLT_VSV,
               RISCV::VSLT_VSS, RISCV::VSLT_SSS);
           continue;
         case RISCV::ADDW :
-          vectorizeBinOp(I, defPredReg,
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VADDW_VVV, RISCV::VADDW_VVS, RISCV::VADDW_VSV,
               RISCV::VADDW_VSS, RISCV::VADDW_SSS);
           continue;
         case RISCV::SUBW :
-          vectorizeBinOp(I, defPredReg,
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VSUBW_VVV, RISCV::VSUBW_VVS, RISCV::VSUBW_VSV,
               RISCV::VSUBW_VSS, RISCV::VSUBW_SSS);
           continue;
         case RISCV::MULW :
-          vectorizeBinOp(I, defPredReg,
+          vectorizeBinOp(&*I, defPredReg,
               RISCV::VMULW_VVV, RISCV::VMULW_VVS, RISCV::VMULW_VSV,
               RISCV::VMULW_VSS, RISCV::VMULW_SSS);
           continue;
-        case RISCV::LI64:
-        case RISCV::LI:
+        case RISCV::PseudoLI:
           {
           int64_t imm = I->getOperand(1).getImm();
           I->setDesc(TII->get(RISCV::VADDI));
           I->RemoveOperand(1);
           I->addOperand(MF, MachineOperand::CreateReg(RISCV::vs0, false));
           I->addOperand(MF, MachineOperand::CreateImm(imm));
-          MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+          MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
           }
           continue;
-        case RISCV::LUI64:
         case RISCV::LUI:
           {
           I->setDesc(TII->get(RISCV::VLUI));
-          MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRBitRegClass);
+          MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
           }
           continue;
-        case RISCV::ADDI64 :
         case RISCV::ADDI :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VADDI,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VADDI,
               RISCV::VADD_VVS, RISCV::VADD_SSS);
           continue;
-        case RISCV::ORI64 :
         case RISCV::ORI :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VORI,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VORI,
               RISCV::VOR_VVS, RISCV::VOR_SSS);
           continue;
-        case RISCV::SLTI64 :
         case RISCV::SLTI:
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSLTI,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSLTI,
               RISCV::VSLT_VVS, RISCV::VSLT_SSS);
           continue;
         case RISCV::SLLIW :
-        case RISCV::SLLIW64 :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSLLIW,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSLLIW,
               RISCV::VSLLW_VVS, RISCV::VSLLW_SSS);
           continue;
-        case RISCV::SLLI :
-        case RISCV::SLLI64 :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSLLI,
+        case RISCV::SLLI  :
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSLLI,
               RISCV::VSLL_VVS, RISCV::VSLL_SSS);
           continue;
-        case RISCV::SRLI64 :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSRLI,
+        case RISCV::SRLI  :
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSRLI,
               RISCV::VSRL_VVS, RISCV::VSRL_SSS);
           continue;
-        case RISCV::SRAI64 :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSRAI,
+        case RISCV::SRAI  :
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSRAI,
               RISCV::VSRA_VVS, RISCV::VSRA_SSS);
           continue;
         case RISCV::ADDIW :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VADDIW,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VADDIW,
               RISCV::VADDW_VVS, RISCV::VADDW_SSS);
           continue;
         case RISCV::SRAIW :
-        case RISCV::SRAIW64 :
-          vectorizeBinImmOp(I, defPredReg, RISCV::VSRAIW,
+          vectorizeBinImmOp(&*I, defPredReg, RISCV::VSRAIW,
               RISCV::VSRAW_VVS, RISCV::VSRAW_SSS);
           continue;
-        case RISCV::FLH64 :
-          vectorizeLoadOp(I, &RISCV::VVHBitRegClass, defPredReg,
-              RISCV::VLH_F, RISCV::VLXH_F, RISCV::VLSH_F);
-          continue;
-        case RISCV::FLW64 :
-          vectorizeLoadOp(I, &RISCV::VVWBitRegClass, defPredReg,
+        // case RISCV::FLH   :
+        //   vectorizeLoadOp(&*I, &RISCV::VVHRegClass, defPredReg,
+        //       RISCV::VLH_F, RISCV::VLXH_F, RISCV::VLSH_F);
+        //   continue;
+        case RISCV::FLW   :
+          vectorizeLoadOp(&*I, &RISCV::VVWRegClass, defPredReg,
               RISCV::VLW_F, RISCV::VLXW_F, RISCV::VLSW_F);
           continue;
-        case RISCV::FLD64 :
-          vectorizeLoadOp(I, &RISCV::VVRBitRegClass, defPredReg,
+        case RISCV::FLD   :
+          vectorizeLoadOp(&*I, &RISCV::VVRRegClass, defPredReg,
               RISCV::VLD_F, RISCV::VLXD_F, RISCV::VLSD_F);
           continue;
-        case RISCV::LHU64 :
-        case RISCV::LHU64_32 :
-          vectorizeLoadOp(I, &RISCV::VVHBitRegClass, defPredReg,
+        case RISCV::LHU   :
+          vectorizeLoadOp(&*I, &RISCV::VVHRegClass, defPredReg,
               RISCV::VLHU, RISCV::VLXHU, RISCV::VLSHU);
           continue;
-        case RISCV::LW64 :
-        case RISCV::LW64_32 :
-          vectorizeLoadOp(I, &RISCV::VVWBitRegClass, defPredReg,
+        case RISCV::LW    :
+          vectorizeLoadOp(&*I, &RISCV::VVWRegClass, defPredReg,
               RISCV::VLW, RISCV::VLXW, RISCV::VLSW);
           continue;
-        case RISCV::FSD64 :
-          vectorizeStoreOp(I, defPredReg,
+        case RISCV::FSD   :
+          vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSD_F, RISCV::VSXD_F);
           continue;
-        case RISCV::FSW64 :
-          vectorizeStoreOp(I, defPredReg,
+        case RISCV::FSW   :
+          vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSW_F, RISCV::VSXW_F);
           continue;
-        case RISCV::FSH64 :
-          vectorizeStoreOp(I, defPredReg,
-              RISCV::VSH_F, RISCV::VSXH_F);
-          continue;
-        case RISCV::SW64 :
-        case RISCV::SW64_32 :
-          vectorizeStoreOp(I, defPredReg,
+        // case RISCV::FSH   :
+        //   vectorizeStoreOp(&*I, defPredReg,
+        //       RISCV::VSH_F, RISCV::VSXH_F);
+        //   continue;
+        case RISCV::SW   :
+          vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSW, RISCV::VSXW);
           continue;
-        case RISCV::FCVT_S_D_RDY :
-          vectorizeCvtOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFCVT_S_D_RDY_VV, RISCV::VFCVT_S_D_RDY_VS,
-              RISCV::VFCVT_S_D_RDY_SS);
-          continue;
-        case RISCV::FCVT_S_W_RDY :
-          vectorizeIntCvtOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFCVT_S_W_RDY_VV, RISCV::VFCVT_S_W_RDY_VS,
-              RISCV::VFCVT_S_W_RDY_SS);
-          continue;
-        case RISCV::FCVT_D_S_RDY :
-          vectorizeCvtOp(I, &RISCV::VVRBitRegClass, defPredReg,
-              RISCV::VFCVT_D_S_RDY_VV, RISCV::VFCVT_D_S_RDY_VS,
-              RISCV::VFCVT_D_S_RDY_SS);
-          continue;
-        case RISCV::FCVT_H_S_RDY :
-          vectorizeCvtOp(I, &RISCV::VVHBitRegClass, defPredReg,
-              RISCV::VFCVT_H_S_RDY_VV, RISCV::VFCVT_H_S_RDY_VS,
-              RISCV::VFCVT_H_S_RDY_SS);
-          continue;
-        case RISCV::FCVT_S_H_RDY :
-          vectorizeCvtOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFCVT_S_H_RDY_VV, RISCV::VFCVT_S_H_RDY_VS,
-              RISCV::VFCVT_S_H_RDY_SS);
-          continue;
-        case RISCV::FADD_D_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVRBitRegClass, defPredReg,
-              RISCV::VFADD_D_RDY_VVV, RISCV::VFADD_D_RDY_VVS, RISCV::VFADD_D_RDY_VSV,
-              RISCV::VFADD_D_RDY_VSS, RISCV::VFADD_D_RDY_SSS);
-          continue;
-        case RISCV::FSUB_D_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVRBitRegClass, defPredReg,
-              RISCV::VFSUB_D_RDY_VVV, RISCV::VFSUB_D_RDY_VVS, RISCV::VFSUB_D_RDY_VSV,
-              RISCV::VFSUB_D_RDY_VSS, RISCV::VFSUB_D_RDY_SSS);
-          continue;
-        case RISCV::FMUL_D_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVRBitRegClass, defPredReg,
-              RISCV::VFMUL_D_RDY_VVV, RISCV::VFMUL_D_RDY_VVS, RISCV::VFMUL_D_RDY_VSV,
-              RISCV::VFMUL_D_RDY_VSS, RISCV::VFMUL_D_RDY_SSS);
-          continue;
-        case RISCV::FADD_S_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFADD_S_RDY_VVV, RISCV::VFADD_S_RDY_VVS, RISCV::VFADD_S_RDY_VSV,
-              RISCV::VFADD_S_RDY_VSS, RISCV::VFADD_S_RDY_SSS);
-          continue;
-        case RISCV::FSUB_S_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFSUB_S_RDY_VVV, RISCV::VFSUB_S_RDY_VVS, RISCV::VFSUB_S_RDY_VSV,
-              RISCV::VFSUB_S_RDY_VSS, RISCV::VFSUB_S_RDY_SSS);
-          continue;
-        case RISCV::FMUL_S_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFMUL_S_RDY_VVV, RISCV::VFMUL_S_RDY_VVS, RISCV::VFMUL_S_RDY_VSV,
-              RISCV::VFMUL_S_RDY_VSS, RISCV::VFMUL_S_RDY_SSS);
-          continue;
-        case RISCV::FDIV_S_RDY :
-          vectorizeFPBinOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFDIV_S_RDY_VVV, RISCV::VFDIV_S_RDY_VVS, RISCV::VFDIV_S_RDY_VSV,
-              RISCV::VFDIV_S_RDY_VSS, RISCV::VFDIV_S_RDY_SSS);
-          continue;
-        case RISCV::FMADD_S_RDY :
-          vectorizeFPTriOp(I, &RISCV::VVWBitRegClass, defPredReg,
-              RISCV::VFMADD_S_RDY_VVVV, RISCV::VFMADD_S_RDY_VVVS,
-              RISCV::VFMADD_S_RDY_VVSV, RISCV::VFMADD_S_RDY_VVSS,
-              RISCV::VFMADD_S_RDY_VSVV, RISCV::VFMADD_S_RDY_VSVS,
-              RISCV::VFMADD_S_RDY_VSSV, RISCV::VFMADD_S_RDY_VSSS,
-              RISCV::VFMADD_S_RDY_SSSS);
-          continue;
-        case RISCV::FMADD_D_RDY :
-          vectorizeFPTriOp(I, &RISCV::VVRBitRegClass, defPredReg,
-              RISCV::VFMADD_D_RDY_VVVV, RISCV::VFMADD_D_RDY_VVVS,
-              RISCV::VFMADD_D_RDY_VVSV, RISCV::VFMADD_D_RDY_VVSS,
-              RISCV::VFMADD_D_RDY_VSVV, RISCV::VFMADD_D_RDY_VSVS,
-              RISCV::VFMADD_D_RDY_VSSV, RISCV::VFMADD_D_RDY_VSSS,
-              RISCV::VFMADD_D_RDY_SSSS);
-          continue;
-        case RISCV::RET :
+        // case RISCV::FCVT_S_D_RDY :
+        //   vectorizeCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFCVT_S_D_RDY_VV, RISCV::VFCVT_S_D_RDY_VS,
+        //       RISCV::VFCVT_S_D_RDY_SS);
+        //   continue;
+        // case RISCV::FCVT_S_W_RDY :
+        //   vectorizeIntCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFCVT_S_W_RDY_VV, RISCV::VFCVT_S_W_RDY_VS,
+        //       RISCV::VFCVT_S_W_RDY_SS);
+        //   continue;
+        // case RISCV::FCVT_D_S_RDY :
+        //   vectorizeCvtOp(&*I, &RISCV::VVRRegClass, defPredReg,
+        //       RISCV::VFCVT_D_S_RDY_VV, RISCV::VFCVT_D_S_RDY_VS,
+        //       RISCV::VFCVT_D_S_RDY_SS);
+        //   continue;
+        // case RISCV::FCVT_H_S_RDY :
+        //   vectorizeCvtOp(&*I, &RISCV::VVHRegClass, defPredReg,
+        //       RISCV::VFCVT_H_S_RDY_VV, RISCV::VFCVT_H_S_RDY_VS,
+        //       RISCV::VFCVT_H_S_RDY_SS);
+        //   continue;
+        // case RISCV::FCVT_S_H_RDY :
+        //   vectorizeCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFCVT_S_H_RDY_VV, RISCV::VFCVT_S_H_RDY_VS,
+        //       RISCV::VFCVT_S_H_RDY_SS);
+        //   continue;
+        // case RISCV::FADD_D_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+        //       RISCV::VFADD_D_RDY_VVV, RISCV::VFADD_D_RDY_VVS, RISCV::VFADD_D_RDY_VSV,
+        //       RISCV::VFADD_D_RDY_VSS, RISCV::VFADD_D_RDY_SSS);
+        //   continue;
+        // case RISCV::FSUB_D_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+        //       RISCV::VFSUB_D_RDY_VVV, RISCV::VFSUB_D_RDY_VVS, RISCV::VFSUB_D_RDY_VSV,
+        //       RISCV::VFSUB_D_RDY_VSS, RISCV::VFSUB_D_RDY_SSS);
+        //   continue;
+        // case RISCV::FMUL_D_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+        //       RISCV::VFMUL_D_RDY_VVV, RISCV::VFMUL_D_RDY_VVS, RISCV::VFMUL_D_RDY_VSV,
+        //       RISCV::VFMUL_D_RDY_VSS, RISCV::VFMUL_D_RDY_SSS);
+        //   continue;
+        // case RISCV::FADD_S_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFADD_S_RDY_VVV, RISCV::VFADD_S_RDY_VVS, RISCV::VFADD_S_RDY_VSV,
+        //       RISCV::VFADD_S_RDY_VSS, RISCV::VFADD_S_RDY_SSS);
+        //   continue;
+        // case RISCV::FSUB_S_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFSUB_S_RDY_VVV, RISCV::VFSUB_S_RDY_VVS, RISCV::VFSUB_S_RDY_VSV,
+        //       RISCV::VFSUB_S_RDY_VSS, RISCV::VFSUB_S_RDY_SSS);
+        //   continue;
+        // case RISCV::FMUL_S_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFMUL_S_RDY_VVV, RISCV::VFMUL_S_RDY_VVS, RISCV::VFMUL_S_RDY_VSV,
+        //       RISCV::VFMUL_S_RDY_VSS, RISCV::VFMUL_S_RDY_SSS);
+        //   continue;
+        // case RISCV::FDIV_S_RDY :
+        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFDIV_S_RDY_VVV, RISCV::VFDIV_S_RDY_VVS, RISCV::VFDIV_S_RDY_VSV,
+        //       RISCV::VFDIV_S_RDY_VSS, RISCV::VFDIV_S_RDY_SSS);
+        //   continue;
+        // case RISCV::FMADD_S_RDY :
+        //   vectorizeFPTriOp(&*I, &RISCV::VVWRegClass, defPredReg,
+        //       RISCV::VFMADD_S_RDY_VVVV, RISCV::VFMADD_S_RDY_VVVS,
+        //       RISCV::VFMADD_S_RDY_VVSV, RISCV::VFMADD_S_RDY_VVSS,
+        //       RISCV::VFMADD_S_RDY_VSVV, RISCV::VFMADD_S_RDY_VSVS,
+        //       RISCV::VFMADD_S_RDY_VSSV, RISCV::VFMADD_S_RDY_VSSS,
+        //       RISCV::VFMADD_S_RDY_SSSS);
+        //   continue;
+        // case RISCV::FMADD_D_RDY :
+        //   vectorizeFPTriOp(&*I, &RISCV::VVRRegClass, defPredReg,
+        //       RISCV::VFMADD_D_RDY_VVVV, RISCV::VFMADD_D_RDY_VVVS,
+        //       RISCV::VFMADD_D_RDY_VVSV, RISCV::VFMADD_D_RDY_VVSS,
+        //       RISCV::VFMADD_D_RDY_VSVV, RISCV::VFMADD_D_RDY_VSVS,
+        //       RISCV::VFMADD_D_RDY_VSSV, RISCV::VFMADD_D_RDY_VSSS,
+        //       RISCV::VFMADD_D_RDY_SSSS);
+        //   continue;
+        case RISCV::PseudoRET :
           I->setDesc(TII->get(RISCV::VSTOP));
           I->RemoveOperand(1);
           I->RemoveOperand(0);
@@ -1273,45 +1271,35 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         // check that previously added vector copies for phi's are still correct
         case RISCV::VADD_VSS:
           if(I->getOperand(1).getReg() == RISCV::vs0) {
-            if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRBitRegClass) {
+            if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRRegClass) {
               I->setDesc(TII->get(RISCV::VADD_VSV));
             }
           }
-        case RISCV::BEQ64:
         case RISCV::BEQ:
-        case RISCV::BLT64:
         case RISCV::BLT:
-        case RISCV::BLTU64:
         case RISCV::BLTU:
-        case RISCV::BGT64:
-        case RISCV::BGT:
-        case RISCV::BGTU64:
-        case RISCV::BGTU:
-        case RISCV::BNE64:
+        // case RISCV::BGT:
+        // case RISCV::BGTU:
         case RISCV::BNE:
-        case RISCV::BGE64:
         case RISCV::BGE:
-        case RISCV::BGEU64:
         case RISCV::BGEU:
-        case RISCV::BLE64:
-        case RISCV::BLE:
-        case RISCV::BLEU64:
-        case RISCV::BLEU:
-          if(I->getOperand(1).getReg() == RISCV::zero ||
-              I->getOperand(1).getReg() == RISCV::zero_64) {
+        // case RISCV::BLE:
+        // case RISCV::BLEU:
+          if(I->getOperand(1).getReg() == RISCV::X0 ||
+              I->getOperand(1).getReg() == RISCV::X0) {
             I->getOperand(1).setReg(RISCV::vs0);
           }
-          if(I->getOperand(2).getReg() == RISCV::zero ||
-              I->getOperand(2).getReg() == RISCV::zero_64) {
+          if(I->getOperand(2).getReg() == RISCV::X0 ||
+              I->getOperand(2).getReg() == RISCV::X0) {
             I->getOperand(2).setReg(RISCV::vs0);
           }
           // VCMP will be inserted before each branch in a different pass
           // which will then convert the branch to a VCJAL
           continue;
-        case RISCV::J:
-        case RISCV::J64:
+        // case RISCV::J:
+        // case RISCV::J64:
         case RISCV::JAL:
-        case RISCV::JAL64:
+        // case RISCV::JAL64:
           {
           // Insert VCJAL to be fixed up later
           BuildMI(I->getParent(), I->getDebugLoc(), TII->get(RISCV::VCJAL), RISCV::vs0).addMBB(I->getOperand(0).getMBB()).addImm(0).addReg(defPredReg);
@@ -1351,16 +1339,16 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
   // Terminator -> predication loop
   for (auto &MBB : MF) {
     unsigned opcode;
-    unsigned predReg = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+    unsigned predReg = MRI->createVirtualRegister(&RISCV::VPRRegClass);
     unsigned negate = 0;
     SmallVector<MachineInstr*, 1> deadBranches;
     for(auto &term: MBB) {
       if(!term.isConditionalBranch()) {
         switch(term.getOpcode()) {
-          case RISCV::J:
-          case RISCV::J64:
+          // case RISCV::J:
+          // case RISCV::J64:
           case RISCV::JAL:
-          case RISCV::JAL64:
+          // case RISCV::JAL64:
             deadBranches.push_back(&term);
             break;
           case RISCV::VCJAL:
@@ -1375,40 +1363,40 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
       // Synthesized branches via output negation
       // need to mark bb in data structure
       switch(term.getOpcode()) {
-        case RISCV::BNE64:
+        // case RISCV::BNE64:
         case RISCV::BNE:
           negate = 1;
-        case RISCV::BEQ64:
+        // case RISCV::BEQ64:
         case RISCV::BEQ:
           opcode = getVectorCompareOp(&term, RISCV::VCMPEQ_VV, RISCV::VCMPEQ_VS, RISCV::VCMPEQ_SV, RISCV::VCMPEQ_SS);
           break;
-        case RISCV::BGE64:
+        // case RISCV::BGE64:
         case RISCV::BGE:
           negate = 1;
-        case RISCV::BLT64:
+        // case RISCV::BLT64:
         case RISCV::BLT:
           opcode = getVectorCompareOp(&term, RISCV::VCMPLT_VV, RISCV::VCMPLT_VS, RISCV::VCMPLT_SV, RISCV::VCMPLT_SS);
           break;
-        case RISCV::BGEU64:
+        // case RISCV::BGEU64:
         case RISCV::BGEU:
           negate = 1;
-        case RISCV::BLTU64:
+        // case RISCV::BLTU64:
         case RISCV::BLTU:
           opcode = getVectorCompareOp(&term, RISCV::VCMPLTU_VV, RISCV::VCMPLTU_VS, RISCV::VCMPLTU_SV, RISCV::VCMPLTU_SS);
           break;
         // Synthesized branches via lhs, rhs reversal
-        case RISCV::BLE64:
-        case RISCV::BLE:
+        // case RISCV::BLE64:
+        // case RISCV::BLE:
           negate = 1;
-        case RISCV::BGT64:
-        case RISCV::BGT:
+        // case RISCV::BGT64:
+        // case RISCV::BGT:
           opcode = getVectorCompareOp(&term, RISCV::VCMPGT_VV, RISCV::VCMPGT_VS, RISCV::VCMPGT_SV, RISCV::VCMPGT_SS);
           break;
-        case RISCV::BLEU64:
-        case RISCV::BLEU:
+        // case RISCV::BLEU64:
+        // case RISCV::BLEU:
           negate = 1;
-        case RISCV::BGTU64:
-        case RISCV::BGTU:
+        // case RISCV::BGTU64:
+        // case RISCV::BGTU:
           opcode = getVectorCompareOp(&term, RISCV::VCMPGTU_VV, RISCV::VCMPGTU_VS, RISCV::VCMPGTU_SV, RISCV::VCMPGTU_SS);
           break;
         default:
@@ -1417,7 +1405,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
       bbToNeg.insert(std::make_pair(&MBB, negate));
       BuildMI(MBB, &term, term.getDebugLoc(), TII->get(opcode),predReg).addReg(term.getOperand(1).getReg()).addReg(term.getOperand(2).getReg()).addImm(0).addReg(defPredReg);
       // Convert to VCJAL
-      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).addOperand(term.getOperand(0)).addImm(negate).addReg(predReg);
+      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).add(term.getOperand(0)).addImm(negate).addReg(predReg);
       deadBranches.push_back(&term);
       // track result predicate reg
       bbToPred.insert(std::make_pair(&MBB, predReg));
@@ -1441,23 +1429,23 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
             unsigned negcds1 = bbToNeg[cdsItr->first] ^ !(cdsItr->second) ? 1 : 0;
             auto pred0 = *(MBB.pred_begin());
             auto pred1 = *(++(MBB.pred_begin()));
-            unsigned vptemp = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+            unsigned vptemp = MRI->createVirtualRegister(&RISCV::VPRRegClass);
             //TODO: need to generate the correct ands/ors based on the negation
             //Setup the loop mask with a vpset in the predecssor
             // The predecessor with fewer control dependences is correct TODO: prove this
             auto loopHeader = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred1)->second->cds.size() ? pred1 : pred0;
             auto loopTail = PDG->BBtoCDS.find(pred0)->second->cds.size() > PDG->BBtoCDS.find(pred1)->second->cds.size() ? pred0 : pred1;
-            unsigned mask = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+            unsigned mask = MRI->createVirtualRegister(&RISCV::VPRRegClass);
             BuildMI(*loopHeader, loopHeader->getFirstTerminator(), MBB.begin()->getDebugLoc(), TII->get(RISCV::VPSET), mask);
             unsigned myPred = bbToPred.find(&MBB)->second;
             //Insert a PHI node for this MBB's predreg
-            unsigned vpPHI = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+            unsigned vpPHI = MRI->createVirtualRegister(&RISCV::VPRRegClass);
             BuildMI(MBB, MBB.begin(), MBB.begin()->getDebugLoc(), TII->get(TargetOpcode::PHI), vpPHI).addReg(mask).addMBB(loopHeader).addReg(myPred).addMBB(loopTail);
             unsigned left = myPred == predcds0 ? vpPHI : predcds0;
             // pick the correct predRegs to merge
             unsigned right = myPred == predcds1 ? vpPHI : predcds1;
             unsigned negate = 0;
-            unsigned ones = MRI->createVirtualRegister(&RISCV::VPRBitRegClass);
+            unsigned ones = MRI->createVirtualRegister(&RISCV::VPRRegClass);
             if(negcds0) {
               if(negcds1) {
                 // Both negative use or and negate result
@@ -1519,6 +1507,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
   MF.dump();
 }
 
+
 void RISCVVectorFetchRegFix::changeToPostRegAllocVecInst(MachineInstr &MI) {
   switch(MI.getOpcode()) {
     case RISCV::VFADD_S_RDY_VVV: MI.setDesc(TII->get(RISCV::VFADD_RAS_RDY_VVV)); break;
@@ -1543,18 +1532,19 @@ void RISCVVectorFetchRegFix::changeToPostRegAllocVecInst(MachineInstr &MI) {
   }
 }
 
+
 bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
-  if(!isOpenCLKernelFunction(*(MF.getFunction())))
+  if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
   MachineRegisterInfo *MRI = &MF.getRegInfo();
   TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
   //We are changing vv*W and vv*H regs to vv*D regs respecting the register number ordering
   //We assume that vv*[D,W] regs used are consecutive starting at zero
-  const TargetRegisterClass *vvD = &RISCV::VVRBitRegClass;
-  const TargetRegisterClass *vvW = &RISCV::VVWBitRegClass;
-  const TargetRegisterClass *vvH = &RISCV::VVHBitRegClass;
-  const TargetRegisterClass *vvP = &RISCV::VPRBitRegClass;
+  const TargetRegisterClass *vvD = &RISCV::VVRRegClass;
+  const TargetRegisterClass *vvW = &RISCV::VVWRegClass;
+  const TargetRegisterClass *vvH = &RISCV::VVHRegClass;
+  const TargetRegisterClass *vvP = &RISCV::VPRRegClass;
   unsigned wStart = 0;
 
   unsigned numDRegs = 0;
@@ -1672,20 +1662,21 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
       changeToPostRegAllocVecInst(MI);
     }
   }
-  NamedMDNode* vfcfg = MF.getFunction()->getParent()->getNamedMetadata("hwacha.vfcfg");
-  Type *Int64 = IntegerType::get(MF.getFunction()->getContext(), 64);
+  NamedMDNode* vfcfg = MF.getFunction().getParent()->getNamedMetadata("hwacha.vfcfg");
+  Type *Int64 = IntegerType::get(MF.getFunction().getContext(), 64);
   Metadata *cfg[4] = {ConstantAsMetadata::get(ConstantInt::get(Int64, numDRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numWRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numHRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numPRegs))};
-  vfcfg->addOperand(MDNode::get(MF.getFunction()->getContext(), cfg));
+  vfcfg->addOperand(MDNode::get(MF.getFunction().getContext(), cfg));
   return true;
 }
+
 
 MachineFunctionPass *llvm::createRISCVVectorFetchRegFix() { return new RISCVVectorFetchRegFix(); }
 
 bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
-  if(!isOpenCLKernelFunction(*(MF.getFunction())))
+  if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
   MF.dump();
@@ -1702,10 +1693,10 @@ bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
         negate = MI.getOperand(MI.getNumOperands()-2).getImm();
       }
       switch(MI.getOpcode()) {
-        case RISCV::J:
-        case RISCV::J64:
+        // case RISCV::J:
+        // case RISCV::J64:
         case RISCV::JAL:
-        case RISCV::JAL64:
+        // case RISCV::JAL64:
           if(predReg != 0) // This is an unpredicated branch so just erase the jump
             BuildMI(MBB, &MI, MI.getDebugLoc(), TII->get(RISCV::VCJAL), RISCV::vs0).addMBB(MI.getOperand(0).getMBB()).addImm(negate).addReg(predReg);
           MI.eraseFromParent();
