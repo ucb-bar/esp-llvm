@@ -106,26 +106,25 @@ struct DOTGraphTraits<MachineProgramDependenceGraph*> : public DefaultDOTGraphTr
 };
 } //end namespace llvm
 
-// namespace {
+namespace {
 
-// struct MachineProgramDependenceGraphPrinter
-//   : public DOTGraphTraitsMachinePrinter<MachineProgramDependenceGraph, true,
-//                                         MachineProgramDependenceGraph*> {
-//   static char ID;
-//   MachineProgramDependenceGraphPrinter() :
-//     DOTGraphTraitsMachinePrinter<MachineProgramDependenceGraph, true>("pdg", ID) {
-//       initializeMachineProgramDependenceGraphPrinterPass(*PassRegistry::getPassRegistry());
-//     }
-// };
-// char MachineProgramDependenceGraphPrinter::ID = 0;
-// } //end anonymous namespace
+struct MachineProgramDependenceGraphPrinter
+  : public DOTGraphTraitsMachinePrinter<MachineProgramDependenceGraph, true> {
+  static char ID;
+  MachineProgramDependenceGraphPrinter() :
+    DOTGraphTraitsMachinePrinter<MachineProgramDependenceGraph, true>("pdg", ID) {
+      initializeMachineProgramDependenceGraphPrinterPass(*PassRegistry::getPassRegistry());
+    }
+};
+char MachineProgramDependenceGraphPrinter::ID = 0;
+} //end anonymous namespace
 
-// INITIALIZE_PASS_BEGIN(MachineProgramDependenceGraphPrinter, "dot-pdg",
-//                 "Print the pdg of function to 'dot' file", true, true)
-// INITIALIZE_PASS_DEPENDENCY(MachineProgramDependenceGraph)
-// INITIALIZE_PASS_END(MachineProgramDependenceGraphPrinter, "dot-pdg",
-//                 "Print the pdg of function to 'dot' file", true, true)
+INITIALIZE_PASS_BEGIN(MachineProgramDependenceGraphPrinter, "dot-pdg",
+                "Print the pdg of function to 'dot' file", true, true)
+INITIALIZE_PASS_DEPENDENCY(MachineProgramDependenceGraph)
+INITIALIZE_PASS_END(MachineProgramDependenceGraphPrinter, "dot-pdg",
+                "Print the pdg of function to 'dot' file", true, true)
 
-// MachineFunctionPass* llvm::createMachineProgramDependenceGraphPrinterPass() {
-//   return new MachineProgramDependenceGraphPrinter();
-// }
+MachineFunctionPass* llvm::createMachineProgramDependenceGraphPrinterPass() {
+  return new MachineProgramDependenceGraphPrinter();
+}

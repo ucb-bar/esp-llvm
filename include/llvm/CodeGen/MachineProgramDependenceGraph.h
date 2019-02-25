@@ -214,7 +214,7 @@ template <> struct GraphTraits<MachinePDGNode*>{
 
 template <> struct GraphTraits<MachineProgramDependenceGraph*>
  : public GraphTraits<MachinePDGNode*>{
-
+  using NodeRef = MachinePDGNode *;
   static NodeType *getEntryNode(const MachineProgramDependenceGraph *MachinePDG) {
     return MachinePDG->BBtoCDS.begin()->second;
   }
