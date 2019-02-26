@@ -393,6 +393,7 @@ CodeGenInstruction::CodeGenInstruction(Record *R)
   isInsertSubreg = R->getValueAsBit("isInsertSubreg");
   isConvergent = R->getValueAsBit("isConvergent");
   hasNoSchedulingInfo = R->getValueAsBit("hasNoSchedulingInfo");
+  isVariant = R->getValueAsBit("isVariant");
   FastISelShouldIgnore = R->getValueAsBit("FastISelShouldIgnore");
   variadicOpsAreDefs = R->getValueAsBit("variadicOpsAreDefs");
 

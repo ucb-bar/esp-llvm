@@ -113,7 +113,7 @@ INITIALIZE_PASS(DAH, "deadarghaX0r",
 
 /// createDeadArgEliminationPass - This pass removes arguments from functions
 /// which are not used by the body of the function.
-ModulePass *llvm::createDeadArgEliminationPass() { return new DAE(); }
+ModulePass *llvm::createDeadArgEliminationPass() { return new DAE(); } 
 
 ModulePass *llvm::createDeadArgHackingPass() { return new DAH(); }
 
@@ -1069,6 +1069,25 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
         BB.getInstList().erase(RI);
       }
 
+  /* COLIN maybe dead
+  auto DI = FunctionDIs.find(F);
+  if (DI != FunctionDIs.end())
+    DI->second->replaceFunction(NF);
+    */
+  //migrate all opencl named metadata
+  llvm::NamedMDNode *nmd = F->getParent()->getNamedMetadata("opencl.kernels");
+  if(nmd){
+    for (unsigned i = 0, e = nmd->getNumOperands(); i != e; ++i) {
+      MDNode *kernel_iter = nmd->getOperand(i);
+      Function *k =
+        cast<Function>(
+          dyn_cast<ValueAsMetadata>(kernel_iter->getOperand(0))->getValue());
+      if (k->getName() == F->getName()) {
+        kernel_iter->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
+      }
+    }
+  }
+  
   // Clone metadatas from the old function, including debug info descriptor.
   SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
   F->getAllMetadata(MDs);
