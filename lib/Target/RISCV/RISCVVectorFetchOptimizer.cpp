@@ -598,6 +598,9 @@ MachineFunctionPass *llvm::createRISCVVectorFetchMachOpt() {
 bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
 
+  if (!MF.getSubtarget<RISCVSubtarget>().hasXhwacha())
+    return false;
+
   MS = &getAnalysis<MachineScalarization>();
   PDG = &getAnalysis<MachineProgramDependenceGraph>();
   TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
@@ -1534,6 +1537,10 @@ void RISCVVectorFetchRegFix::changeToPostRegAllocVecInst(MachineInstr &MI) {
 
 
 bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
+
+  if (!MF.getSubtarget<RISCVSubtarget>().hasXhwacha())
+    return false;
+
   if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
@@ -1676,6 +1683,10 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
 MachineFunctionPass *llvm::createRISCVVectorFetchRegFix() { return new RISCVVectorFetchRegFix(); }
 
 bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
+
+  if (!MF.getSubtarget<RISCVSubtarget>().hasXhwacha())
+    return false;
+
   if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
