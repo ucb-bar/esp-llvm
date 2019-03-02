@@ -177,9 +177,6 @@ multiclass InstVR4<string name, SDPatternOperator op> {
   }
 }
 
- def HasXhwacha :Predicate<"Subtarget->hasXhwacha()">,
-                 AssemblerPredicate<"FeatureXhwacha">;
-
 //all bits in this file should be considered fake
 
 // Control Thread Instructions
@@ -305,9 +302,11 @@ let isCodeGenOnly = 1 in {
   }
 
   let isVariant = 1 in {
-    def VEIDX  : InstV<(outs VVR:$dest), (ins), "veidx", "$dest", [(set VVR:$dest, (int_hwacha_veidx))]>, Requires<[HasXhwacha]>;
+    def VEIDX  : InstV<(outs VVR:$dest), (ins), "veidx", "$dest", []>, Requires<[HasXhwacha]>;
   }
 }
+
+ def: Pat<(int_hwacha_veidx), (VEIDX)>;
 
 //Psuedo Instructions for scalar operations inside of vector fetch blocks
 //To be expanded into vfetch blocks after register allocation and scheduling
