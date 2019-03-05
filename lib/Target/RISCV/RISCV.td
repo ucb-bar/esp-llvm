@@ -23,11 +23,6 @@ def FeatureStdExtA
                        "'A' (Atomic Instructions)">;
 def HasStdExtA : Predicate<"Subtarget->hasStdExtA()">,
                            AssemblerPredicate<"FeatureStdExtA">;
-                           
-def FeatureXhwacha : SubtargetFeature<"x", "HasXhwacha", "true",
-                                "'X' (Supports Hwacha Vector Fetch Architecture)">;
-def HasXhwacha : Predicate<"Subtarget->hasXhwacha()">,
-                           AssemblerPredicate<"FeatureXhwacha">;
 
 def FeatureStdExtF
     : SubtargetFeature<"f", "HasStdExtF", "true",
@@ -41,6 +36,11 @@ def FeatureStdExtD
                        [FeatureStdExtF]>;
 def HasStdExtD : Predicate<"Subtarget->hasStdExtD()">,
                            AssemblerPredicate<"FeatureStdExtD">;
+
+def FeatureXhwacha : SubtargetFeature<"x", "HasXhwacha", "true",
+                                "'X' (Supports Hwacha Vector Fetch Architecture)">;
+def HasXhwacha : Predicate<"Subtarget->hasXhwacha()">,
+                           AssemblerPredicate<"FeatureXhwacha">;
 
 def FeatureStdExtC
     : SubtargetFeature<"c", "HasStdExtC", "true",

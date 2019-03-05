@@ -1756,6 +1756,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     auto *CalleeFn = cast<Function>(E->getGlobal());
     isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
     openCLMetadata = CalleeFn->getParent()->getNamedMetadata("hwacha.vfcfg");
+    LLVM_DEBUG(dbgs() << "VFCFG METADATA");
+    LLVM_DEBUG(openCLMetadata->dump());
   }
 
 

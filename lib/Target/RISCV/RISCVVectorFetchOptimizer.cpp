@@ -13,6 +13,7 @@
 #include "llvm/CodeGen/MachineScalarization.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/PassSupport.h"
@@ -944,6 +945,10 @@ unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned V
 
 
 void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned defPredReg) {
+
+  LLVM_DEBUG(dbgs() << "Processing Kernel:");
+  LLVM_DEBUG(MF.dump());
+
   std::vector<unsigned> vregs;
   // add vpset vp0 at start of function
   MachineBasicBlock &entryBlock = MF.front();
@@ -977,9 +982,17 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
              MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
              MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass
               ) {
-            MRI->setRegClass(I->getOperand(0).getReg(),
-              MRI->getRegClass(I->getOperand(1).getReg()));
+
+            LLVM_DEBUG(dbgs() << "FOUND A COPY OPCODE");
+            //LLVM_DEBUG(I->dump());
+            LLVM_DEBUG(MF.dump());
+
+            if (TargetRegisterInfo::isVirtualRegister(I->getOperand(0).getReg())) {
+              MRI->setRegClass(I->getOperand(0).getReg(),
+                MRI->getRegClass(I->getOperand(1).getReg()));
+            }
             I->getOperand(1).setSubReg(0); // v registers hold all values with no sub regs for now
+            
           }
           continue;
         case TargetOpcode::SUBREG_TO_REG :// v registers hold all values with no sub regs for now
@@ -1190,21 +1203,21 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSW, RISCV::VSXW);
           continue;
-        // case RISCV::FCVT_S_D_RDY :
-        //   vectorizeCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFCVT_S_D_RDY_VV, RISCV::VFCVT_S_D_RDY_VS,
-        //       RISCV::VFCVT_S_D_RDY_SS);
-        //   continue;
-        // case RISCV::FCVT_S_W_RDY :
-        //   vectorizeIntCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFCVT_S_W_RDY_VV, RISCV::VFCVT_S_W_RDY_VS,
-        //       RISCV::VFCVT_S_W_RDY_SS);
-        //   continue;
-        // case RISCV::FCVT_D_S_RDY :
-        //   vectorizeCvtOp(&*I, &RISCV::VVRRegClass, defPredReg,
-        //       RISCV::VFCVT_D_S_RDY_VV, RISCV::VFCVT_D_S_RDY_VS,
-        //       RISCV::VFCVT_D_S_RDY_SS);
-        //   continue;
+        case RISCV::FCVT_S_D :
+          vectorizeCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFCVT_S_D_RDY_VV, RISCV::VFCVT_S_D_RDY_VS,
+              RISCV::VFCVT_S_D_RDY_SS);
+          continue;
+        case RISCV::FCVT_S_W :
+          vectorizeIntCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFCVT_S_W_RDY_VV, RISCV::VFCVT_S_W_RDY_VS,
+              RISCV::VFCVT_S_W_RDY_SS);
+          continue;
+        case RISCV::FCVT_D_S :
+          vectorizeCvtOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VFCVT_D_S_RDY_VV, RISCV::VFCVT_D_S_RDY_VS,
+              RISCV::VFCVT_D_S_RDY_SS);
+          continue;
         // case RISCV::FCVT_H_S_RDY :
         //   vectorizeCvtOp(&*I, &RISCV::VVHRegClass, defPredReg,
         //       RISCV::VFCVT_H_S_RDY_VV, RISCV::VFCVT_H_S_RDY_VS,
@@ -1215,61 +1228,61 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         //       RISCV::VFCVT_S_H_RDY_VV, RISCV::VFCVT_S_H_RDY_VS,
         //       RISCV::VFCVT_S_H_RDY_SS);
         //   continue;
-        // case RISCV::FADD_D_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
-        //       RISCV::VFADD_D_RDY_VVV, RISCV::VFADD_D_RDY_VVS, RISCV::VFADD_D_RDY_VSV,
-        //       RISCV::VFADD_D_RDY_VSS, RISCV::VFADD_D_RDY_SSS);
-        //   continue;
-        // case RISCV::FSUB_D_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
-        //       RISCV::VFSUB_D_RDY_VVV, RISCV::VFSUB_D_RDY_VVS, RISCV::VFSUB_D_RDY_VSV,
-        //       RISCV::VFSUB_D_RDY_VSS, RISCV::VFSUB_D_RDY_SSS);
-        //   continue;
-        // case RISCV::FMUL_D_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
-        //       RISCV::VFMUL_D_RDY_VVV, RISCV::VFMUL_D_RDY_VVS, RISCV::VFMUL_D_RDY_VSV,
-        //       RISCV::VFMUL_D_RDY_VSS, RISCV::VFMUL_D_RDY_SSS);
-        //   continue;
-        // case RISCV::FADD_S_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFADD_S_RDY_VVV, RISCV::VFADD_S_RDY_VVS, RISCV::VFADD_S_RDY_VSV,
-        //       RISCV::VFADD_S_RDY_VSS, RISCV::VFADD_S_RDY_SSS);
-        //   continue;
-        // case RISCV::FSUB_S_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFSUB_S_RDY_VVV, RISCV::VFSUB_S_RDY_VVS, RISCV::VFSUB_S_RDY_VSV,
-        //       RISCV::VFSUB_S_RDY_VSS, RISCV::VFSUB_S_RDY_SSS);
-        //   continue;
-        // case RISCV::FMUL_S_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFMUL_S_RDY_VVV, RISCV::VFMUL_S_RDY_VVS, RISCV::VFMUL_S_RDY_VSV,
-        //       RISCV::VFMUL_S_RDY_VSS, RISCV::VFMUL_S_RDY_SSS);
-        //   continue;
-        // case RISCV::FDIV_S_RDY :
-        //   vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFDIV_S_RDY_VVV, RISCV::VFDIV_S_RDY_VVS, RISCV::VFDIV_S_RDY_VSV,
-        //       RISCV::VFDIV_S_RDY_VSS, RISCV::VFDIV_S_RDY_SSS);
-        //   continue;
-        // case RISCV::FMADD_S_RDY :
-        //   vectorizeFPTriOp(&*I, &RISCV::VVWRegClass, defPredReg,
-        //       RISCV::VFMADD_S_RDY_VVVV, RISCV::VFMADD_S_RDY_VVVS,
-        //       RISCV::VFMADD_S_RDY_VVSV, RISCV::VFMADD_S_RDY_VVSS,
-        //       RISCV::VFMADD_S_RDY_VSVV, RISCV::VFMADD_S_RDY_VSVS,
-        //       RISCV::VFMADD_S_RDY_VSSV, RISCV::VFMADD_S_RDY_VSSS,
-        //       RISCV::VFMADD_S_RDY_SSSS);
-        //   continue;
-        // case RISCV::FMADD_D_RDY :
-        //   vectorizeFPTriOp(&*I, &RISCV::VVRRegClass, defPredReg,
-        //       RISCV::VFMADD_D_RDY_VVVV, RISCV::VFMADD_D_RDY_VVVS,
-        //       RISCV::VFMADD_D_RDY_VVSV, RISCV::VFMADD_D_RDY_VVSS,
-        //       RISCV::VFMADD_D_RDY_VSVV, RISCV::VFMADD_D_RDY_VSVS,
-        //       RISCV::VFMADD_D_RDY_VSSV, RISCV::VFMADD_D_RDY_VSSS,
-        //       RISCV::VFMADD_D_RDY_SSSS);
-        //   continue;
+        case RISCV::FADD_D:
+          vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VFADD_D_RDY_VVV, RISCV::VFADD_D_RDY_VVS, RISCV::VFADD_D_RDY_VSV,
+              RISCV::VFADD_D_RDY_VSS, RISCV::VFADD_D_RDY_SSS);
+          continue;
+        case RISCV::FSUB_D :
+          vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VFSUB_D_RDY_VVV, RISCV::VFSUB_D_RDY_VVS, RISCV::VFSUB_D_RDY_VSV,
+              RISCV::VFSUB_D_RDY_VSS, RISCV::VFSUB_D_RDY_SSS);
+          continue;
+        case RISCV::FMUL_D :
+          vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VFMUL_D_RDY_VVV, RISCV::VFMUL_D_RDY_VVS, RISCV::VFMUL_D_RDY_VSV,
+              RISCV::VFMUL_D_RDY_VSS, RISCV::VFMUL_D_RDY_SSS);
+          continue;
+        case RISCV::FADD_S :
+          vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFADD_S_RDY_VVV, RISCV::VFADD_S_RDY_VVS, RISCV::VFADD_S_RDY_VSV,
+              RISCV::VFADD_S_RDY_VSS, RISCV::VFADD_S_RDY_SSS);
+          continue;
+        case RISCV::FSUB_S :
+          vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFSUB_S_RDY_VVV, RISCV::VFSUB_S_RDY_VVS, RISCV::VFSUB_S_RDY_VSV,
+              RISCV::VFSUB_S_RDY_VSS, RISCV::VFSUB_S_RDY_SSS);
+          continue;
+        case RISCV::FMUL_S :
+          vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFMUL_S_RDY_VVV, RISCV::VFMUL_S_RDY_VVS, RISCV::VFMUL_S_RDY_VSV,
+              RISCV::VFMUL_S_RDY_VSS, RISCV::VFMUL_S_RDY_SSS);
+          continue;
+        case RISCV::FDIV_S :
+          vectorizeFPBinOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFDIV_S_RDY_VVV, RISCV::VFDIV_S_RDY_VVS, RISCV::VFDIV_S_RDY_VSV,
+              RISCV::VFDIV_S_RDY_VSS, RISCV::VFDIV_S_RDY_SSS);
+          continue;
+        case RISCV::FMADD_S :
+          vectorizeFPTriOp(&*I, &RISCV::VVWRegClass, defPredReg,
+              RISCV::VFMADD_S_RDY_VVVV, RISCV::VFMADD_S_RDY_VVVS,
+              RISCV::VFMADD_S_RDY_VVSV, RISCV::VFMADD_S_RDY_VVSS,
+              RISCV::VFMADD_S_RDY_VSVV, RISCV::VFMADD_S_RDY_VSVS,
+              RISCV::VFMADD_S_RDY_VSSV, RISCV::VFMADD_S_RDY_VSSS,
+              RISCV::VFMADD_S_RDY_SSSS);
+          continue;
+        case RISCV::FMADD_D :
+          vectorizeFPTriOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VFMADD_D_RDY_VVVV, RISCV::VFMADD_D_RDY_VVVS,
+              RISCV::VFMADD_D_RDY_VVSV, RISCV::VFMADD_D_RDY_VVSS,
+              RISCV::VFMADD_D_RDY_VSVV, RISCV::VFMADD_D_RDY_VSVS,
+              RISCV::VFMADD_D_RDY_VSSV, RISCV::VFMADD_D_RDY_VSSS,
+              RISCV::VFMADD_D_RDY_SSSS);
+          continue;
         case RISCV::PseudoRET :
           I->setDesc(TII->get(RISCV::VSTOP));
-          I->RemoveOperand(1);
-          I->RemoveOperand(0);
+          // I->RemoveOperand(1);
+          // I->RemoveOperand(0);
           continue;
         // check that previously added vector copies for phi's are still correct
         case RISCV::VADD_VSS:
@@ -1669,13 +1682,18 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
       changeToPostRegAllocVecInst(MI);
     }
   }
-  NamedMDNode* vfcfg = MF.getFunction().getParent()->getNamedMetadata("hwacha.vfcfg");
+
+  LLVM_DEBUG(MF.getFunction().dump());
+
+  NamedMDNode* vfcfg = const_cast<Module*>(MF.getMMI().getModule())->getOrInsertNamedMetadata("hwacha.vfcfg");
   Type *Int64 = IntegerType::get(MF.getFunction().getContext(), 64);
   Metadata *cfg[4] = {ConstantAsMetadata::get(ConstantInt::get(Int64, numDRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numWRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numHRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numPRegs))};
-  vfcfg->addOperand(MDNode::get(MF.getFunction().getContext(), cfg));
+  assert(vfcfg != nullptr);
+  auto functionContext = MDNode::get(MF.getFunction().getContext(), cfg);
+  vfcfg->addOperand(functionContext);
   return true;
 }
 
