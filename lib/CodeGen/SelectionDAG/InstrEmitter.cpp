@@ -853,6 +853,11 @@ EmitMachineNode(SDNode *Node, bool IsClone, bool IsCloned,
     assert(NumMIOperands >= II.getNumOperands() &&
            "Too few operands for a variadic node!");
   else
+    LLVM_DEBUG(Node->dump());
+    LLVM_DEBUG(dbgs() << NumMIOperands << "\n");
+    LLVM_DEBUG(dbgs() << II.getNumOperands() << "\n");
+    LLVM_DEBUG(dbgs() << II.getNumImplicitDefs() << "\n");
+    LLVM_DEBUG(dbgs() << NumImpUses << "\n");
     assert(NumMIOperands >= II.getNumOperands() &&
            NumMIOperands <= II.getNumOperands() + II.getNumImplicitDefs() +
                             NumImpUses &&

@@ -1920,25 +1920,38 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
   if(isOpenCLKernel) {
     // Read out the configuration from metadata
-    if(openCLMetadata->getNumOperands() < 2)
+    if(openCLMetadata->getNumOperands() < 1)
       llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
-    auto* vfcfgD = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(0))->getValue());
-    auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(1))->getValue());
-    auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(2))->getValue());
-    auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1)->getOperand(3))->getValue());
+    auto* vfcfgD = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(0))->getValue());
+    auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(1))->getValue());
+    auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(2))->getValue());
+    auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(3))->getValue());
 
+    LLVM_DEBUG(dbgs() << "VCONFIG VALUES" << vfcfgD->getValue() << " " << vfcfgS->getValue() << " " << vfcfgH->getValue() << " " << vfcfgP->getValue());
+    
     SmallVector<SDValue, 8> vsetcfgOps;
+    vsetcfgOps.push_back(Chain);
     vsetcfgOps.push_back(DAG.getConstant(vfcfgD->getValue(), DL, MVT::i64, true));
     vsetcfgOps.push_back(DAG.getConstant(vfcfgS->getValue(), DL, MVT::i64, true));
     vsetcfgOps.push_back(DAG.getConstant(vfcfgH->getValue(), DL, MVT::i64, true));
     vsetcfgOps.push_back(DAG.getConstant(vfcfgP->getValue(), DL, MVT::i64, true));
-    vsetcfgOps.push_back(Chain);
-    vsetcfgOps.push_back(Glue);
-    Chain = SDValue(DAG.getMachineNode(RISCV::VSETCFG, DL, MVT::i64, MVT::Other, MVT::Glue,
-          vsetcfgOps), 1);
+    if (Glue.getNode()) {
+      vsetcfgOps.push_back(Glue);
+    }
+
+   LLVM_DEBUG(vsetcfgOps[0].dump());
+   LLVM_DEBUG(vsetcfgOps[1].dump());
+   LLVM_DEBUG(vsetcfgOps[2].dump());
+   LLVM_DEBUG(vsetcfgOps[3].dump());
+   LLVM_DEBUG(vsetcfgOps[4].dump());
+
+    SDVTList NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
+    LLVM_DEBUG(dbgs() << "VSETCFG opcode" << DAG.getMachineNode(RISCVISD::VSETCFG, DL, NodeTys, vsetcfgOps)->getOpcode());
+    Chain = SDValue(DAG.getMachineNode(RISCVISD::VSETCFG, DL, NodeTys, vsetcfgOps), 1);
+
     Glue = Chain.getValue(2);
     //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
-    Chain = SDValue(DAG.getMachineNode(RISCV::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
+    Chain = SDValue(DAG.getMachineNode(RISCVISD::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
         DAG.getConstant(0, DL, MVT::i64, true), Chain, Glue), 1);// take the chain as res
     Glue = Chain.getValue(2);
   }

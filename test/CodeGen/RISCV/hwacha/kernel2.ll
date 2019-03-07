@@ -3,21 +3,6 @@ declare i64 @llvm.hwacha.veidx() #0
 
 ; Function Attrs: noinline nounwind
 define dso_local void @_pocl_launcher_saxpy(i32*, i32*, i32, i32, i64, i64, i64, i64, i64, i64, i64, i64, i64) {
-  %mul.i.i = shl i64 %7, 9
-  %add.i.i = add i64 %mul.i.i, %10
-  %call.i.i.i = call i64 @llvm.hwacha.veidx() #0
-  %add1.i.i = add i64 %add.i.i, %call.i.i.i
-  %sext = shl i64 %add1.i.i, 32
-  %idxprom.i = ashr exact i64 %sext, 32
-  %arrayidx.i = getelementptr inbounds i32, i32* %0, i64 %idxprom.i
-  %14 = load i32, i32* %arrayidx.i, align 4
-  %mul.i = mul i32 %14, %2
-  %sext1 = shl i64 %add1.i.i, 32
-  %idxprom1.i = ashr exact i64 %sext1, 32
-  %arrayidx2.i = getelementptr inbounds i32, i32* %1, i64 %idxprom1.i
-  %15 = load i32, i32* %arrayidx2.i, align 4
-  %add.i = add i32 %15, %mul.i
-  store i32 %add.i, i32* %arrayidx2.i, align 4
   ret void
 }
 

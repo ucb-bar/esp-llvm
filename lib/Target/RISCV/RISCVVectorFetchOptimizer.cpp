@@ -992,7 +992,6 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
                 MRI->getRegClass(I->getOperand(1).getReg()));
             }
             I->getOperand(1).setSubReg(0); // v registers hold all values with no sub regs for now
-            
           }
           continue;
         case TargetOpcode::SUBREG_TO_REG :// v registers hold all values with no sub regs for now
@@ -1692,8 +1691,12 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numHRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numPRegs))};
   assert(vfcfg != nullptr);
+  LLVM_DEBUG(dbgs() << "VFGCF INSERTED");
   auto functionContext = MDNode::get(MF.getFunction().getContext(), cfg);
+  LLVM_DEBUG(functionContext->dump());
   vfcfg->addOperand(functionContext);
+
+  LLVM_DEBUG(vfcfg->getOperand(0)->dump());
   return true;
 }
 
