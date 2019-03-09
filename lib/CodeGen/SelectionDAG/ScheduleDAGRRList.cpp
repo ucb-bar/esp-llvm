@@ -482,6 +482,7 @@ static bool IsChainDependent(SDNode *Outer, SDNode *Inner,
 static SDNode *
 FindCallSeqStart(SDNode *N, unsigned &NestLevel, unsigned &MaxNest,
                  const TargetInstrInfo *TII) {
+  LLVM_DEBUG(dbgs() << "FINDING CALL SEQ START" << "\n");
   while (true) {
     // For a TokenFactor, examine each operand. There may be multiple ways
     // to get to the CALLSEQ_BEGIN, but we need to find the path with the
@@ -515,14 +516,20 @@ FindCallSeqStart(SDNode *N, unsigned &NestLevel, unsigned &MaxNest,
           return N;
       }
     }
+    LLVM_DEBUG(dbgs() << "Examining: ");
+    LLVM_DEBUG(N->dump());
     // Otherwise, find the chain and continue climbing.
-    for (const SDValue &Op : N->op_values())
+    for (const SDValue &Op : N->op_values()) {
+      LLVM_DEBUG(dbgs() << "Looking at parameter: " << "\n");
+      LLVM_DEBUG(Op.dump());
+      LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
       if (Op.getValueType() == MVT::Other) {
         N = Op.getNode();
         goto found_chain_operand;
       }
+    }
     return nullptr;
-  found_chain_operand:;
+      found_chain_operand:;
     if (N->getOpcode() == ISD::EntryToken)
       return nullptr;
   }

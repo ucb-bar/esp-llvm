@@ -37,11 +37,6 @@ def FeatureStdExtD
 def HasStdExtD : Predicate<"Subtarget->hasStdExtD()">,
                            AssemblerPredicate<"FeatureStdExtD">;
 
-def FeatureXhwacha : SubtargetFeature<"x", "HasXhwacha", "true",
-                                "'X' (Supports Hwacha Vector Fetch Architecture)">;
-def HasXhwacha : Predicate<"Subtarget->hasXhwacha()">,
-                           AssemblerPredicate<"FeatureXhwacha">;
-
 def FeatureStdExtC
     : SubtargetFeature<"c", "HasStdExtC", "true",
                        "'C' (Compressed Instructions)">;
@@ -68,6 +63,12 @@ def IsRV32E : Predicate<"Subtarget->isRV32E()">,
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
                        "Enable Linker relaxation.">;
+
+def FeatureXhwacha : SubtargetFeature<"x", "HasXhwacha", "true",
+                                "'X' (Supports Hwacha Vector Fetch Architecture)", [FeatureStdExtM, FeatureStdExtD, Feature64Bit]>;
+def HasXhwacha : Predicate<"Subtarget->hasXhwacha()">,
+                           AssemblerPredicate<"FeatureXhwacha">;
+
 
 //===----------------------------------------------------------------------===//
 // Registers, calling conventions, instruction descriptions.

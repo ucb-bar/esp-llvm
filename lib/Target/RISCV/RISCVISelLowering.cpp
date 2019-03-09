@@ -1926,8 +1926,6 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(1))->getValue());
     auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(2))->getValue());
     auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(3))->getValue());
-
-    LLVM_DEBUG(dbgs() << "VCONFIG VALUES" << vfcfgD->getValue() << " " << vfcfgS->getValue() << " " << vfcfgH->getValue() << " " << vfcfgP->getValue());
     
     SmallVector<SDValue, 8> vsetcfgOps;
     vsetcfgOps.push_back(Chain);
@@ -1939,21 +1937,51 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       vsetcfgOps.push_back(Glue);
     }
 
-   LLVM_DEBUG(vsetcfgOps[0].dump());
-   LLVM_DEBUG(vsetcfgOps[1].dump());
-   LLVM_DEBUG(vsetcfgOps[2].dump());
-   LLVM_DEBUG(vsetcfgOps[3].dump());
-   LLVM_DEBUG(vsetcfgOps[4].dump());
+    LLVM_DEBUG(dbgs() << "VSETCFG operands" << "\n");
+    LLVM_DEBUG(vsetcfgOps[0].dump());
+    LLVM_DEBUG(vsetcfgOps[1].dump());
+    LLVM_DEBUG(vsetcfgOps[2].dump());
+    LLVM_DEBUG(vsetcfgOps[3].dump());
+    LLVM_DEBUG(vsetcfgOps[4].dump());
+    LLVM_DEBUG(dbgs() << vsetcfgOps[0].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetcfgOps[1].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetcfgOps[2].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetcfgOps[3].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetcfgOps[4].getValueType().getEVTString() << "\n");
 
     SDVTList NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
-    LLVM_DEBUG(dbgs() << "VSETCFG opcode" << DAG.getMachineNode(RISCVISD::VSETCFG, DL, NodeTys, vsetcfgOps)->getOpcode());
-    Chain = SDValue(DAG.getMachineNode(RISCVISD::VSETCFG, DL, NodeTys, vsetcfgOps), 1);
+    auto VsetcfgNode = DAG.getNode(RISCVISD::VSETCFG, DL, NodeTys, vsetcfgOps);
+    Glue = VsetcfgNode.getValue(2);
+    Chain = VsetcfgNode.getValue(1);
 
-    Glue = Chain.getValue(2);
+    for (const SDValue &Op : VsetcfgNode.getNode()->op_values()) {
+      LLVM_DEBUG(Op.dump());
+      LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
+    }
+
     //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
-    Chain = SDValue(DAG.getMachineNode(RISCVISD::VSETVL, DL, MVT::i64, MVT::Other, MVT::Glue,
-        DAG.getConstant(0, DL, MVT::i64, true), Chain, Glue), 1);// take the chain as res
-    Glue = Chain.getValue(2);
+    //TODO: Ask colin why this is vsetvl always set to zero??
+    SDValue vsetvlOps[] = {Chain, DAG.getConstant(0, DL, MVT::i64, true), Glue};
+
+    LLVM_DEBUG(dbgs() << "VSETVL operands" << "\n");
+    LLVM_DEBUG(vsetvlOps[0].dump());
+    LLVM_DEBUG(vsetvlOps[1].dump());
+    LLVM_DEBUG(vsetvlOps[2].dump());
+    LLVM_DEBUG(dbgs() << vsetvlOps[0].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetvlOps[1].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetvlOps[2].getValueType().getEVTString() << "\n");
+
+    NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
+    auto VsetvlNode = DAG.getNode(RISCVISD::VSETVL, DL, NodeTys, vsetvlOps);// take the chain as res
+
+
+    for (const SDValue &Op : VsetvlNode.getNode()->op_values()) {
+      LLVM_DEBUG(Op.dump());
+      LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
+    }
+
+    Glue = VsetvlNode.getValue(2);
+    Chain = VsetvlNode.getValue(1);
   }
 
   // The first call operand is the chain and the second is the target address.

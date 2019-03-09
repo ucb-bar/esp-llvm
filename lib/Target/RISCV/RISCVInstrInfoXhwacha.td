@@ -8,17 +8,13 @@
 //===----------------------------------------------------------------------===//
 
 
-def imm64sx32 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<32>(Imm);}]> {
+def imm64sx32 : Operand<i64>, ImmLeaf<i64, [{return isInt<32>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<32>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<32>";
 }
 
-def imm64 : Operand<XLenVT>, ImmLeaf<XLenVT, [{return isInt<64>(Imm);}]> {
-  let ParserMatchClass = SImmAsmOperand<64>;
-  let EncoderMethod = "getImmOpValue";
-  let DecoderMethod = "decodeSImmOperand<64>";
-}
+def imm64 : Operand<i64>;
 
 // Transformation Function - get the lower 32 bits.
 def LO32 : SDNodeXForm<imm, [{
@@ -58,26 +54,19 @@ def pred : PredicateOperand<i1, (ops imm1, VPR), (ops (i1 0), vp0)> {
 
 //TODO NAMESPACE to riscv_
 
-def SDT_RVSETCFG            : SDTypeProfile<1, 4,[SDTCisVT<0, i64>,
+def SDT_RISCVSETCFG            : SDTypeProfile<1, 4,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>,
                                                   SDTCisVT<2, i64>,
                                                   SDTCisVT<3, i64>,
                                                   SDTCisVT<4, i64>]>;
-def SDT_RVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
+def SDT_RISCVSETVL             : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
                                                   SDTCisVT<1, i64>]>;
 
-def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
-def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
-
-def SDT_RISCVVSETCFG   : SDTypeProfile<1, 4,[SDTCisVT<0, i64>,
-                              SDTCisVT<1, i64>,
-                              SDTCisVT<2, i64>,
-                              SDTCisVT<3, i64>,
-                              SDTCisVT<4, i64>]>;
-def SDT_RISCVVSETVL  : SDTypeProfile<1, 1,[SDTCisVT<0, i64>,
-                        SDTCisVT<1, i64>]>;
-
 def SDT_RISCVVCall               : SDTypeProfile<0, -1, [SDTCisPtrTy<0>]>;
+
+def r_vsetcfg           : SDNode<"RISCVISD::VSETCFG", SDT_RISCVSETCFG, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
+def r_vsetvl            : SDNode<"RISCVISD::VSETVL", SDT_RISCVSETVL, [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue, SDNPSideEffect]>;
+
 
 def r_callv  : SDNode<"RISCVISD::CALLV", SDT_RISCVVCall,
                  [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
@@ -183,11 +172,13 @@ multiclass InstVR4<string name, SDPatternOperator op> {
 
 //configure vector unit
 let isCodeGenOnly = 1, isPseudo = 1 in {
-  def VSETCFG : InstV< (outs GPR:$cfg), (ins imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs),
-                "vsetcfg", "$cfg,$dregs,$wregs,$hregs,$pregs", [(set GPR:$cfg, (r_vsetcfg imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs))]>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
-  def VSETVL  : InstV< (outs GPR:$res), (ins GPR:$goal),
-                "vsetvl", "$res,$goal", [(set GPR:$res, (r_vsetvl GPR:$goal))]>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
+  def VSETCFG : InstV<(outs GPR:$cfg), (ins imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs),
+                "vsetcfg", "$cfg,$dregs,$wregs,$hregs,$pregs", []>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
+  def VSETVL  : InstV<(outs GPR:$res), (ins GPR:$goal), "vsetvl", "$res,$goal", []>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
 }
+
+def: Pat<(r_vsetvl GPR:$goal), (VSETVL GPR:$goal)>;
+def: Pat<(r_vsetcfg i64:$dregs, i64:$wregs, i64:$hregs, i64:$pregsl), (VSETCFG imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregsl)>;
 
 let isCall = 1, isCodeGenOnly = 1 in {
     def VFetch : InstV< (outs), (ins GPR:$target), "vf", "$target", [(r_callv regaddr:$target)]>, Requires<[HasXhwacha]>;
