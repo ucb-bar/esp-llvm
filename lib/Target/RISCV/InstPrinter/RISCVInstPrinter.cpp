@@ -41,6 +41,8 @@ static cl::opt<bool>
 
 void RISCVInstPrinter::printInst(const MCInst *MI, raw_ostream &O,
                                  StringRef Annot, const MCSubtargetInfo &STI) {
+  LLVM_DEBUG(dbgs() << "Printing Inst" << "\n");
+  LLVM_DEBUG(MI->dump());
   bool Res = false;
   const MCInst *NewMI = MI;
   MCInst UncompressedMI;

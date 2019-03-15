@@ -794,6 +794,10 @@ void RISCVVectorFetchMachOpt::vectorizeFPTriOp(MachineInstr *I, const TargetRegi
 
 void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPredReg,
     unsigned IMM, unsigned VVS, unsigned SSS) {
+  LLVM_DEBUG(dbgs() << "Found possible binary instruction that can be vectorized" << "\n");
+  LLVM_DEBUG(I->dump());
+  LLVM_DEBUG(dbgs() << "Can be scalarized status: " << (MS->invar[I] ? "YES" : "NO") << "\n");
+
   if(MS->invar[I]) {
     // Generate one instruction
     // vADDi vsdest, vssrc, imm
@@ -960,8 +964,9 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
     vregs.clear();
     // In each BB change each instruction
     for (MachineBasicBlock::iterator I = MFI->begin(); I != MFI->end(); ++I) {
-      printf("Inst:");I->dump();fflush(stdout);fflush(stderr);
-      printf("invar?%d\n",MS->invar[&*I]);fflush(stdout);fflush(stderr);
+      LLVM_DEBUG(dbgs() << "Processing instruction:" << "\n");
+      LLVM_DEBUG(I->dump());
+
       // All inputs are vs registers and outputs are vv registers
       switch(I->getOpcode()) {
         case TargetOpcode::COPY : // TODO: look at whether to copy into different reg class based on subreg
@@ -981,15 +986,16 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
              MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
              MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
              MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass
-              ) {
+              )
+          {
+              LLVM_DEBUG(dbgs() << "FOUND A COPY OPCODE THAT SHOULD BE CONVERTED TO VECTOR REGISTER" << "\n");
+              LLVM_DEBUG(dbgs() << "Dump of MIR up to current point: " << "\n");
+              //LLVM_DEBUG(I->dump());
+              LLVM_DEBUG(MF.dump());
 
-            LLVM_DEBUG(dbgs() << "FOUND A COPY OPCODE");
-            //LLVM_DEBUG(I->dump());
-            LLVM_DEBUG(MF.dump());
-
-            if (TargetRegisterInfo::isVirtualRegister(I->getOperand(0).getReg())) {
-              MRI->setRegClass(I->getOperand(0).getReg(),
-                MRI->getRegClass(I->getOperand(1).getReg()));
+              if (TargetRegisterInfo::isVirtualRegister(I->getOperand(0).getReg())) {
+                MRI->setRegClass(I->getOperand(0).getReg(),
+                  MRI->getRegClass(I->getOperand(1).getReg()));
             }
             I->getOperand(1).setSubReg(0); // v registers hold all values with no sub regs for now
           }
