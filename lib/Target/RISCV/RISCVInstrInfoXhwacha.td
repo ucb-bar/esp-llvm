@@ -77,92 +77,92 @@ def r_callv  : SDNode<"RISCVISD::CALLV", SDT_RISCVVCall,
 def regaddr : ComplexPattern<iPTR, 1, "selectRegAddr">;
 
 multiclass InstVR2<string name, SDPatternOperator op> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0 in {
   def _VV : RVInst<(outs VVR:$dst), (ins VVR:$src1, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1", [(set VVR:$dst, (op VVR:$src1))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1", [], InstFormatOther>;
   def _VS : RVInst<(outs VVR:$dst), (ins VSR:$src1, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1", [(set VVR:$dst, (op VSR:$src1))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1", [], InstFormatOther>;
   def _SS : RVInst<(outs VSR:$dst), (ins VSR:$src1),
-    name#"", "$dst, $src1", [(set VSR:$dst, (op VSR:$src1))], InstFormatOther>;
+    name#"", "$dst, $src1", [], InstFormatOther>;
   }
 }
 
 multiclass InstVR3<string name, SDPatternOperator op, RegisterOperand typ> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0 in {
   def _VVV : RVInst<(outs typ:$dst), (ins typ:$src1, typ:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, typ:$src2))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VVS : RVInst<(outs typ:$dst), (ins typ:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set typ:$dst, (op typ:$src1, VSR:$src2))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VSV : RVInst<(outs typ:$dst), (ins VSR:$src1, typ:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, typ:$src2))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VSS : RVInst<(outs typ:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set typ:$dst, (op VSR:$src1, VSR:$src2))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _SSS : RVInst<(outs VSR:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"", "$dst, $src1, $src2", [(set VSR:$dst, (op VSR:$src1, VSR:$src2))], InstFormatOther>;
+    name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   }
 }
 
 multiclass InstVR3Cmp<string name, SDPatternOperator op> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0  in {
   def _VV : RVInst<(outs VPR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VS : RVInst<(outs VPR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _SV : RVInst<(outs VPR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _SS : RVInst<(outs VPR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   }
 }
 
 multiclass InstVR3CmpSwitch<string name, SDPatternOperator op> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0  in {
   def _VV : RVInst<(outs VPR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VVR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src2, $src1", [], InstFormatOther>;
   def _VS : RVInst<(outs VPR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VVR:$src1), (i64 VSR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src2, $src1", [], InstFormatOther>;
   def _SV : RVInst<(outs VPR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VVR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src2, $src1", [], InstFormatOther>;
   def _SS : RVInst<(outs VPR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src2, $src1", [(set VPR:$dst, (trunc (i32 (op (i64 VSR:$src1), (i64 VSR:$src2)))))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src2, $src1", [], InstFormatOther>;
   }
 }
 
 multiclass InstVR3Int<string name, SDPatternOperator op> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0  in {
   def _VVV : RVInst<(outs VVR:$dst), (ins VVR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VVR:$src2)))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VVS : RVInst<(outs VVR:$dst), (ins VVR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VVR:$src1), (i64 VSR:$src2)))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VSV : RVInst<(outs VVR:$dst), (ins VSR:$src1, VVR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VVR:$src2)))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _VSS : RVInst<(outs VVR:$dst), (ins VSR:$src1, VSR:$src2, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2", [(set VVR:$dst, (op (i64 VSR:$src1), (i64 VSR:$src2)))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   def _SSS : RVInst<(outs VSR:$dst), (ins VSR:$src1, VSR:$src2),
-    name#"", "$dst, $src1, $src2", [(set VSR:$dst, (op (i64 VSR:$src1), (i64 VSR:$src2)))], InstFormatOther>;
+    name#"", "$dst, $src1, $src2", [], InstFormatOther>;
   }
 }
 
 multiclass InstVR4<string name, SDPatternOperator op> {
-  let isPseudo = 1, isCodeGenOnly = 1 in {
+  let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0  in {
   def _VVVV : RVInst<(outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VVR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VVR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VVSV : RVInst<(outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VVR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VSVV : RVInst<(outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VVR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VVR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VSSV : RVInst<(outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VVR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VVR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VVVS: RVInst<(outs VVR:$dst), (ins VVR:$src1, VVR:$src2, VSR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VVR:$src2, VSR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VVSS: RVInst<(outs VVR:$dst), (ins VVR:$src1, VSR:$src2, VSR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VVR:$src1, VSR:$src2, VSR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VSVS: RVInst<(outs VVR:$dst), (ins VSR:$src1, VVR:$src2, VSR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VVR:$src2, VSR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _VSSS: RVInst<(outs VVR:$dst), (ins VSR:$src1, VSR:$src2, VSR:$src3, pred:$p),
-    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [(set VVR:$dst, (op VSR:$src1, VSR:$src2, VSR:$src3))], InstFormatOther>;
+    "@$p\t"#name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   def _SSSS : RVInst<(outs VSR:$dst), (ins VSR:$src1, VSR:$src2, VSR:$src3),
-    name#"", "$dst, $src1, $src2, $src3", [(set VSR:$dst, (op VSR:$src1, VSR:$src2, VSR:$src3))], InstFormatOther>;
+    name#"", "$dst, $src1, $src2, $src3", [], InstFormatOther>;
   }
 }
 

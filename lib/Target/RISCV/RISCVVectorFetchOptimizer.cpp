@@ -101,6 +101,7 @@ namespace {
     virtual void vectorizeBinOp(MachineInstr *I, unsigned defPredReg,
         unsigned VVV, unsigned VVS, unsigned VSV,
         unsigned VSS, unsigned SSS);
+    virtual void vectorizeFMV(MachineInstr *I);
     virtual void vectorizeFPBinOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
         unsigned VVV, unsigned VVS, unsigned VSV,
         unsigned VSS, unsigned SSS);
@@ -685,6 +686,12 @@ void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredRe
 }
 
 
+void RISCVVectorFetchMachOpt::vectorizeFMV(MachineInstr *I) {
+  //Copy probably optimized out
+  LLVM_DEBUG(dbgs() << "foo bar " << I->getNumOperands());
+  MRI->setRegClass(I->getOperand(0).getReg(), MRI->getRegClass(I->getOperand(1).getReg()));
+  I->setDesc(TII->get(TargetOpcode::COPY));
+}
 
 void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
     const TargetRegisterClass *destRC, unsigned defPredReg,
@@ -720,9 +727,13 @@ void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
         I->setDesc(TII->get(VVV));
       }
     }
+    //TODO: Add check for rounding mode?
+    I->RemoveOperand(3);
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
   } else {
+    //TODO: Add check for rounding mode?
+    I->RemoveOperand(3);
     I->setDesc(TII->get(SSS));
   }
   MRI->setRegClass(I->getOperand(0).getReg(), destClass);
@@ -949,7 +960,6 @@ unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned V
 
 
 void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned defPredReg) {
-
   LLVM_DEBUG(dbgs() << "Processing Kernel:");
   LLVM_DEBUG(MF.dump());
 
@@ -1233,6 +1243,9 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         //       RISCV::VFCVT_S_H_RDY_VV, RISCV::VFCVT_S_H_RDY_VS,
         //       RISCV::VFCVT_S_H_RDY_SS);
         //   continue;
+        case RISCV::FMV_W_X:
+          vectorizeFMV(&*I);
+          continue;
         case RISCV::FADD_D:
           vectorizeFPBinOp(&*I, &RISCV::VVRRegClass, defPredReg,
               RISCV::VFADD_D_RDY_VVV, RISCV::VFADD_D_RDY_VVS, RISCV::VFADD_D_RDY_VSV,

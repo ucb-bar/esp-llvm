@@ -1417,6 +1417,25 @@ static SDValue unpackFromRegLoc(SelectionDAG &DAG, SDValue Chain,
   return convertLocVTToValVT(DAG, Val, VA, DL);
 }
 
+// The caller is responsible for loading the full value if the argument is
+// passed with CCValAssign::Indirect.
+static SDValue unpackFromVectorRegLoc(SelectionDAG &DAG, SDValue Chain,
+                                const CCValAssign &VA, const SDLoc &DL) {
+  MachineFunction &MF = DAG.getMachineFunction();
+  MachineRegisterInfo &RegInfo = MF.getRegInfo();
+  EVT LocVT = VA.getLocVT();
+  SDValue Val;
+
+  unsigned VReg = RegInfo.createVirtualRegister(&RISCV::VSRRegClass);
+  RegInfo.addLiveIn(VA.getLocReg(), VReg);
+  Val = DAG.getCopyFromReg(Chain, DL, VReg, LocVT);
+
+  if (VA.getLocInfo() == CCValAssign::Indirect)
+    return Val;
+
+  return convertLocVTToValVT(DAG, Val, VA, DL);
+}
+
 static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
                                    const CCValAssign &VA, const SDLoc &DL) {
   EVT LocVT = VA.getLocVT();
@@ -1552,8 +1571,12 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     // case.
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64)
       ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL);
-    else if (VA.isRegLoc())
-      ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
+    else if (VA.isRegLoc()) {
+     if (isOpenCLKernelFunction(DAG.getMachineFunction().getFunction()))
+       ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL);
+     else
+        ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
+    }
     else
       ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL);
 
