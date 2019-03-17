@@ -69,6 +69,11 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
 
   // Use markSuperRegs to ensure any register aliases are also reserved
+
+  if (MF.getSubtarget<RISCVSubtarget>().hasXhwacha()) {
+    markSuperRegs(Reserved, RISCV::vs0);
+  }
+
   markSuperRegs(Reserved, RISCV::X0); // zero
   markSuperRegs(Reserved, RISCV::X1); // ra
   markSuperRegs(Reserved, RISCV::X2); // sp
@@ -81,7 +86,7 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
 }
 
 bool RISCVRegisterInfo::isConstantPhysReg(unsigned PhysReg) const {
-  return PhysReg == RISCV::X0;
+  return PhysReg == RISCV::X0 || PhysReg == RISCV::vs0;
 }
 
 const uint32_t *RISCVRegisterInfo::getNoPreservedMask() const {
