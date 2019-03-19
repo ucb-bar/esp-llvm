@@ -927,30 +927,33 @@ void RISCVVectorFetchMachOpt::vectorizeIntCvtOp(MachineInstr *I, const TargetReg
 
 
 unsigned RISCVVectorFetchMachOpt::getVectorCompareOp(MachineInstr *I, unsigned VV, unsigned VS, unsigned SV, unsigned SS) {
-  if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
-    assert(I->getOperand(1).getReg() == RISCV::vs0);
-    if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
-      assert(I->getOperand(2).getReg() == RISCV::vs0);
+  LLVM_DEBUG(dbgs() << "Processing Instruction:" << "\n");
+  LLVM_DEBUG(I->dump());
+
+  if(TRI->isPhysicalRegister(I->getOperand(0).getReg())) {
+    assert(I->getOperand(0).getReg() == RISCV::vs0);
+    if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
+      assert(I->getOperand(1).getReg() == RISCV::vs0);
       return SS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       return SS;
     } else {
       return SV;
     }
-  } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass){
-    if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
-      assert(I->getOperand(2).getReg() == RISCV::vs0);
+  } else if(MRI->getRegClass(I->getOperand(0).getReg()) == &RISCV::VSRRegClass){
+    if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
+      assert(I->getOperand(1).getReg() == RISCV::vs0);
       return SS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       return SS;
     } else {
       return SV;
     }
   } else {
-    if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
-      assert(I->getOperand(2).getReg() == RISCV::vs0);
+    if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
+      assert(I->getOperand(1).getReg() == RISCV::vs0);
       return VS;
-    } else if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       return VS;
     } else {
       return VV;
@@ -1319,13 +1322,11 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         case RISCV::BGEU:
         // case RISCV::BLE:
         // case RISCV::BLEU:
-          if(I->getOperand(1).getReg() == RISCV::X0 ||
-              I->getOperand(1).getReg() == RISCV::X0) {
-            I->getOperand(1).setReg(RISCV::vs0);
+          if(I->getOperand(0).getReg() == RISCV::X0) {
+            I->getOperand(0).setReg(RISCV::vs0);
           }
-          if(I->getOperand(2).getReg() == RISCV::X0 ||
-              I->getOperand(2).getReg() == RISCV::X0) {
-            I->getOperand(2).setReg(RISCV::vs0);
+          if(I->getOperand(1).getReg() == RISCV::X0) {
+            I->getOperand(1).setReg(RISCV::vs0);
           }
           // VCMP will be inserted before each branch in a different pass
           // which will then convert the branch to a VCJAL
@@ -1437,8 +1438,9 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
           llvm_unreachable("Invalid branch condition!");
       }
       bbToNeg.insert(std::make_pair(&MBB, negate));
-      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(opcode),predReg).addReg(term.getOperand(1).getReg()).addReg(term.getOperand(2).getReg()).addImm(0).addReg(defPredReg);
+      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(opcode),predReg).addReg(term.getOperand(0).getReg()).addReg(term.getOperand(1).getReg()).addImm(0).addReg(defPredReg);
       // Convert to VCJAL
+      LLVM_DBEUG(dbgs() << "Adding VCJAL at line" << __LINE__ << "\n");
       BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).add(term.getOperand(0)).addImm(negate).addReg(predReg);
       deadBranches.push_back(&term);
       // track result predicate reg

@@ -14,6 +14,7 @@
 #include "RISCV.h"
 #include "RISCVSubtarget.h"
 #include "RISCVTargetMachine.h"
+#include "RISCVXhwachaUtilities.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -22,9 +23,13 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Debug.h"
 
 #define GET_INSTRINFO_CTOR_DTOR
 #include "RISCVGenInstrInfo.inc"
+
+
+#define DEBUG_TYPE "riscvinstrinfo"
 
 using namespace llvm;
 
@@ -242,11 +247,18 @@ bool RISCVInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
                                    MachineBasicBlock *&FBB,
                                    SmallVectorImpl<MachineOperand> &Cond,
                                    bool AllowModify) const {
+  
+  if (isOpenCLKernelFunction(MBB.getParent()->getFunction())) {
+    return true;
+  }
+
   TBB = FBB = nullptr;
   Cond.clear();
 
   // If the block has no terminators, it just falls into the block after it.
   MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+
+
   if (I == MBB.end() || !isUnpredicatedTerminator(*I))
     return false;
 
@@ -282,6 +294,10 @@ bool RISCVInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
     return true;
 
   // Handle a single unconditional branch.
+
+  LLVM_DEBUG(dbgs() << "Looking at instruction:" << "\n");
+  LLVM_DEBUG(I->dump());
+
   if (NumTerminators == 1 && I->getDesc().isUnconditionalBranch()) {
     TBB = I->getOperand(0).getMBB();
     return false;

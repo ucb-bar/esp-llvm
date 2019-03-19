@@ -1106,8 +1106,22 @@ static const MCPhysReg ArgFPR64s[] = {
 };
 
 static const MCPhysReg ArgVSRs[] = {
-  RISCV::vs1, RISCV::vs2, RISCV::vs3, RISCV::vs4,
-  RISCV::vs5, RISCV::vs6, RISCV::vs7, RISCV::vs8
+  RISCV::vs1, RISCV::vs2, RISCV::vs3, RISCV::vs4, RISCV::vs5,
+  RISCV::vs6, RISCV::vs7, RISCV::vs8, RISCV::vs9, 
+  RISCV::vs10, RISCV::vs11, RISCV::vs12, RISCV::vs13, 
+  RISCV::vs14, RISCV::vs15, RISCV::vs16, RISCV::vs17, 
+  RISCV::vs18, RISCV::vs19, RISCV::vs20, RISCV::vs21, 
+  RISCV::vs22, RISCV::vs23, RISCV::vs24, RISCV::vs25, 
+  RISCV::vs26, RISCV::vs27, RISCV::vs28, RISCV::vs29, 
+  RISCV::vs30, RISCV::vs31, RISCV::vs32, RISCV::vs33, 
+  RISCV::vs34, RISCV::vs35, RISCV::vs36, RISCV::vs37, 
+  RISCV::vs38, RISCV::vs39, RISCV::vs40, RISCV::vs41, 
+  RISCV::vs42, RISCV::vs43, RISCV::vs44, RISCV::vs45, 
+  RISCV::vs46, RISCV::vs47, RISCV::vs48, RISCV::vs49, 
+  RISCV::vs50, RISCV::vs51, RISCV::vs52, RISCV::vs53, 
+  RISCV::vs54, RISCV::vs55, RISCV::vs56, RISCV::vs57, 
+  RISCV::vs58, RISCV::vs59, RISCV::vs60, RISCV::vs61, 
+  RISCV::vs62, RISCV::vs63
 };
 
 // Pass a 2*XLEN argument that has been split into two XLEN values through
@@ -1285,6 +1299,7 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
     Reg = State.AllocateReg(ArgFPR64s, ArgFPR32s);
   else
     Reg = State.AllocateReg(ArgGPRs);
+
   unsigned StackOffset = Reg ? 0 : State.AllocateStack(XLen / 8, XLen / 8);
 
   // If we reach this point and PendingLocs is non-empty, we must be at the
