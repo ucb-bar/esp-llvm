@@ -1440,7 +1440,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
       bbToNeg.insert(std::make_pair(&MBB, negate));
       BuildMI(MBB, &term, term.getDebugLoc(), TII->get(opcode),predReg).addReg(term.getOperand(0).getReg()).addReg(term.getOperand(1).getReg()).addImm(0).addReg(defPredReg);
       // Convert to VCJAL
-      LLVM_DBEUG(dbgs() << "Adding VCJAL at line" << __LINE__ << "\n");
+      LLVM_DEBUG(dbgs() << "Adding VCJAL at line" << __LINE__ << "\n");
       BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).add(term.getOperand(0)).addImm(negate).addReg(predReg);
       deadBranches.push_back(&term);
       // track result predicate reg
