@@ -5,23 +5,18 @@
 _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 # %bb.0:
 	vpset	vp0
-	vmcs	vs1,a4
-	vmcs	vs2,a3
-	vmcs	vs3,a2
-	vmcs	vs4,a1
-	vmcs	vs5,a0
-	vslli	vs2, vs2, 9
-	vadd	vs1, vs2, vs1
+	vslli	vs4, vs4, 9
+	vadd	vs4, vs4, vs5
 	veidx	vv0
-	@vp0	vadd	vv0, vs1, vv0
-	vaddi	vs1, vs0, 32
-	@vp0	vsll	vv0, vv0, vs1
-	vaddi	vs1, vs0, 30
-	@vp0	vsra	vv0, vv0, vs1
-	@vp0	vadd	vv1, vs5, vv0
+	@vp0	vadd	vv0, vs4, vv0
+	vaddi	vs4, vs0, 32
+	@vp0	vsll	vv0, vv0, vs4
+	vaddi	vs4, vs0, 30
+	@vp0	vsra	vv0, vv0, vs4
+	@vp0	vadd	vv1, vs1, vv0
 	@vp0	vlxw	vv2, vs0, vv1
 	@vp0	vfmul.s	vv2, vv2, vs3
-	@vp0	vadd	vv0, vs4, vv0
+	@vp0	vadd	vv0, vs2, vv0
 	@vp0	vlxw	vv3, vs0, vv0
 	@vp0	vfadd.s	vv2, vv3, vv2
 	@vp0	vsxw	vv2, vs0, vv0
@@ -34,19 +29,23 @@ _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 	.type	_pocl_launcher_saxpy_workgroup,@function
 _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 # %bb.0:
-	ld	a4, 56(a1)
-	ld	a3, 32(a1)
-	ld	a1, 8(a0)
-	ld	a1, 0(a1)
-	ld	a2, 0(a0)
-	ld	a5, 0(a2)
+	ld	a2, 56(a1)
+	ld	a1, 32(a1)
+	ld	a3, 8(a0)
+	ld	a3, 0(a3)
+	ld	a4, 0(a0)
+	ld	a4, 0(a4)
 	ld	a0, 16(a0)
 	flw	ft0, 0(a0)
-	fmv.x.w	a2, ft0
-	mv	a0, a5
-	vsetcfg	a5,2,2,0,1
-	li	a5, 4
-	vsetvl	a5,a5
+	fmv.x.w	a0, ft0
+	vmcs	vs1,a4
+	vmcs	vs2,a3
+	vmcs	vs3,a0
+	vmcs	vs4,a1
+	vmcs	vs5,a2
+	vsetcfg	a0,2,2,0,1
+	li	a0, 4
+	vsetvl	a0,a0
 	vf	_pocl_launcher_saxpy
 	ret
 .Lfunc_end1:

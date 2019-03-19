@@ -1105,6 +1105,11 @@ static const MCPhysReg ArgFPR64s[] = {
   RISCV::F14_64, RISCV::F15_64, RISCV::F16_64, RISCV::F17_64
 };
 
+static const MCPhysReg ArgVSRs[] = {
+  RISCV::vs1, RISCV::vs2, RISCV::vs3, RISCV::vs4,
+  RISCV::vs5, RISCV::vs6, RISCV::vs7, RISCV::vs8
+};
+
 // Pass a 2*XLEN argument that has been split into two XLEN values through
 // registers or the stack as necessary.
 static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
@@ -1147,7 +1152,7 @@ static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
 static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
                      MVT ValVT, MVT LocVT, CCValAssign::LocInfo LocInfo,
                      ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsFixed,
-                     bool IsRet, Type *OrigTy) {
+                     bool IsRet, bool IsOpenCLKernel, Type *OrigTy) {
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
@@ -1272,6 +1277,8 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
 
   // Allocate to a register if possible, or else a stack slot.
   unsigned Reg;
+  if (IsOpenCLKernel)
+    Reg = State.AllocateReg(ArgVSRs);
   if (ValVT == MVT::f32 && !UseGPRForF32)
     Reg = State.AllocateReg(ArgFPR32s, ArgFPR64s);
   else if (ValVT == MVT::f64 && !UseGPRForF64)
@@ -1317,7 +1324,7 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
 
 void RISCVTargetLowering::analyzeInputArgs(
     MachineFunction &MF, CCState &CCInfo,
-    const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet) const {
+    const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet, bool IsOpenCLKernel) const {
   unsigned NumArgs = Ins.size();
   FunctionType *FType = MF.getFunction().getFunctionType();
 
@@ -1333,7 +1340,7 @@ void RISCVTargetLowering::analyzeInputArgs(
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
     if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
-                 ArgFlags, CCInfo, /*IsRet=*/true, IsRet, ArgTy)) {
+                 ArgFlags, CCInfo, /*IsFixed=*/true, IsRet, IsOpenCLKernel, ArgTy)) {
       LLVM_DEBUG(dbgs() << "InputArg #" << i << " has unhandled type "
                         << EVT(ArgVT).getEVTString() << '\n');
       llvm_unreachable(nullptr);
@@ -1343,9 +1350,11 @@ void RISCVTargetLowering::analyzeInputArgs(
 
 void RISCVTargetLowering::analyzeOutputArgs(
     MachineFunction &MF, CCState &CCInfo,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, bool IsRet,
+    const SmallVectorImpl<ISD::OutputArg> &Outs, bool IsRet, bool IsOpenCLKernel,
     CallLoweringInfo *CLI) const {
   unsigned NumArgs = Outs.size();
+
+  LLVM_DEBUG(dbgs() << (IsOpenCLKernel ? "LOWERING ARGS FOR CALL TO OPENCL KERNEL" : "") << "\n");
 
   for (unsigned i = 0; i != NumArgs; i++) {
     MVT ArgVT = Outs[i].VT;
@@ -1354,7 +1363,7 @@ void RISCVTargetLowering::analyzeOutputArgs(
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
     if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
-                 ArgFlags, CCInfo, Outs[i].IsFixed, IsRet, OrigTy)) {
+                 ArgFlags, CCInfo, Outs[i].IsFixed, IsRet, IsOpenCLKernel, OrigTy)) {
       LLVM_DEBUG(dbgs() << "OutputArg #" << i << " has unhandled type "
                         << EVT(ArgVT).getEVTString() << "\n");
       llvm_unreachable(nullptr);
@@ -1562,7 +1571,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   // Assign locations to all of the incoming arguments.
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
-  analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false);
+
+  bool isOpenCLKernel = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction());
+  analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false, isOpenCLKernel);
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -1572,7 +1583,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64)
       ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL);
     else if (VA.isRegLoc()) {
-     if (isOpenCLKernelFunction(DAG.getMachineFunction().getFunction()))
+     if (isOpenCLKernel)
        ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL);
      else
         ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
@@ -1784,7 +1795,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
 
-  analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI);
+  analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, isOpenCLKernel, &CLI);
 
   // Check if it's really possible to do a tail call.
   if (IsTailCall)
@@ -1927,6 +1938,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Build a sequence of copy-to-reg nodes, chained and glued together.
   for (auto &Reg : RegsToPass) {
     Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
+    LLVM_DEBUG(dbgs() << "Regs to Pass:" << "\n");
+    LLVM_DEBUG(Chain.dump());
     Glue = Chain.getValue(1);
   }
 
@@ -2053,7 +2066,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // Assign locations to each value returned by this call.
   SmallVector<CCValAssign, 16> RVLocs;
   CCState RetCCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
-  analyzeInputArgs(MF, RetCCInfo, Ins, /*IsRet=*/true);
+  analyzeInputArgs(MF, RetCCInfo, Ins, /*IsRet=*/true, isOpenCLKernel);
 
   // Copy all of the result registers out of their specified physreg.
   for (auto &VA : RVLocs) {
@@ -2091,8 +2104,8 @@ bool RISCVTargetLowering::CanLowerReturn(
     MVT VT = Outs[i].VT;
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
-    if (CC_RISCV(MF.getDataLayout(), ABI, i, VT, VT, CCValAssign::Full,
-                 ArgFlags, CCInfo, /*IsFixed=*/true, /*IsRet=*/true, nullptr))
+    if (CC_RISCV(MF.getDataLayout(), ABI, i, VT, VT, CCValAssign::Full, ArgFlags,
+                 CCInfo, /*IsFixed=*/true, /*IsRet=*/true, /*IsOpenCLKernel*/false, nullptr))
       return false;
   }
   return true;
@@ -2111,7 +2124,7 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
   CCState CCInfo(CallConv, IsVarArg, DAG.getMachineFunction(), RVLocs,
                  *DAG.getContext());
 
-  analyzeOutputArgs(DAG.getMachineFunction(), CCInfo, Outs, /*IsRet=*/true,
+  analyzeOutputArgs(DAG.getMachineFunction(), CCInfo, Outs, /*IsRet=*/true, /*IsOpenCLKernel*/ false,
                     nullptr);
 
   SDValue Glue;
