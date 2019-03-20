@@ -1331,7 +1331,7 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           // VCMP will be inserted before each branch in a different pass
           // which will then convert the branch to a VCJAL
           continue;
-        // case RISCV::J:
+        case RISCV::PseudoBR:
         // case RISCV::J64:
         case RISCV::JAL:
         // case RISCV::JAL64:
@@ -1380,7 +1380,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
     for(auto &term: MBB) {
       if(!term.isConditionalBranch()) {
         switch(term.getOpcode()) {
-          // case RISCV::J:
+          case RISCV::PseudoBR:
           // case RISCV::J64:
           case RISCV::JAL:
           // case RISCV::JAL64:
@@ -1441,7 +1441,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
       BuildMI(MBB, &term, term.getDebugLoc(), TII->get(opcode),predReg).addReg(term.getOperand(0).getReg()).addReg(term.getOperand(1).getReg()).addImm(0).addReg(defPredReg);
       // Convert to VCJAL
       LLVM_DEBUG(dbgs() << "Adding VCJAL at line" << __LINE__ << "\n");
-      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).add(term.getOperand(0)).addImm(negate).addReg(predReg);
+      BuildMI(MBB, &term, term.getDebugLoc(), TII->get(RISCV::VCJAL),RISCV::vs0).addMBB(term.getOperand(2).getMBB()).addImm(negate).addReg(predReg);
       deadBranches.push_back(&term);
       // track result predicate reg
       bbToPred.insert(std::make_pair(&MBB, predReg));
@@ -1746,7 +1746,7 @@ bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
         negate = MI.getOperand(MI.getNumOperands()-2).getImm();
       }
       switch(MI.getOpcode()) {
-        // case RISCV::J:
+        case RISCV::PseudoBR:
         // case RISCV::J64:
         case RISCV::JAL:
         // case RISCV::JAL64:

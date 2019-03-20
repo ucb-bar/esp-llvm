@@ -444,8 +444,17 @@ bool RISCVInstrInfo::reverseBranchCondition(
 MachineBasicBlock *
 RISCVInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
   assert(MI.getDesc().isBranch() && "Unexpected opcode!");
+
+  LLVM_DEBUG(dbgs() << "Processing branch:" << "\n");
+  LLVM_DEBUG(MI.dump());
   // The branch target is always the last operand.
   int NumOp = MI.getNumExplicitOperands();
+  LLVM_DEBUG(dbgs() << "Num operands: " << NumOp << "\n");
+
+  if (MI.getOpcode() == RISCV::VCJAL) {
+    return MI.getOperand(1).getMBB();
+  }
+
   return MI.getOperand(NumOp - 1).getMBB();
 }
 
@@ -466,6 +475,7 @@ bool RISCVInstrInfo::isBranchOffsetInRange(unsigned BranchOp,
     return isIntN(13, BrOffset);
   case RISCV::JAL:
   case RISCV::PseudoBR:
+  case RISCV::VCJAL:
     return isIntN(21, BrOffset);
   }
 }
