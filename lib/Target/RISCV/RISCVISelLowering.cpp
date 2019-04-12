@@ -1112,16 +1112,15 @@ static const MCPhysReg ArgVSRs[] = {
   RISCV::vs14, RISCV::vs15, RISCV::vs16, RISCV::vs17, 
   RISCV::vs18, RISCV::vs19, RISCV::vs20, RISCV::vs21, 
   RISCV::vs22, RISCV::vs23, RISCV::vs24, RISCV::vs25, 
-  RISCV::vs26, RISCV::vs27, RISCV::vs28, RISCV::vs29, 
-  RISCV::vs30, RISCV::vs31, RISCV::vs32, RISCV::vs33, 
-  RISCV::vs34, RISCV::vs35, RISCV::vs36, RISCV::vs37, 
-  RISCV::vs38, RISCV::vs39, RISCV::vs40, RISCV::vs41, 
-  RISCV::vs42, RISCV::vs43, RISCV::vs44, RISCV::vs45, 
-  RISCV::vs46, RISCV::vs47, RISCV::vs48, RISCV::vs49, 
-  RISCV::vs50, RISCV::vs51, RISCV::vs52, RISCV::vs53, 
-  RISCV::vs54, RISCV::vs55, RISCV::vs56, RISCV::vs57, 
-  RISCV::vs58, RISCV::vs59, RISCV::vs60, RISCV::vs61, 
-  RISCV::vs62, RISCV::vs63
+};
+
+static const MCPhysReg ArgVARs[] = {
+  RISCV::va1, RISCV::va2, RISCV::va3, RISCV::va4, RISCV::va5,
+  RISCV::va6, RISCV::va7, RISCV::va8, RISCV::va9, 
+  RISCV::va10, RISCV::va11, RISCV::va12, RISCV::va13, 
+  RISCV::va14, RISCV::va15, RISCV::va16, RISCV::va17, 
+  RISCV::va18, RISCV::va19, RISCV::va20, RISCV::va21, 
+  RISCV::va22, RISCV::va23, RISCV::va24, RISCV::va25, 
 };
 
 // Pass a 2*XLEN argument that has been split into two XLEN values through
@@ -1444,13 +1443,13 @@ static SDValue unpackFromRegLoc(SelectionDAG &DAG, SDValue Chain,
 // The caller is responsible for loading the full value if the argument is
 // passed with CCValAssign::Indirect.
 static SDValue unpackFromVectorRegLoc(SelectionDAG &DAG, SDValue Chain,
-                                const CCValAssign &VA, const SDLoc &DL) {
+                                const CCValAssign &VA, const SDLoc &DL, bool isVAR) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   EVT LocVT = VA.getLocVT();
   SDValue Val;
 
-  unsigned VReg = RegInfo.createVirtualRegister(&RISCV::VSRRegClass);
+  unsigned VReg = RegInfo.createVirtualRegister(isVAR ? &RISCV::VARRegClass : &RISCV::VSRRegClass);
   RegInfo.addLiveIn(VA.getLocReg(), VReg);
   Val = DAG.getCopyFromReg(Chain, DL, VReg, LocVT);
 
@@ -1590,6 +1589,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   bool isOpenCLKernel = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction());
   analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false, isOpenCLKernel);
 
+  LLVM_DEBUG(dbgs() << "Inside Lower Formal Arguments" << "\n");
+  LLVM_DEBUG(MF.getFunction().dump());
+
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
     SDValue ArgValue;
@@ -1598,10 +1600,15 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64)
       ArgValue = unpackF64OnRV32DSoftABI(DAG, Chain, VA, DL);
     else if (VA.isRegLoc()) {
-     if (isOpenCLKernel)
-       ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL);
-     else
+     if (isOpenCLKernel) {
+       LLVM_DEBUG(dbgs() << "ValNo " << VA.getValNo() << "\n");
+       bool isVAR = MF.getFunction().getAttributes().hasParamAttr(VA.getValNo(), "VARRegClass");
+       LLVM_DEBUG(dbgs() << "isVARRegClass?: " << isVAR << "\n");
+       ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL, isVAR);
+     }
+     else {
         ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
+     }
     }
     else
       ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL);

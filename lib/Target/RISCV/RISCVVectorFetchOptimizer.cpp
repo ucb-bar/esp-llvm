@@ -450,12 +450,18 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   FunctionType *NFTy = FunctionType::get(RetTy, Params, false);
   Function *NF = Function::Create(NFTy, Function::InternalLinkage, F->getName());
   NF->copyAttributesFrom(F);
-  for(unsigned i = 1; i <= addrs.size(); i++) {
-    NF->addAttribute(FTy->getNumParams()+i, Attribute::ByVal);
-  }
 
   F->getParent()->getFunctionList().insert(F->getIterator(), NF);
   NF->takeName(F);
+
+  LLVMContext &Ctx = NF->getParent()->getContext();
+
+  for(unsigned i = 1; i <= addrs.size(); i++) {
+    NF->addAttribute(FTy->getNumParams()+i, Attribute::ByVal);
+    NF->addAttribute(FTy->getNumParams()+i, Attribute::get(Ctx, "VARRegClass"));
+  }
+
+
   // Get the callgraph information that we need to update to reflect our
   // changes.
   CallGraph &CG = getAnalysis<CallGraphWrapperPass>().getCallGraph();
@@ -521,8 +527,13 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     cast<CallInst>(New)->setCallingConv(CS.getCallingConv());
     cast<CallInst>(New)->setAttributes(AttributeList::get(New->getContext(),
                                                         fnAttributes, retAttributes, ArrayRef<AttributeSet>()));
+
+
+   
+
     for(unsigned i = 0;i < addrs.size(); i++) {
       cast<CallInst>(New)->addAttribute(ArgIndex+i, Attribute::ByVal);
+      cast<CallInst>(New)->addAttribute(ArgIndex+i, Attribute::get(Ctx, "VARRegClass"));
     }
     if (cast<CallInst>(Call)->isTailCall())
       cast<CallInst>(New)->setTailCall();
@@ -869,7 +880,7 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
 void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VEC, unsigned IDX, unsigned SCALAR) {
 
-  LLVM_DEBUG(dbgs() << "Vectorizing load op: ") << "\n";
+  LLVM_DEBUG(dbgs() << "Vectorizing load op: " << "\n");
   LLVM_DEBUG(I->dump());
 
   //TODO: support invariant memops becoming scalar memops
