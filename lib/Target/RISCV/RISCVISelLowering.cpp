@@ -1356,10 +1356,10 @@ void RISCVTargetLowering::analyzeInputArgs(
     else if (Ins[i].isOrigArg())
       ArgTy = FType->getParamType(Ins[i].getOrigArgIndex());
 
-    bool isVARRegClass = MF.getFunction().getAttributes().hasParamAttr(i, "VARRegClass");
     auto OpenCLArgType = OpenCLLowering::NONE;
     if (isOpenCLKernel) {
-      OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRReg;
+      bool isVARRegClass = MF.getFunction().getAttributes().hasParamAttr(i, "VARRegClass");
+      OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRREG;
     }
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
@@ -1374,15 +1374,30 @@ void RISCVTargetLowering::analyzeInputArgs(
 
 void RISCVTargetLowering::analyzeOutputArgs(
     MachineFunction &MF, CCState &CCInfo,
-    const SmallVectorImpl<ISD::OutputArg> &Outs, bool IsRet, OpenCLLowering::ArgType OpenCLArgType, CallLoweringInfo *CLI) const {
+    const SmallVectorImpl<ISD::OutputArg> &Outs, bool IsRet, CallLoweringInfo *CLI) const {
   unsigned NumArgs = Outs.size();
 
-  LLVM_DEBUG(dbgs() << (IsOpenCLKernel ? "LOWERING ARGS FOR CALL TO OPENCL KERNEL" : "") << "\n");
+  bool isOpenCLKernel = false;
+  const Function* CalleeFn;
+
+  if (CLI != nullptr) {
+    if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(CLI->Callee)) {
+      CalleeFn = cast<Function>(E->getGlobal());
+      isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+    }
+  }
 
   for (unsigned i = 0; i != NumArgs; i++) {
     MVT ArgVT = Outs[i].VT;
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
     Type *OrigTy = CLI ? CLI->getArgs()[Outs[i].OrigArgIndex].Ty : nullptr;
+
+
+    auto OpenCLArgType = OpenCLLowering::NONE;
+    if (isOpenCLKernel) {
+      bool isVARRegClass = CalleeFn->getAttributes().hasParamAttr(i, "VARRegClass");
+      OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRREG;
+    }
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
     if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
@@ -1598,8 +1613,6 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   bool isOpenCLKernel = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction());
   analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false);
 
-  LLVM_DEBUG(dbgs() << "Inside Lower Formal Arguments" << "\n");
-  LLVM_DEBUG(MF.getFunction().dump());
 
   for (unsigned i = 0, e = ArgLocs.size(); i != e; ++i) {
     CCValAssign &VA = ArgLocs[i];
@@ -2136,7 +2149,7 @@ bool RISCVTargetLowering::CanLowerReturn(
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
     if (CC_RISCV(MF.getDataLayout(), ABI, i, VT, VT, CCValAssign::Full, ArgFlags,
-                 CCInfo, /*IsFixed=*/true, /*IsRet=*/true, nullptr))
+                 CCInfo, /*IsFixed=*/true, /*IsRet=*/true, OpenCLLowering::NONE, nullptr))
       return false;
   }
   return true;
