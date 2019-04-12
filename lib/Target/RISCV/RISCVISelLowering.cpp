@@ -1340,9 +1340,11 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
 
 void RISCVTargetLowering::analyzeInputArgs(
     MachineFunction &MF, CCState &CCInfo,
-    const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet, OpenCLLowering::ArgType OpenCLArgType) const {
+    const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet) const {
   unsigned NumArgs = Ins.size();
   FunctionType *FType = MF.getFunction().getFunctionType();
+
+  bool isOpenCLKernel = isOpenCLKernelFunction(MF.getFunction());
 
   for (unsigned i = 0; i != NumArgs; ++i) {
     MVT ArgVT = Ins[i].VT;
@@ -1353,6 +1355,12 @@ void RISCVTargetLowering::analyzeInputArgs(
       ArgTy = FType->getReturnType();
     else if (Ins[i].isOrigArg())
       ArgTy = FType->getParamType(Ins[i].getOrigArgIndex());
+
+    bool isVARRegClass = MF.getFunction().getAttributes().hasParamAttr(i, "VARRegClass");
+    auto OpenCLArgType = OpenCLLowering::NONE;
+    if (isOpenCLKernel) {
+      OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRReg;
+    }
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
     if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
