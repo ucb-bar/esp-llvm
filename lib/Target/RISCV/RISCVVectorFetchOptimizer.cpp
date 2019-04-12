@@ -45,6 +45,9 @@ namespace {
     ScalarEvolution     *SE;
     std::map<Instruction *, const SCEV *> addrs;
     std::map<Instruction *, const SCEV *> scalars;
+  private:
+    virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
+        bool *found, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth);
   public:
     static char ID;
 
@@ -233,7 +236,7 @@ CallGraphNode *RISCVVectorFetchIROpt::VectorFetchOpt(CallGraphNode *CGN) {
   return nullptr;
 }
 
-const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F) {
+const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth) {
   //psuedo code
   // recursively descend looking for eidx
   // once found, while we are coming up the tree
@@ -244,15 +247,20 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
   // + if the recorded input is not equal to the bytewidth we fail
   // Once we arrive at the root of the tree which needs to be an add node
   // + append the mul of eidx and recorded input as another input
+
+  LLVM_DEBUG(dbgs() << std::string(recursionDepth, '\t'));
+  LLVM_DEBUG(expr->dump());
+
   if(const SCEVAddExpr *add = dyn_cast<SCEVAddExpr>(expr)) {
     bool lfound = *found;
     SmallVector<const SCEV *, 8> newops;
     for( const SCEV *op : add->operands() ) {
       *found = false;
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
+      LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Recursing into add expr operand: " << "\n");
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
-        printf("two uses of veidx: can't hoist\n");
+        printf("\ttwo uses of veidx: can't hoist\n");
         return SE->getCouldNotCompute();
       }
       newops.push_back(subexp);
@@ -272,8 +280,9 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     bool lfound = *found;
     SmallVector<const SCEV *, 8> newops;
     for( const SCEV *op : mul->operands() ) {
+      LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Recursing into mul expr operand" << "\n");
       *found = false;
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
         printf("two uses of veidx: can't hoist\n");
@@ -301,9 +310,11 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     *found = lfound;
     return SE->getMulExpr(newops);
   } else if(const SCEVUnknown *eidx = dyn_cast<SCEVUnknown>(expr)) {
+    LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Found SCEVUnknown expr" << "\n");
     // Note that we found it
     if(isa<IntrinsicInst>(eidx->getValue())) {
       if(cast<IntrinsicInst>(eidx->getValue())->getIntrinsicID() == Intrinsic::hwacha_veidx) {
+        LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Is an EIDX" << "\n");
         *found = true;
         *veidx = eidx;
         // Replace  with identity constant based on parent
@@ -321,12 +332,14 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
       return SE->getCouldNotCompute(); // not an arugment so we can't hoist
     }
   } else if(isa<SCEVConstant>(expr)) {
+    LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Found constant expr leaf" << "\n");
     return expr;
   } else if(const SCEVCastExpr *Cast = dyn_cast<SCEVCastExpr>(expr)) {
+    LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Found an SCEVCastExpr" << "\n");
     bool lfound = *found;
     *found = false;
     const SCEV *op = Cast->getOperand();
-    const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F);
+    const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
     if(subexp == SE->getCouldNotCompute()) return subexp;
     if(*found) {
       printf("Cannot cast veidx: can't hoist\n");
@@ -339,7 +352,15 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
   return SE->getCouldNotCompute();
 }
 
+const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F) {
+  return attemptToHoistOffset(expr, parent, found, bytewidth, veidx, F, 0);
+}
+
 CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
+
+  LLVM_DEBUG(dbgs() << "Processing Function:" << "\n");
+  LLVM_DEBUG(F->dump());
+
   for(Function::iterator BBI = F->begin(), MBBE = F->end(); BBI != MBBE; ++BBI) {
     for(BasicBlock::iterator MII = BBI->begin(), MIE = BBI->end(); MII != MIE; ++MII) {
       if(isa<StoreInst>(MII)) {
@@ -379,6 +400,8 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         load->dump();
         fflush(stdout);fflush(stderr);
         const SCEV *ptrBase = SE->getPointerBase(load);
+        LLVM_DEBUG(dbgs() << "Ptrbase Dump" << "\n");
+        LLVM_DEBUG(ptrBase->dump());
         // We need a base addr to start with
         if(!isa<SCEVUnknown>(ptrBase)) {
           break;
@@ -389,8 +412,12 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         // have base or eidx
         bool found = false;
         const SCEV *veidx;
+        LLVM_DEBUG(dbgs() << "Calling hoist offset. Following expressions show recursion tree" << "\n");
         const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
+
         if(newSCEV != SE->getCouldNotCompute()){
+          LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
+          LLVM_DEBUG(newSCEV->dump());
           if(found) {
             addrs.insert(std::make_pair(&*MII, newSCEV));
             printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
@@ -402,11 +429,12 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
       }
     }
   }
+
   // Update function type based on new arguments
   FunctionType *FTy = F->getFunctionType();
   std::vector<Type*> Params;
   Params.insert(Params.end(), FTy->param_begin(), FTy->param_end());
-  for(std::map<Instruction *, const SCEV *>::iterator it = addrs.begin(); it != addrs.end(); ++it) {
+  for(std::map< Instruction*, const SCEV* >::iterator it = addrs.begin(); it != addrs.end(); ++it) {
     if(isa<LoadInst>(it->first))
       Params.push_back(it->first->getType()->getPointerTo());
     if(isa<StoreInst>(it->first))
@@ -583,6 +611,9 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     delete CG.removeFunctionFromModule(CGN);
   else
     F->setLinkage(Function::ExternalLinkage);
+
+  LLVM_DEBUG(dbgs() << "Transformed function" << "\n");
+  LLVM_DEBUG(NF->dump());
 
   return NF_CGN;
 }
@@ -837,6 +868,10 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
 
 void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VEC, unsigned IDX, unsigned SCALAR) {
+
+  LLVM_DEBUG(dbgs() << "Vectorizing load op: ") << "\n";
+  LLVM_DEBUG(I->dump());
+
   //TODO: support invariant memops becoming scalar memops
   if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {
     I->setDesc(TII->get(VEC));
