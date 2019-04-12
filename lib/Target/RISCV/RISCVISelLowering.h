@@ -63,6 +63,15 @@ enum NodeType : unsigned {
 };
 }
 
+namespace OpenCLLowering {
+  enum ArgType {
+  NONE,
+  VSRREG,
+  VARREG
+};
+}
+
+
 class RISCVTargetLowering : public TargetLowering {
   const RISCVSubtarget &Subtarget;
 
@@ -132,10 +141,10 @@ public:
 private:
   void analyzeInputArgs(MachineFunction &MF, CCState &CCInfo,
                         const SmallVectorImpl<ISD::InputArg> &Ins,
-                        bool IsRet, bool IsOpenCLKernel) const;
+                        bool IsRet) const;
   void analyzeOutputArgs(MachineFunction &MF, CCState &CCInfo,
                          const SmallVectorImpl<ISD::OutputArg> &Outs,
-                         bool IsRet, bool IsOpenCLKernel, CallLoweringInfo *CLI) const;
+                         bool IsRet, CallLoweringInfo *CLI) const;
   // Lower incoming arguments, copy physregs into vregs
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool IsVarArg,

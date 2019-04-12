@@ -23,6 +23,7 @@
 using namespace llvm;
 
 #define RISCV_EXPAND_PSEUDO_NAME "RISCV pseudo instruction expansion pass"
+#define DEBUG_TYPE "riscvpostrapseudos"
 
 namespace {
 
@@ -62,6 +63,8 @@ private:
 char RISCVExpandPseudo::ID = 0;
 
 bool RISCVExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
+  LLVM_DEBUG(dbgs() << "Post RAP Pass" << "\n");
+  LLVM_DEBUG(MF.dump());
   TII = static_cast<const RISCVInstrInfo *>(MF.getSubtarget().getInstrInfo());
   bool Modified = false;
   for (auto &MBB : MF)

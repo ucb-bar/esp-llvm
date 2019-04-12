@@ -885,14 +885,20 @@ void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegis
 
   //TODO: support invariant memops becoming scalar memops
   if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {
+    LLVM_DEBUG(dbgs() << "Found VARRegClass Load. Converting to:" << "\n");
     I->setDesc(TII->get(VEC));
     MRI->setRegClass(I->getOperand(0).getReg(), destRC);
+
+    LLVM_DEBUG(I->dump());
+    I->RemoveOperand(2);
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
   } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
+    LLVM_DEBUG(dbgs() << "Found VSR Load" << "\n");
     I->setDesc(TII->get(SCALAR));
     MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
   } else {
+    LLVM_DEBUG(dbgs() << "Found EIDX Load" << "\n");
     I->setDesc(TII->get(IDX));
     // Destination is always vector
     MRI->setRegClass(I->getOperand(0).getReg(), destRC);
