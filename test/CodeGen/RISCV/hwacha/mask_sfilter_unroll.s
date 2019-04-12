@@ -11,38 +11,38 @@ _pocl_launcher_mask_sfilter_unroll:     # @_pocl_launcher_mask_sfilter_unroll
 	@vp0	vadd	vv0, vs14, vv0
 	vadd	vs14, vs17, vs15
 	vslli	vs14, vs14, 1
-	vlshu	vs15, vs19
-	@vp0	vcmpeq	vp1, vs15, vs0
+	@vp0	vlhu	vv8, va2
+	@vp0	vcmpeq	vp1, vv8, vs0
 	@!vp1	vcjal	1, vs0, .LBB0_1
 	@vp1	vcjal	1, vs0, .LBB0_5
 .LBB0_1:                                # %if.then.i
-	vlsw	vs15, vs21
-	vfmul.s	vs15, vs15, vs6
-	vlsw	vs16, vs20
-	vfmul.s	vs16, vs16, vs5
-	vfadd.s	vs15, vs16, vs15
-	vlsw	vs16, vs22
-	vfmul.s	vs16, vs16, vs7
-	vfadd.s	vs15, vs15, vs16
-	vlsw	vs16, vs23
-	vfmul.s	vs16, vs16, vs8
-	vfadd.s	vs15, vs15, vs16
-	vlsw	vs16, vs24
-	vfmul.s	vs16, vs16, vs9
-	vfadd.s	vs15, vs15, vs16
-	vlsw	vs16, vs25
-	vfmul.s	vs16, vs16, vs10
-	vfadd.s	vs15, vs15, vs16
-	vlsw	vs16, vs26
-	vfmul.s	vs16, vs16, vs11
-	vfadd.s	vs15, vs15, vs16
-	vlsw	vs16, vs18
-	vfmul.s	vs16, vs16, vs13
-	vlsw	vs17, vs27
-	vfmul.s	vs17, vs17, vs12
-	vfadd.s	vs15, vs15, vs17
-	vfadd.s	vs15, vs15, vs16
-	@vp0	vsxw	vs15, vs0, vs28
+	@vp0	vlw	vv5, va4
+	@vp0	vfmul.s	vv5, vv5, vs6
+	@vp0	vlw	vv6, va3
+	@vp0	vfmul.s	vv6, vv6, vs5
+	@vp0	vfadd.s	vv5, vv6, vv5
+	@vp0	vlw	vv6, va5
+	@vp0	vfmul.s	vv6, vv6, vs7
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vlw	vv6, va6
+	@vp0	vfmul.s	vv6, vv6, vs8
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vlw	vv6, va7
+	@vp0	vfmul.s	vv6, vv6, vs9
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vlw	vv6, va8
+	@vp0	vfmul.s	vv6, vv6, vs10
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vlw	vv6, va9
+	@vp0	vfmul.s	vv6, vv6, vs11
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vlw	vv6, va1
+	@vp0	vfmul.s	vv6, vv6, vs13
+	@vp0	vlw	vv7, va10
+	@vp0	vfmul.s	vv7, vv7, vs12
+	@vp0	vfadd.s	vv5, vv5, vv7
+	@vp0	vfadd.s	vv5, vv5, vv6
+	@vp0	vsw	vv5, va11
 	vori	vs15, vs14, 1
 	vmul	vs14, vs15, vs3
 	@vp0	vadd	vv1, vv0, vs14
@@ -50,28 +50,28 @@ _pocl_launcher_mask_sfilter_unroll:     # @_pocl_launcher_mask_sfilter_unroll
 	vaddi	vs16, vs0, 1
 	@vp0	vsll	vv2, vv1, vs16
 	@vp0	vadd	vv2, vs4, vv2
-	@vp0	vlxhu	vv7, vs0, vv2
-	@vp0	vcmpeq	vp1, vv7, vs0
+	@vp0	vlxhu	vv8, vs0, vv2
+	@vp0	vcmpeq	vp1, vv8, vs0
 	@vp1	vcjal	1, vs0, .LBB0_4
 	@!vp1	vcjal	1, vs0, .LBB0_3
 .LBB0_3:                                # %if.then.66.i
-	vlsw	vs4, vs30
-	vfmul.s	vs4, vs4, vs6
-	vlsw	vs6, vs29
-	vfmul.s	vs5, vs6, vs5
-	vfadd.s	vs4, vs5, vs4
-	vlsw	vs5, vs31
-	vfmul.s	vs5, vs5, vs7
-	vfadd.s	vs4, vs4, vs5
-	vaddi	vs5, vs0, -1
-	@vp0	vadd	vv2, vv0, vs5
+	@vp0	vlw	vv5, va13
+	@vp0	vfmul.s	vv5, vv5, vs6
+	@vp0	vlw	vv6, va12
+	@vp0	vfmul.s	vv6, vv6, vs5
+	@vp0	vfadd.s	vv5, vv6, vv5
+	@vp0	vlw	vv6, va14
+	@vp0	vfmul.s	vv6, vv6, vs7
+	@vp0	vfadd.s	vv5, vv5, vv6
+	vaddi	vs4, vs0, -1
+	@vp0	vadd	vv2, vv0, vs4
 	@vp0	vadd	vv3, vs14, vv2
-	vaddi	vs5, vs0, 2
-	@vp0	vsll	vv3, vv3, vs5
+	vaddi	vs4, vs0, 2
+	@vp0	vsll	vv3, vv3, vs4
 	@vp0	vadd	vv3, vs1, vv3
-	@vp0	vlxw	vv5, vs0, vv3
-	@vp0	vfmul.s	vv5, vv5, vs8
-	@vp0	vfadd.s	vv5, vs4, vv5
+	@vp0	vlxw	vv6, vs0, vv3
+	@vp0	vfmul.s	vv6, vv6, vs8
+	@vp0	vfadd.s	vv5, vv5, vv6
 	vaddi	vs4, vs0, 2
 	@vp0	vsll	vv1, vv1, vs4
 	@vp0	vadd	vv3, vs1, vv1
@@ -256,26 +256,26 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	vmcs	vs15,a7
 	vmcs	vs16,t2
 	vmcs	vs17,a6
-	vmcs	vs18,s3
-	vmcs	vs19,s4
-	vmcs	vs20,s5
-	vmcs	vs21,s6
-	vmcs	vs22,s7
-	vmcs	vs23,s8
-	vmcs	vs24,s9
-	vmcs	vs25,s10
-	vmcs	vs26,s11
+	vmca	va1,s3
+	vmca	va2,s4
+	vmca	va3,s5
+	vmca	va4,s6
+	vmca	va5,s7
+	vmca	va6,s8
+	vmca	va7,s9
+	vmca	va8,s10
+	vmca	va9,s11
 	addi	a0, sp, 16
-	vmcs	vs27,a0
+	vmca	va10,a0
 	addi	a0, sp, 12
-	vmcs	vs28,a0
+	vmca	va11,a0
 	addi	a0, sp, 8
-	vmcs	vs29,a0
+	vmca	va12,a0
 	addi	a0, sp, 4
-	vmcs	vs30,a0
+	vmca	va13,a0
 	mv	a0, sp
-	vmcs	vs31,a0
-	vsetcfg	a0,5,2,1,2
+	vmca	va14,a0
+	vsetcfg	a0,5,3,1,2
 	li	a0, 4
 	vsetvl	a0,a0
 	vf	_pocl_launcher_mask_sfilter_unroll

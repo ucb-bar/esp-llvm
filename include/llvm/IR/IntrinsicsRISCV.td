@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 let TargetPrefix = "hwacha" in {
-  def int_hwacha_veidx : Intrinsic<[llvm_i64_ty], [], []>;
+  def int_hwacha_veidx : Intrinsic<[llvm_i64_ty], [], [IntrNoMem]>;
 }
 
 let TargetPrefix = "riscv" in {

@@ -292,12 +292,14 @@ let isCodeGenOnly = 1 in {
     def VSTOP   : InstV<(outs), (ins), "vstop", "", []>,Requires<[HasXhwacha]>;
   }
 
-  let isVariant = 1 in {
+  let isVariant = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0  in {
     def VEIDX  : InstV<(outs VVR:$dest), (ins), "veidx", "$dest", []>, Requires<[HasXhwacha]>;
   }
 }
 
- def: Pat<(int_hwacha_veidx), (VEIDX)>;
+def: Pat<(int_hwacha_veidx), (VEIDX)>;
+
+
 
 //Psuedo Instructions for scalar operations inside of vector fetch blocks
 //To be expanded into vfetch blocks after register allocation and scheduling
