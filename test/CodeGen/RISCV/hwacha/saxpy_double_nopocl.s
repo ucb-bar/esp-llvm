@@ -1,15 +1,17 @@
 	.text
-	.file	"saxpy_int.ll"
+	.file	"saxpy_double_nopocl.ll"
 	.p2align	2               # -- Begin function _pocl_launcher_saxpy
 	.type	_pocl_launcher_saxpy,@function
 _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 # %bb.0:
 	vpset	vp0
-	@vp0	vlw	vv0, va1
-	vmul	vs1, vv0, vs1
-	@vp0	vlw	vv0, va2
-	vadd	vs1, vv0, vs1
-	@vp0	vsw	vs1, va3
+	fmv.d.x	ft0, vs1
+	@vp0	vlw	vv1, va1
+	vfcvt.d.s	vs1, vv1
+	vfmul.d	vs1, vs1, ft0
+	@vp0	vld	vv0, va2
+	@vp0	vfadd.d	vv0, vv0, vs1
+	@vp0	vsd	vv0, va3
 	vstop	
 .Lfunc_end0:
 	.size	_pocl_launcher_saxpy, .Lfunc_end0-_pocl_launcher_saxpy
@@ -19,38 +21,34 @@ _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 	.type	_pocl_launcher_saxpy_workgroup,@function
 _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 # %bb.0:
-	addi	sp, sp, -16
-	ld	a2, 56(a1)
-	ld	a1, 32(a1)
-	slli	a1, a1, 9
-	add	a1, a2, a1
-	slli	a1, a1, 2
-	ld	a2, 0(a0)
-	ld	a2, 0(a2)
-	add	a2, a2, a1
-	lw	a2, 0(a2)
-	ld	a3, 16(a0)
-	lw	a3, 0(a3)
-	ld	a0, 8(a0)
+	addi	sp, sp, -32
+	ld	a1, 16(a0)
+	lwu	a2, 0(a1)
+	lwu	a1, 4(a1)
+	ld	a3, 8(a0)
+	ld	a3, 0(a3)
 	ld	a0, 0(a0)
-	sw	a2, 12(sp)
-	add	a0, a0, a1
-	lw	a1, 0(a0)
-	sw	a1, 8(sp)
-	lw	a0, 0(a0)
-	sw	a0, 4(sp)
-	addi	a0, sp, 12
-	addi	a1, sp, 8
-	addi	a2, sp, 4
-	vmcs	vs1,a3
-	vmca	va1,a0
-	vmca	va2,a1
-	vmca	va3,a2
-	vsetcfg	a0,0,1,0,1
+	ld	a0, 0(a0)
+	lw	a0, 4(a0)
+	sw	a0, 28(sp)
+	ld	a0, 8(a3)
+	sd	a0, 16(sp)
+	ld	a0, 8(a3)
+	sd	a0, 8(sp)
+	slli	a0, a1, 32
+	or	a0, a0, a2
+	addi	a1, sp, 28
+	addi	a2, sp, 16
+	addi	a3, sp, 8
+	vmcs	vs1,a0
+	vmca	va1,a1
+	vmca	va2,a2
+	vmca	va3,a3
+	vsetcfg	a0,1,1,0,1
 	li	a0, 4
 	vsetvl	a0,a0
 	vf	_pocl_launcher_saxpy
-	addi	sp, sp, 16
+	addi	sp, sp, 32
 	ret
 .Lfunc_end1:
 	.size	_pocl_launcher_saxpy_workgroup, .Lfunc_end1-_pocl_launcher_saxpy_workgroup

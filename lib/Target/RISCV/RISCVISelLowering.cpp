@@ -1611,6 +1611,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
   bool isOpenCLKernel = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction());
+  LLVM_DEBUG(dbgs() << "Corresponding Function" << "\n");
+  DAG.getMachineFunction().getFunction().dump();
+  LLVM_DEBUG(dbgs() << "IS OPENCLKENERL?" << " " << isOpenCLKernel << "\n");
   analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false);
 
 

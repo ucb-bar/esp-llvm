@@ -2,17 +2,17 @@
 declare i64 @llvm.hwacha.veidx() #0
 
 ; Function Attrs: noinline nounwind
-define dso_local void @_pocl_launcher_saxpy(float*, float*, float) {
-body:
+define dso_local void @_pocl_launcher_saxpy(float*, double*, double) {
   %idx = call i64 @llvm.hwacha.veidx() #0
   %arrayidx.i = getelementptr float, float* %0, i64 %idx
-  %tomul = load float, float* %arrayidx.i, align 4
-  %mul.i = fmul float %tomul, %2
+  %4 = load float, float* %arrayidx.i, align 4
+  %conv.i = fpext float %4 to double
+  %mul.i = fmul double %conv.i, %2
 
-  %arrayidx2.i = getelementptr float, float* %1, i64 %idx
-  %toadd = load float, float* %arrayidx2.i, align 4
-  %add.i = fadd float %toadd, %mul.i
-  store float %add.i, float* %arrayidx2.i, align 4
+  %arrayidx2.i = getelementptr double, double* %1, i64 %idx
+  %5 = load double, double* %arrayidx2.i, align 4
+  %add.i = fadd double %5, %mul.i
+  store double %add.i, double* %arrayidx2.i, align 4
   ret void
 }
 
@@ -21,14 +21,14 @@ define dso_local void @_pocl_launcher_saxpy_workgroup(i8**, { i32, [3 x i64], [3
   %4 = load float**, float*** %3, align 8
   %5 = load float*, float** %4, align 8
   %6 = getelementptr i8*, i8** %0, i64 1
-  %7 = bitcast i8** %6 to float***
-  %8 = load float**, float*** %7, align 8
-  %9 = load float*, float** %8, align 8
+  %7 = bitcast i8** %6 to double***
+  %8 = load double**, double*** %7, align 8
+  %9 = load double*, double** %8, align 8
   %10 = getelementptr i8*, i8** %0, i64 2
-  %11 = bitcast i8** %10 to float**
-  %12 = load float*, float** %11, align 8
-  %13 = load float, float* %12, align 4
-  call void @_pocl_launcher_saxpy(float* %5, float* %9, float %13)
+  %11 = bitcast i8** %10 to double**
+  %12 = load double*, double** %11, align 8
+  %13 = load double, double* %12, align 4
+  call void @_pocl_launcher_saxpy(float* %5, double* %9, double %13)
   ret void
 }
 
@@ -45,4 +45,4 @@ attributes #1 = { noinline }
 
 !0 = !{!"clang version 3.7.0  (git@github.com:riscv/riscv-llvm b701702c63e224dd309b5b016a91641264eb181d)"}
 !1 = !{!"clang version 3.7.0  (git@github.com:riscv/riscv-llvm e40d0933929057622d08a7b68fc90773d912ecaa)"}
-!2 = !{void (float*, float*, float)* @_pocl_launcher_saxpy}
+!2 = !{void (float*, double*, double)* @_pocl_launcher_saxpy}

@@ -1,9 +1,13 @@
 #include "RISCVXhwachaUtilities.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Module.h"
+#include "llvm/Support/Debug.h"
+
+#define DEBUG_TYPE "hwacha-utils"
 
 bool llvm::isOpenCLKernelFunction(const Function &F) {
   NamedMDNode* oclKernels = F.getParent()->getNamedMetadata("opencl.kernels");
+  oclKernels->dump();
 
   if (!oclKernels || oclKernels->getNumOperands() == 0) return false;
 
@@ -15,6 +19,8 @@ bool llvm::isOpenCLKernelFunction(const Function &F) {
       llvm::ValueAsMetadata* vam = dyn_cast<llvm::ValueAsMetadata>(kernel_iter->getOperand(0));
       llvm::Function *kernel_prototype =
         llvm::cast<llvm::Function>(vam->getValue());
+      kernel_prototype->dump();
+      LLVM_DEBUG(dbgs() << kernel_prototype->getName() << " | " << F.getName() << "\n");
       if(kernel_prototype->getName().equals(F.getName()))
         return true;
     }

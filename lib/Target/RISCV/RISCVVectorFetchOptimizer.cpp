@@ -474,6 +474,19 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   //
   SmallVector<Value*, 16> Args;
 
+  //migrate all named metadata
+  LLVM_DEBUG(dbgs() << "MIGRATING KERNEL METADATA" << "\n");
+  llvm::NamedMDNode *nmd = F->getParent()->getNamedMetadata("opencl.kernels");
+  for (unsigned i = 0, e = nmd->getNumOperands(); i != e; ++i) {
+    MDNode *kernel_iter = nmd->getOperand(i);
+    Function *k =
+      cast<Function>(
+        dyn_cast<ValueAsMetadata>(kernel_iter->getOperand(0))->getValue());
+    if (k->getName() == F->getName()) {
+      kernel_iter->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
+    }
+  }
+
   while (!F->use_empty()) {
     CallSite CS(F->user_back());
     assert(CS.getCalledFunction() == F);
@@ -545,18 +558,6 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     CallGraphNode *CalleeNode = CG[Call->getParent()->getParent()];
     CalleeNode->replaceCallEdge(CS, CallSite(New), NF_CGN);
 
-    //migrate all named metadata
-    llvm::NamedMDNode *nmd = F->getParent()->getNamedMetadata("opencl.kernels");
-    for (unsigned i = 0, e = nmd->getNumOperands(); i != e; ++i) {
-      MDNode *kernel_iter = nmd->getOperand(i);
-      Function *k =
-        cast<Function>(
-          dyn_cast<ValueAsMetadata>(kernel_iter->getOperand(0))->getValue());
-      if (k->getName() == F->getName()) {
-        kernel_iter->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
-      }
-    }
-
     if (!Call->use_empty()) {
       Call->replaceAllUsesWith(New);
       New->takeName(Call);
@@ -566,6 +567,8 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     // F.
     Call->eraseFromParent();
   }
+
+
   // Since we have now created the new function, splice the body of the old
   // function right into the new function, leaving the old rotting hulk of the
   // function empty.
