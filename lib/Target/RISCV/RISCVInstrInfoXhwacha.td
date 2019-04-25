@@ -200,6 +200,8 @@ let mayStore = 0, mayLoad = 0, hasSideEffects = 0 in {
 
 //Vector Memory Ops
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
+  // Indexed Load
+
   def VLXW : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXH : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
@@ -229,6 +231,20 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
              "vlsh", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLSHU_F : InstV<(outs VSR:$dest), (ins VSR:$src1),
              "vlshu", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
+
+  // Strided Load
+  def VLSTW : InstV<(outs VVW:$dest), (ins VAR:$base, VAR:$stride, pred:$p),
+             "@$p\tvlstw", "$dest, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
+
+  def VLSTD: InstV<(outs VVR:$dest), (ins VAR:$base, VAR:$stride, pred:$p),
+             "@$p\tvlstd", "$dest, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
+
+
+  // Strided Store
+  def VSSTW : InstV<(outs), (ins VVW:$src, VAR:$base, VAR:$stride, pred:$p),
+             "@$p\tvsstw", "$src, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
+  def VSSTD : InstV<(outs), (ins VVR:$src, VAR:$base, VAR:$stride, pred:$p),
+             "@$p\tvsstw", "$src, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
 
   let isVariant = 1 in {
     def VLD : InstV<(outs VVR:$dest), (ins VAR:$src1, pred:$p),
@@ -299,6 +315,24 @@ let isCodeGenOnly = 1 in {
 
 def: Pat<(int_hwacha_veidx), (VEIDX)>;
 
+// Handle strided ops
+
+multiclass strided<RegisterClass RTY> {
+  let isCodeGenOnly = 1, mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
+    def _load : InstV<(outs RTY:$dest), (ins GPR:$base, GPR:$stride), "", "",  []>, Requires<[HasXhwacha]>;
+  }
+  let isCodeGenOnly = 1, mayLoad = 0, mayStore = 1, hasSideEffects = 0 in {
+    def _store : InstV<(outs), (ins RTY:$src, GPR:$base, GPR:$stride), "", "",  []>, Requires<[HasXhwacha]>;
+  }
+}
+
+let isCodeGenOnly = 1 in {
+  defm strideF : strided<FPR32>;
+  defm strideD : strided<FPR64>;
+}
+
+def: Pat<(int_hwacha_loadstridefloat GPR:$base, GPR:$stride), (strideF_load GPR:$base, GPR:$stride)>;
+def: Pat<(int_hwacha_storestridefloat FPR32:$src, GPR:$base, GPR:$stride), (strideF_store FPR32:$src, GPR:$base, GPR:$stride)>;
 
 
 //Psuedo Instructions for scalar operations inside of vector fetch blocks

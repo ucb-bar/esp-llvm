@@ -47,7 +47,7 @@ namespace {
     std::map<Instruction *, const SCEV *> scalars;
   private:
     virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
-        bool *found, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth);
+        bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth);
   public:
     static char ID;
 
@@ -69,7 +69,7 @@ namespace {
     virtual CallGraphNode *processOpenCLKernel(Function *F);
     virtual CallGraphNode *VectorFetchOpt(CallGraphNode *CGN);
     virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
-        bool *found, unsigned bytewidth, const SCEV **veidx, Function *F);
+        bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F);
   };
 
 }
@@ -116,6 +116,8 @@ namespace {
         unsigned IMM, unsigned VSS, unsigned SSS);
     virtual void vectorizeLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
         unsigned VEC, unsigned IDX, unsigned SCALAR);
+    virtual void vectorizeStridedLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg, unsigned STRD);
+    virtual void vectorizeStridedStoreOp(MachineInstr *I, unsigned defPredReg, unsigned STRD);
     virtual void vectorizeStoreOp(MachineInstr *I, unsigned defPredReg,
         unsigned VEC, unsigned IDX);
     virtual void vectorizeCvtOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
@@ -236,7 +238,7 @@ CallGraphNode *RISCVVectorFetchIROpt::VectorFetchOpt(CallGraphNode *CGN) {
   return nullptr;
 }
 
-const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth) {
+const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth) {
   //psuedo code
   // recursively descend looking for eidx
   // once found, while we are coming up the tree
@@ -257,7 +259,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     for( const SCEV *op : add->operands() ) {
       *found = false;
       LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Recursing into add expr operand: " << "\n");
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
         printf("\ttwo uses of veidx: can't hoist\n");
@@ -282,7 +284,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     for( const SCEV *op : mul->operands() ) {
       LLVM_DEBUG(dbgs() << std::string(recursionDepth + 1, '\t') << "Recursing into mul expr operand" << "\n");
       *found = false;
-      const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
+      const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
         printf("two uses of veidx: can't hoist\n");
@@ -296,12 +298,19 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
         }
         // check constant
         if(const SCEVConstant *num = dyn_cast<SCEVConstant>(mul->getOperand(0))){
-          if(num != SE->getConstant(num->getType(), bytewidth)) {
-            printf("require bytewidth multipler on eidx: can't hoist\n");
+          if(num->getValue()->getZExtValue() % bytewidth != 0) {
+            printf("require multiplier of eidx to be a multiple of bytewidth: can't hoist\n");
             return SE->getCouldNotCompute();
+          }
+          if (num->getValue()->getZExtValue() != bytewidth) {
+            *stride = num;
           }
         } else {
           printf("require constant as bytewidth: can't hoist\n");
+          return SE->getCouldNotCompute();
+        }
+        if (mul->getNumOperands() > 2) {
+          printf("Cannot multiply eidx by anything other than fixed constant\n");
           return SE->getCouldNotCompute();
         }
       }
@@ -321,7 +330,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
         if(parent->getSCEVType() == scAddExpr) {
           return SE->getConstant(expr->getType(),0);
         } else if(parent->getSCEVType() == scMulExpr) {
-          return SE->getConstant(expr->getType(),1);
+          return SE->getConstant(expr->getType(), 0); //If eidx is part of a mul expression we obliterate the expression (since we can't hoist it out)
         } else {
           return SE->getCouldNotCompute(); // TODO: do we need to handle casts
         }
@@ -339,7 +348,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     bool lfound = *found;
     *found = false;
     const SCEV *op = Cast->getOperand();
-    const SCEV *subexp = attemptToHoistOffset(op, expr, found, bytewidth, veidx, F, recursionDepth + 2);
+    const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
     if(subexp == SE->getCouldNotCompute()) return subexp;
     if(*found) {
       printf("Cannot cast veidx: can't hoist\n");
@@ -352,14 +361,16 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
   return SE->getCouldNotCompute();
 }
 
-const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, unsigned bytewidth, const SCEV **veidx, Function *F) {
-  return attemptToHoistOffset(expr, parent, found, bytewidth, veidx, F, 0);
+const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F) {
+  return attemptToHoistOffset(expr, parent, found, stride, bytewidth, veidx, F, 0);
 }
 
 CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   LLVM_DEBUG(dbgs() << "Processing Function:" << "\n");
   LLVM_DEBUG(F->dump());
+
+  std::map<Instruction*, const SCEV*> strideLengthsForMem;
 
   for(Function::iterator BBI = F->begin(), MBBE = F->end(); BBI != MBBE; ++BBI) {
     for(BasicBlock::iterator MII = BBI->begin(), MIE = BBI->end(); MII != MIE; ++MII) {
@@ -380,10 +391,13 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         // have base or eidx
         bool found = false;
         const SCEV *veidx;
-        const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
+        const SCEV* stride = nullptr;
+        const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, &stride, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
         if(newSCEV != SE->getCouldNotCompute()){
           if(found) {
             addrs.insert(std::make_pair(&*MII, newSCEV));
+            if (stride != nullptr)
+              strideLengthsForMem.insert(std::make_pair(&*MII, stride));
             printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
           } else { // entirely scalar memop so we hoist it differently
             // TODO: Hoisting scalar stores requires checking that all values
@@ -411,15 +425,21 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
         // where offset is another potentially deep scev tree as long as it doesn't
         // have base or eidx
         bool found = false;
+        const SCEV *stride = nullptr;
         const SCEV *veidx;
         LLVM_DEBUG(dbgs() << "Calling hoist offset. Following expressions show recursion tree" << "\n");
-        const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
+        const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, &stride, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
 
         if(newSCEV != SE->getCouldNotCompute()){
           LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
           LLVM_DEBUG(newSCEV->dump());
+     
           if(found) {
             addrs.insert(std::make_pair(&*MII, newSCEV));
+            if (stride != nullptr) {
+              LLVM_DEBUG(stride->dump());
+              strideLengthsForMem.insert(std::make_pair(&*MII, stride));
+            }
             printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
           } else { // entirely scalar memop so we hoist it differently
             scalars.insert(std::make_pair(&*MII, newSCEV));
@@ -434,11 +454,27 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   FunctionType *FTy = F->getFunctionType();
   std::vector<Type*> Params;
   Params.insert(Params.end(), FTy->param_begin(), FTy->param_end());
+
+  std::vector<unsigned> TagAddrIdx;
+  std::vector<unsigned> TagStrideIdx;
+
   for(std::map< Instruction*, const SCEV* >::iterator it = addrs.begin(); it != addrs.end(); ++it) {
-    if(isa<LoadInst>(it->first))
+    if(isa<LoadInst>(it->first)) {
       Params.push_back(it->first->getType()->getPointerTo());
-    if(isa<StoreInst>(it->first))
+      TagAddrIdx.push_back(Params.size());
+      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
+        Params.push_back(strideLengthsForMem[it->first]->getType());
+        TagStrideIdx.push_back(Params.size());
+      }
+    }
+    if(isa<StoreInst>(it->first)) {
       Params.push_back(it->first->getOperand(0)->getType()->getPointerTo());
+      TagAddrIdx.push_back(Params.size());
+      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
+        Params.push_back(strideLengthsForMem[it->first]->getType());
+        TagStrideIdx.push_back(Params.size());
+      }
+    }
   }
   for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
     if(isa<LoadInst>(it->first))
@@ -456,9 +492,14 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   LLVMContext &Ctx = NF->getParent()->getContext();
 
-  for(unsigned i = 1; i <= addrs.size(); i++) {
-    NF->addAttribute(FTy->getNumParams()+i, Attribute::ByVal);
-    NF->addAttribute(FTy->getNumParams()+i, Attribute::get(Ctx, "VARRegClass"));
+  for (unsigned i : TagAddrIdx) {
+    NF->addAttribute(i, Attribute::ByVal);
+    NF->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
+  }
+
+  for (unsigned i : TagStrideIdx) {
+    NF->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
+    NF->addAttribute(i, Attribute::get(Ctx, "strided"));
   }
 
 
@@ -517,6 +558,11 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
       }
     }
     AttributeList aregAttrs();
+
+    std::vector<unsigned> TagCallAddrIdx;
+    std::vector<unsigned> TagCallStrideIdx;
+
+
     // Create code to generate SCEV in map
     SCEVExpander Expander(*SE, F->getParent()->getDataLayout(), "vfoptexp");
     for(std::map<Instruction *, const SCEV *>::iterator it = addrs.begin(); it != addrs.end(); ++it) {
@@ -527,6 +573,14 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
       if(isa<StoreInst>(it->first))
         base = Expander.expandCodeFor(newSCEV, it->first->getOperand(0)->getType()->getPointerTo(),Call);
       Args.push_back(base);
+      TagCallAddrIdx.push_back(Args.size());
+      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
+        newSCEV = SCEVParameterRewriter::rewrite(strideLengthsForMem[it->first], *SE, argMap);
+        base = Expander.expandCodeFor(newSCEV, newSCEV->getType(), Call);
+        Call->getParent()->dump();
+        Args.push_back(base);
+        TagCallStrideIdx.push_back(Args.size());
+      }
     }
     for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
       const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->second, *SE, argMap);
@@ -543,11 +597,17 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
 
    
-
-    for(unsigned i = 0;i < addrs.size(); i++) {
-      cast<CallInst>(New)->addAttribute(ArgIndex+i, Attribute::ByVal);
-      cast<CallInst>(New)->addAttribute(ArgIndex+i, Attribute::get(Ctx, "VARRegClass"));
+    for (unsigned i : TagCallAddrIdx) {
+      cast<CallInst>(New)->addAttribute(i, Attribute::ByVal);
+      cast<CallInst>(New)->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
     }
+
+    for (unsigned i : TagCallStrideIdx) {
+      cast<CallInst>(New)->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
+      cast<CallInst>(New)->addAttribute(i, Attribute::get(Ctx, "strided"));
+    }
+
+
     if (cast<CallInst>(Call)->isTailCall())
       cast<CallInst>(New)->setTailCall();
 
@@ -587,19 +647,49 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   }
   // Loop over the remaining args createing new loads to use the
   for(std::map<Instruction *, const SCEV *>::iterator it = addrs.begin(); it != addrs.end(); ++it) {
+    if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
+      auto Module = it->first->getModule();
+      bool isLoad = isa<LoadInst>(it->first);
+      auto memType = isLoad ? it->first->getType() : it->first->getOperand(0)->getType();
 
-    Instruction *newMemOp;
-    if(isa<LoadInst>(it->first)) {
-      newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
+      Function *declaration;
+      Instruction *stridedInst;
+
+      if (memType->isFloatTy()) {
+        declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridefloat : Intrinsic::hwacha_storestridefloat);
+      } else if (memType->isDoubleTy()) {
+        declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridedouble : Intrinsic::hwacha_storestridedouble);
+      } else {
+        assert(false && "Unsupported Type for Strides");
+      }
+
+      if (isLoad) {
+        stridedInst = CallInst::Create(declaration,  {&*I2, &*std::next(I2)}, "", it->first);
+      } else {
+        stridedInst = CallInst::Create(declaration,  {it->first->getOperand(0), &*I2, &*std::next(I2)}, "", it->first);
+      }
+      
+      it->first->replaceAllUsesWith(stridedInst);
+      stridedInst->takeName(it->first);
+      it->first->eraseFromParent();
+
+      ++I2;
+      ++I2;
+    } else {  
+      Instruction *newMemOp;
+      if(isa<LoadInst>(it->first)) {
+        newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
+      }
+      if(isa<StoreInst>(it->first)) {
+        newMemOp = new StoreInst(it->first->getOperand(0), &*I2, "vec_addr_base", it->first);
+      }
+      it->first->replaceAllUsesWith(newMemOp);
+      newMemOp->takeName(it->first);
+      it->first->eraseFromParent();
+      ++I2;
     }
-    if(isa<StoreInst>(it->first)) {
-      newMemOp = new StoreInst(it->first->getOperand(0), &*I2, "vec_addr_base", it->first);
-    }
-    it->first->replaceAllUsesWith(newMemOp);
-    newMemOp->takeName(it->first);
-    it->first->eraseFromParent();
-    ++I2;
   }
+
   for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
     Instruction *newMemOp;
     if(isa<LoadInst>(it->first)) {
@@ -610,6 +700,11 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     }
     ++I2;
   }
+
+
+  LLVM_DEBUG(dbgs() << "Transformed function" << "\n");
+  LLVM_DEBUG(NF->dump());
+
   // iterate of instruction in addr doing a few things
   // 1) add another argument for the address to be passed
   // 2) replace the memop with one that uses this new argument
@@ -626,8 +721,6 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   else
     F->setLinkage(Function::ExternalLinkage);
 
-  LLVM_DEBUG(dbgs() << "Transformed function" << "\n");
-  LLVM_DEBUG(NF->dump());
 
   return NF_CGN;
 }
@@ -879,12 +972,47 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
   }
 }
 
+// inline int getStridedLoadStoreLength(MachineInstr *I, const TargetRegisterClass *destRC) {
+//   if(MRI->getRegClass(I->getOperand(1).getReg()) != &RISCV::VARRegClass)
+//     return 0;
+//   MachineFunction* MF = I->getMF();
+//   const MachineRegisterInfo &MRI = MF->getRegInfo();
+
+//   const MachineInstr* MI = MRI.getVRegDef(I->getOperand(1).getReg());
+//   if (!MI->isCopy()) {
+//     return 0;
+//   }
+//   CopySource = MI->getOperand(1);
+//   MI = MRI.getVRegDef(CopySource.getReg());
+//   if (!MI->isCopy()) {
+//     return 0;
+//   }
+//   auto& CopySource = MI->getOperand(1);
+//   if (TargetRegisterInfo::isVirtualRegister(CopySource.getReg())) {
+//     return 0;
+//   }
+// }
+
+void RISCVVectorFetchMachOpt::vectorizeStridedLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg, unsigned STRD) {
+  I->setDesc(TII->get(STRD));
+  MRI->setRegClass(I->getOperand(0).getReg(), destRC);
+  I->addOperand(MachineOperand::CreateImm(0));
+  I->addOperand(MachineOperand::CreateReg(defPredReg, false));
+}
+
+void RISCVVectorFetchMachOpt::vectorizeStridedStoreOp(MachineInstr *I, unsigned defPredReg, unsigned STRD) {
+    I->setDesc(TII->get(STRD));
+    I->addOperand(MachineOperand::CreateImm(0));
+    I->addOperand(MachineOperand::CreateReg(defPredReg, false));
+}
 
 void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegisterClass *destRC, unsigned defPredReg,
     unsigned VEC, unsigned IDX, unsigned SCALAR) {
 
   LLVM_DEBUG(dbgs() << "Vectorizing load op: " << "\n");
   LLVM_DEBUG(I->dump());
+
+  int stride = 1;
 
   //TODO: support invariant memops becoming scalar memops
   if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {
@@ -1248,9 +1376,15 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           vectorizeLoadOp(&*I, &RISCV::VVWRegClass, defPredReg,
               RISCV::VLW_F, RISCV::VLXW_F, RISCV::VLSW_F);
           continue;
+        case RISCV::strideF_load   :
+          vectorizeStridedLoadOp(&*I, &RISCV::VVWRegClass, defPredReg, RISCV::VLSTW);
+          continue;
         case RISCV::FLD   :
           vectorizeLoadOp(&*I, &RISCV::VVRRegClass, defPredReg,
               RISCV::VLD_F, RISCV::VLXD_F, RISCV::VLSD_F);
+          continue;
+        case RISCV::strideD_load   :
+          vectorizeStridedLoadOp(&*I, &RISCV::VVRRegClass, defPredReg,  RISCV::VLSTD);
           continue;
         case RISCV::LHU   :
           vectorizeLoadOp(&*I, &RISCV::VVHRegClass, defPredReg,
@@ -1264,9 +1398,15 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSD_F, RISCV::VSXD_F);
           continue;
+        case RISCV::strideD_store   :
+          vectorizeStridedStoreOp(&*I, defPredReg, RISCV::VSSTD);
+          continue;
         case RISCV::FSW   :
           vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSW_F, RISCV::VSXW_F);
+          continue;
+        case RISCV::strideF_store   :
+          vectorizeStridedStoreOp(&*I, defPredReg, RISCV::VSSTW);
           continue;
         // case RISCV::FSH   :
         //   vectorizeStoreOp(&*I, defPredReg,

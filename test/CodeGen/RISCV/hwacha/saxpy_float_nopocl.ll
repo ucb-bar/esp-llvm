@@ -16,26 +16,11 @@ body:
   ret void
 }
 
-define dso_local void @_pocl_launcher_saxpy_workgroup(i8**, { i32, [3 x i64], [3 x i64], [3 x i64] }*) {
-  %3 = bitcast i8** %0 to float***
-  %4 = load float**, float*** %3, align 8
-  %5 = load float*, float** %4, align 8
-  %6 = getelementptr i8*, i8** %0, i64 1
-  %7 = bitcast i8** %6 to float***
-  %8 = load float**, float*** %7, align 8
-  %9 = load float*, float** %8, align 8
-  %10 = getelementptr i8*, i8** %0, i64 2
-  %11 = bitcast i8** %10 to float**
-  %12 = load float*, float** %11, align 8
-  %13 = load float, float* %12, align 4
-  call void @_pocl_launcher_saxpy(float* %5, float* %9, float %13)
+define dso_local void @_pocl_launcher_saxpy_workgroup(float*, float*, float) {
+  call void @_pocl_launcher_saxpy(float* %0, float* %1, float %2)
   ret void
 }
 
-
-define void @pocl.barrier() {
-  ret void
-}
 
 attributes #0 = { nounwind }
 attributes #1 = { noinline }

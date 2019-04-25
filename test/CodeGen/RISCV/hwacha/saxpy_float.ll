@@ -7,9 +7,9 @@ define dso_local void @_pocl_launcher_saxpy(float*, float*, float, i32, i64, i64
   %add.i.i = add i64 %mul.i.i, %10
   %call.i.i.i = call i64 @llvm.hwacha.veidx() #0
   %add1.i.i = add i64 %add.i.i, %call.i.i.i
-  %sext = shl i64 %add1.i.i, 32
-  %idxprom.i = ashr exact i64 %sext, 32
-  %arrayidx.i = getelementptr inbounds float, float* %0, i64 %idxprom.i
+  ; %sext = shl i64 %add1.i.i, 32
+  ; %idxprom.i = ashr exact i64 %sext, 32
+  %arrayidx.i = getelementptr inbounds float, float* %0, i64 %add1.i.i ;%idxprom.i
   %14 = load float, float* %arrayidx.i, align 4
   %mul.i = fmul float %14, %2
   %sext1 = shl i64 %add1.i.i, 32
