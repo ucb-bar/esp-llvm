@@ -370,81 +370,55 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   LLVM_DEBUG(dbgs() << "Processing Function:" << "\n");
   LLVM_DEBUG(F->dump());
 
-  std::map<Instruction*, const SCEV*> strideLengthsForMem;
+  std::map<Instruction*, const SCEV*> strideLengthsForMem; 
 
   for(Function::iterator BBI = F->begin(), MBBE = F->end(); BBI != MBBE; ++BBI) {
     for(BasicBlock::iterator MII = BBI->begin(), MIE = BBI->end(); MII != MIE; ++MII) {
-      if(isa<StoreInst>(MII)) {
-        const SCEV *store = SE->getSCEV(cast<StoreInst>(MII)->getPointerOperand());
-        printf("found store inst in opencl kernel, trying to hoist\n");
-        MII->dump();
-        store->dump();
-        fflush(stdout);fflush(stderr);
-        const SCEV *ptrBase = SE->getPointerBase(store);
-        // We need a base addr to start with
-        if(!isa<SCEVUnknown>(ptrBase)) {
-          break;
-        }
-        // Descend through NAry ops building up a global addexpr
-        // Goal is something like AddExpr(base, offset, MulExpr(eidx,bytewidth))
-        // where offset is another potentially deep scev tree as long as it doesn't
-        // have base or eidx
-        bool found = false;
-        const SCEV *veidx;
-        const SCEV* stride = nullptr;
-        const SCEV *newSCEV = attemptToHoistOffset(store, store, &found, &stride, MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
-        if(newSCEV != SE->getCouldNotCompute()){
-          if(found) {
-            addrs.insert(std::make_pair(&*MII, newSCEV));
-            if (stride != nullptr)
-              strideLengthsForMem.insert(std::make_pair(&*MII, stride));
-            printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
-          } else { // entirely scalar memop so we hoist it differently
-            // TODO: Hoisting scalar stores requires checking that all values
-            // in SCEV are known at the call site
-            scalars.insert(std::make_pair(&*MII, newSCEV));
-            printf("HOISTED SCALAR\n");fflush(stdout);fflush(stderr);
-          }
-        }
-      }
-      if(isa<LoadInst>(MII)) {
-        const SCEV *load = SE->getSCEV(cast<LoadInst>(MII)->getPointerOperand());
-        printf("found load inst in opencl kernel, trying to hoist\n");
-        MII->dump();
-        load->dump();
-        fflush(stdout);fflush(stderr);
-        const SCEV *ptrBase = SE->getPointerBase(load);
-        LLVM_DEBUG(dbgs() << "Ptrbase Dump" << "\n");
-        LLVM_DEBUG(ptrBase->dump());
-        // We need a base addr to start with
-        if(!isa<SCEVUnknown>(ptrBase)) {
-          break;
-        }
-        // Descend through NAry ops building up a global addexpr
-        // Goal is something like AddExpr(base, offset, MulExpr(eidx,bytewidth))
-        // where offset is another potentially deep scev tree as long as it doesn't
-        // have base or eidx
-        bool found = false;
-        const SCEV *stride = nullptr;
-        const SCEV *veidx;
-        LLVM_DEBUG(dbgs() << "Calling hoist offset. Following expressions show recursion tree" << "\n");
-        const SCEV *newSCEV = attemptToHoistOffset(load, load, &found, &stride, MII->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
+      bool isStore = isa<StoreInst>(MII);
+      bool isLoad = isa<LoadInst>(MII);
+      if (!isStore && !isLoad)
+        continue;
 
-        if(newSCEV != SE->getCouldNotCompute()){
-          LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
-          LLVM_DEBUG(newSCEV->dump());
-     
-          if(found) {
-            addrs.insert(std::make_pair(&*MII, newSCEV));
-            if (stride != nullptr) {
-              LLVM_DEBUG(stride->dump());
-              strideLengthsForMem.insert(std::make_pair(&*MII, stride));
-            }
-            printf("HOISTED ADDR\n");fflush(stdout);fflush(stderr);
-          } else { // entirely scalar memop so we hoist it differently
-            scalars.insert(std::make_pair(&*MII, newSCEV));
-            printf("HOISTED SCALAR\n");fflush(stdout);fflush(stderr);
+      const SCEV *expr = SE->getSCEV(isStore ? cast<StoreInst>(MII)->getPointerOperand() : cast<LoadInst>(MII)->getPointerOperand());
+      
+      LLVM_DEBUG(dbgs() << "Found load/store inst in opencl kernel, trying to hoist\n");
+      MII->dump();
+      expr->dump();
+
+      const SCEV *ptrBase = SE->getPointerBase(expr);
+      LLVM_DEBUG(dbgs() << "Ptrbase Dump" << "\n");
+      LLVM_DEBUG(ptrBase->dump());
+      // We need a base addr to start with
+      if(!isa<SCEVUnknown>(ptrBase)) {
+        break;
+      }
+      // Descend through NAry ops building up a global addexpr
+      // Goal is something like AddExpr(base, offset, MulExpr(eidx,bytewidth))
+      // where offset is another potentially deep scev tree as long as it doesn't
+      // have base or eidx
+      bool found = false;
+      const SCEV *stride = nullptr;
+      const SCEV *veidx;
+      LLVM_DEBUG(dbgs() << "Calling hoist offset. Following expressions show recursion tree" << "\n");
+      const SCEV *newSCEV = attemptToHoistOffset(expr, expr, &found, &stride, isLoad ? MII->getType()->getPrimitiveSizeInBits()/8 :
+        MII->getOperand(0)->getType()->getPrimitiveSizeInBits()/8, &veidx, F);
+
+      if(newSCEV != SE->getCouldNotCompute()) {
+        LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
+        LLVM_DEBUG(newSCEV->dump());
+   
+        if(found) {
+          addrs.insert(std::make_pair(&*MII, newSCEV));
+          if (stride != nullptr) {
+            LLVM_DEBUG(stride->dump());
+            strideLengthsForMem.insert(std::make_pair(&*MII, stride));
           }
+          LLVM_DEBUG(dbgs() << "Hoisted Addr" << "\n");
+        } else { // entirely scalar memop so we hoist it differently
+          // TODO: Hoisting scalar stores requires checking that all values
+          // in SCEV are known at the call site
+          scalars.insert(std::make_pair(&*MII, newSCEV));
+          LLVM_DEBUG(dbgs() << "Hoisted Scalar" << "\n");
         }
       }
     }
