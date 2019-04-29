@@ -15,6 +15,9 @@ def llvm_double_ptr_ty        : LLVMPointerType<llvm_float_ty>;
 
 let TargetPrefix = "hwacha" in {
   def int_hwacha_veidx : Intrinsic<[llvm_i64_ty], [], [IntrNoMem]>;
+  def int_hwacha_vsetvl : Intrinsic<[llvm_i64_ty], [llvm_i64_ty], [IntrHasSideEffects]>;
+
+  // All the strided stuff
   def int_hwacha_loadstridefloat : Intrinsic<[llvm_float_ty], [llvm_float_ptr_ty, llvm_i64_ty], [IntrReadMem]>;
   def int_hwacha_loadstridedouble : Intrinsic<[llvm_double_ty], [llvm_double_ptr_ty, llvm_i64_ty], [IntrReadMem]>;
   def int_hwacha_storestridefloat : Intrinsic<[], [ llvm_float_ty, llvm_float_ptr_ty, llvm_i64_ty], [IntrWriteMem]>;

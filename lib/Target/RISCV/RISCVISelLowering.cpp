@@ -2046,27 +2046,28 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
 
     //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
     //TODO: Ask colin why this is vsetvl always set to zero??
-    SDValue vsetvlOps[] = {Chain, DAG.getConstant(0, DL, MVT::i64, true), Glue};
+    
+    // SDValue vsetvlOps[] = {Chain, DAG.getConstant(0, DL, MVT::i64, true), Glue};
 
-    LLVM_DEBUG(dbgs() << "VSETVL operands" << "\n");
-    LLVM_DEBUG(vsetvlOps[0].dump());
-    LLVM_DEBUG(vsetvlOps[1].dump());
-    LLVM_DEBUG(vsetvlOps[2].dump());
-    LLVM_DEBUG(dbgs() << vsetvlOps[0].getValueType().getEVTString() << "\n");
-    LLVM_DEBUG(dbgs() << vsetvlOps[1].getValueType().getEVTString() << "\n");
-    LLVM_DEBUG(dbgs() << vsetvlOps[2].getValueType().getEVTString() << "\n");
+    // LLVM_DEBUG(dbgs() << "VSETVL operands" << "\n");
+    // LLVM_DEBUG(vsetvlOps[0].dump());
+    // LLVM_DEBUG(vsetvlOps[1].dump());
+    // LLVM_DEBUG(vsetvlOps[2].dump());
+    // LLVM_DEBUG(dbgs() << vsetvlOps[0].getValueType().getEVTString() << "\n");
+    // LLVM_DEBUG(dbgs() << vsetvlOps[1].getValueType().getEVTString() << "\n");
+    // LLVM_DEBUG(dbgs() << vsetvlOps[2].getValueType().getEVTString() << "\n");
 
-    NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
-    auto VsetvlNode = DAG.getNode(RISCVISD::VSETVL, DL, NodeTys, vsetvlOps);// take the chain as res
+    // NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
+    // auto VsetvlNode = DAG.getNode(RISCVISD::VSETVL, DL, NodeTys, vsetvlOps);// take the chain as res
 
 
-    for (const SDValue &Op : VsetvlNode.getNode()->op_values()) {
-      LLVM_DEBUG(Op.dump());
-      LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
-    }
+    // for (const SDValue &Op : VsetvlNode.getNode()->op_values()) {
+    //   LLVM_DEBUG(Op.dump());
+    //   LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
+    // }
 
-    Glue = VsetvlNode.getValue(2);
-    Chain = VsetvlNode.getValue(1);
+    // Glue = VsetvlNode.getValue(2);
+    // Chain = VsetvlNode.getValue(1);
   }
 
   // The first call operand is the chain and the second is the target address.

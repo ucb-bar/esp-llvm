@@ -1,5 +1,6 @@
 ; Function Attrs: nounwind
 declare i64 @llvm.hwacha.veidx() #0
+declare i64 @llvm.hwacha.vsetvl(i64) #3
 
 ; Function Attrs: noinline nounwind
 define dso_local void @_pocl_launcher_saxpy(float*, float*, float) {
@@ -17,12 +18,14 @@ body:
 }
 
 define dso_local void @_pocl_launcher_saxpy_workgroup(float*, float*, float) {
+  call i64 @llvm.hwacha.vsetvl(i64 23)
   call void @_pocl_launcher_saxpy(float* %0, float* %1, float %2)
   ret void
 }
 
 
 attributes #0 = { nounwind }
+attributes #3 = { nounwind }
 attributes #1 = { noinline }
 
 !llvm.ident = !{!0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !0, !1}

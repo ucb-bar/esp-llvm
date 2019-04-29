@@ -171,14 +171,18 @@ multiclass InstVR4<string name, SDPatternOperator op> {
 // Control Thread Instructions
 
 //configure vector unit
-let isCodeGenOnly = 1, isPseudo = 1 in {
+let isCodeGenOnly = 1, hasSideEffects = 1 in {
   def VSETCFG : InstV<(outs GPR:$cfg), (ins imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregs),
                 "vsetcfg", "$cfg,$dregs,$wregs,$hregs,$pregs", []>, Requires<[HasXhwacha]>;//vsetcfg 32,0    #num_int_regs,num_pred_regs
+}
+
+let hasSideEffects = 1 in {
   def VSETVL  : InstV<(outs GPR:$res), (ins GPR:$goal), "vsetvl", "$res,$goal", []>, Requires<[HasXhwacha]>;//vsetvl t0,t0    #reg,reg for how long we got and how long we wanted
 }
 
 def: Pat<(r_vsetvl GPR:$goal), (VSETVL GPR:$goal)>;
 def: Pat<(r_vsetcfg i64:$dregs, i64:$wregs, i64:$hregs, i64:$pregsl), (VSETCFG imm64:$dregs, imm64:$wregs, imm64:$hregs, imm64:$pregsl)>;
+def: Pat<(int_hwacha_vsetvl GPR:$goal), (VSETVL GPR:$goal)>;
 
 let isCall = 1, isCodeGenOnly = 1 in {
     def VFetch : InstV< (outs), (ins GPR:$target), "vf", "$target", [(r_callv regaddr:$target)]>, Requires<[HasXhwacha]>;
@@ -312,8 +316,8 @@ let isCodeGenOnly = 1 in {
     def VEIDX  : InstV<(outs VVR:$dest), (ins), "veidx", "$dest", []>, Requires<[HasXhwacha]>;
   }
 }
-
 def: Pat<(int_hwacha_veidx), (VEIDX)>;
+
 
 // Handle strided ops
 
@@ -416,7 +420,7 @@ let isPseudo = 1 in {
 
   }
 
- let mayStore = 0 in {
+ let mayStore = 0, hasSideEffects = 1 in {
     //Predicate Instructions
     def VPSET  : InstV<(outs VPR:$dest), (ins), "vpset", "$dest",[(set VPR:$dest, (i1 1))]>, Requires<[HasXhwacha]>;
     def VPCLEAR  : InstV<(outs VPR:$dest), (ins), "vpclear", "$dest",[(set VPR:$dest, (i1 0))]>, Requires<[HasXhwacha]>;

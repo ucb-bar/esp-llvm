@@ -524,11 +524,11 @@ bool RISCVInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
       // This is now handled at call lowering
       return true;
     }
-    case RISCV::VSETVL :
-    {
-      BuildMI(*(MI.getParent()), MI, MI.getDebugLoc(), get(RISCV::PseudoLI), MI.getOperand(0).getReg()).addImm(4);
-      MI.getOperand(1).ChangeToRegister(MI.getOperand(0).getReg(),false);
-    }
+    // case RISCV::VSETVL :
+    // {
+    //   BuildMI(*(MI.getParent()), MI, MI.getDebugLoc(), get(RISCV::PseudoLI), MI.getOperand(0).getReg()).addImm(4);
+    //   MI.getOperand(1).ChangeToRegister(MI.getOperand(0).getReg(),false);
+    // }
   default:
     return false;
   }

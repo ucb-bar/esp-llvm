@@ -20,6 +20,8 @@ _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 # %bb.0:
 	addi	sp, sp, -16
+	addi	a3, zero, 23
+	vsetvl	a3,a3
 	lw	a0, 0(a0)
 	sw	a0, 12(sp)
 	lw	a0, 0(a1)
@@ -30,8 +32,6 @@ _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 	vmca	va1,a0
 	vmca	va2,a1
 	vsetcfg	a0,0,2,0,1
-	li	a0, 4
-	vsetvl	a0,a0
 	vf	_pocl_launcher_saxpy
 	addi	sp, sp, 16
 	ret
