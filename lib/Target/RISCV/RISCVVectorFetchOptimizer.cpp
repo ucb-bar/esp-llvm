@@ -43,8 +43,10 @@ namespace {
   struct RISCVVectorFetchIROpt : public ModulePass {
     Scalarization       *MS;
     ScalarEvolution     *SE;
-    std::map<Instruction *, const SCEV *> addrs;
-    std::map<Instruction *, const SCEV *> scalars;
+    std::map<const SCEV *, std::vector<Instruction *>> addrs; //scev addr -> instrs
+    std::set<const SCEV *> strides;
+    std::map<const SCEV *, const SCEV *> addrStrides; //scev addr -> stride 
+    std::map<const SCEV *, std::vector<Instruction *>> scalars;
   private:
     virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
         bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth);
@@ -370,6 +372,8 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   LLVM_DEBUG(dbgs() << "Processing Function:" << "\n");
   LLVM_DEBUG(F->dump());
 
+  //SCEVs are themselves immutable and interally uniqued so we can just use pointer equality 
+
   std::map<Instruction*, const SCEV*> strideLengthsForMem; 
 
   for(Function::iterator BBI = F->begin(), MBBE = F->end(); BBI != MBBE; ++BBI) {
@@ -405,55 +409,56 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
       if(newSCEV != SE->getCouldNotCompute()) {
         LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
+        LLVM_DEBUG(dbgs() << (void*) newSCEV << "\n");
         LLVM_DEBUG(newSCEV->dump());
    
         if(found) {
-          addrs.insert(std::make_pair(&*MII, newSCEV));
+          addrs[newSCEV].push_back(&*MII);
           if (stride != nullptr) {
+            LLVM_DEBUG(dbgs() << (void*) stride << "\n");
             LLVM_DEBUG(stride->dump());
-            strideLengthsForMem.insert(std::make_pair(&*MII, stride));
+            addrStrides[newSCEV] = *(strides.insert(stride).first); 
           }
           LLVM_DEBUG(dbgs() << "Hoisted Addr" << "\n");
-        } else { // entirely scalar memop so we hoist it differently
+        } else if (isLoad) {
+          // entirely scalar memop so we hoist it differently
           // TODO: Hoisting scalar stores requires checking that all values
           // in SCEV are known at the call site
-          scalars.insert(std::make_pair(&*MII, newSCEV));
+          scalars[newSCEV].push_back(&*MII);
           LLVM_DEBUG(dbgs() << "Hoisted Scalar" << "\n");
         }
       }
     }
   }
 
+  LLVM_DEBUG(dbgs() << "Number of strides: " << addrStrides.size() << "\n");
+
   // Update function type based on new arguments
   FunctionType *FTy = F->getFunctionType();
   std::vector<Type*> Params;
   Params.insert(Params.end(), FTy->param_begin(), FTy->param_end());
 
-  std::vector<unsigned> TagAddrIdx;
-  std::vector<unsigned> TagStrideIdx;
+  std::map<const SCEV*, unsigned> TagAddrIdx;
+  std::map<const SCEV*, unsigned> TagStrideIdx;
+  std::map<const SCEV*, unsigned> TagScalarIdx;
 
-  for(std::map< Instruction*, const SCEV* >::iterator it = addrs.begin(); it != addrs.end(); ++it) {
-    if(isa<LoadInst>(it->first)) {
-      Params.push_back(it->first->getType()->getPointerTo());
-      TagAddrIdx.push_back(Params.size());
-      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
-        Params.push_back(strideLengthsForMem[it->first]->getType());
-        TagStrideIdx.push_back(Params.size());
-      }
-    }
-    if(isa<StoreInst>(it->first)) {
-      Params.push_back(it->first->getOperand(0)->getType()->getPointerTo());
-      TagAddrIdx.push_back(Params.size());
-      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
-        Params.push_back(strideLengthsForMem[it->first]->getType());
-        TagStrideIdx.push_back(Params.size());
-      }
-    }
+  for (auto it = addrs.begin(); it != addrs.end(); ++it) {
+    Instruction* inst = it->second[0];
+    bool loadInst = isa<LoadInst>(inst);
+    Params.push_back(loadInst ? inst->getType()->getPointerTo() : inst->getOperand(0)->getType()->getPointerTo());
+    TagAddrIdx[it->first] = Params.size();
   }
-  for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
-    if(isa<LoadInst>(it->first))
-      Params.push_back(it->first->getType()->getPointerTo());
+
+  for (auto it = strides.begin(); it != strides.end(); it++) {
+    Params.push_back((*it)->getType());
+    TagStrideIdx[*it] = Params.size();
   }
+
+  for(auto it = scalars.begin(); it != scalars.end(); ++it) {
+    Params.push_back(it->second[0]->getType()->getPointerTo());
+    TagScalarIdx[it->first] = Params.size();
+  }
+
   Type *RetTy = FTy->getReturnType();
 
   // Create new function with additional args to replace old one
@@ -466,14 +471,14 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   LLVMContext &Ctx = NF->getParent()->getContext();
 
-  for (unsigned i : TagAddrIdx) {
-    NF->addAttribute(i, Attribute::ByVal);
-    NF->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
+  for (auto it = TagAddrIdx.begin(); it != TagAddrIdx.end(); it++) {
+    NF->addAttribute(it->second, Attribute::ByVal);
+    NF->addAttribute(it->second, Attribute::get(Ctx, "VARRegClass"));
   }
 
-  for (unsigned i : TagStrideIdx) {
-    NF->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
-    NF->addAttribute(i, Attribute::get(Ctx, "strided"));
+  for (auto it = TagStrideIdx.begin(); it != TagStrideIdx.end(); it++) {
+    NF->addAttribute(it->second, Attribute::get(Ctx, "VARRegClass"));
+    NF->addAttribute(it->second, Attribute::get(Ctx, "strided"));
   }
 
 
@@ -536,31 +541,32 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     std::vector<unsigned> TagCallAddrIdx;
     std::vector<unsigned> TagCallStrideIdx;
 
-
     // Create code to generate SCEV in map
     SCEVExpander Expander(*SE, F->getParent()->getDataLayout(), "vfoptexp");
-    for(std::map<Instruction *, const SCEV *>::iterator it = addrs.begin(); it != addrs.end(); ++it) {
-      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->second, *SE, argMap);
-      Value *base;
-      if(isa<LoadInst>(it->first))
-        base = Expander.expandCodeFor(newSCEV, it->first->getType()->getPointerTo(),Call);
-      if(isa<StoreInst>(it->first))
-        base = Expander.expandCodeFor(newSCEV, it->first->getOperand(0)->getType()->getPointerTo(),Call);
+    for (auto it = addrs.begin(); it != addrs.end(); ++it) {
+      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->first, *SE, argMap);
+      Value *base; 
+      Instruction* inst = it->second[0];
+      bool isLoad = isa<LoadInst>(inst);
+      base = Expander.expandCodeFor(newSCEV, isLoad ? inst->getType()->getPointerTo() :
+                                              inst->getOperand(0)->getType()->getPointerTo(),Call);
+
       Args.push_back(base);
       TagCallAddrIdx.push_back(Args.size());
-      if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
-        newSCEV = SCEVParameterRewriter::rewrite(strideLengthsForMem[it->first], *SE, argMap);
-        base = Expander.expandCodeFor(newSCEV, newSCEV->getType(), Call);
-        Call->getParent()->dump();
-        Args.push_back(base);
-        TagCallStrideIdx.push_back(Args.size());
-      }
     }
-    for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
-      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->second, *SE, argMap);
-      Value *base;
-      if(isa<LoadInst>(it->first))
-        base = Expander.expandCodeFor(newSCEV, it->first->getType()->getPointerTo(),Call);
+
+    for (auto it = strides.begin(); it != strides.end(); it++) {
+      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(*it, *SE, argMap);
+      Value *base = Expander.expandCodeFor(newSCEV, newSCEV->getType(), Call);
+      Call->getParent()->dump();
+      Args.push_back(base);
+      TagCallStrideIdx.push_back(Args.size());
+    }
+
+    for(auto it = scalars.begin(); it != scalars.end(); ++it) {
+      Instruction* inst = it->second[0];
+      const SCEV *newSCEV = SCEVParameterRewriter::rewrite(it->first, *SE, argMap);
+      Value *base = Expander.expandCodeFor(newSCEV, inst->getType()->getPointerTo(),Call);
       Args.push_back(base);
     }
 
@@ -568,8 +574,6 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     cast<CallInst>(New)->setCallingConv(CS.getCallingConv());
     cast<CallInst>(New)->setAttributes(AttributeList::get(New->getContext(),
                                                         fnAttributes, retAttributes, ArrayRef<AttributeSet>()));
-
-
    
     for (unsigned i : TagCallAddrIdx) {
       cast<CallInst>(New)->addAttribute(i, Attribute::ByVal);
@@ -619,60 +623,88 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     ++I2;
     continue;
   }
+
+  std::map<unsigned, Value*> ArgNumToArgVal;
+  for (Function::arg_iterator E = NF->arg_end(); I2 != E; I2++) {
+    LLVM_DEBUG(dbgs() << "Mapping argno: " << (&*I2)->getArgNo() << " to val: ");
+    (&*I2)->dump();
+    LLVM_DEBUG(dbgs() << "\n");
+    ArgNumToArgVal[(&*I2)->getArgNo()] = &*I2;
+  }
+
+  LLVM_DEBUG(dbgs() << "New Function with parameters added (body not yet transformed)" << "\n");
+  LLVM_DEBUG(NF->dump());
+
   // Loop over the remaining args createing new loads to use the
-  for(std::map<Instruction *, const SCEV *>::iterator it = addrs.begin(); it != addrs.end(); ++it) {
-    if (strideLengthsForMem.find(it->first) != strideLengthsForMem.end()) {
-      auto Module = it->first->getModule();
-      bool isLoad = isa<LoadInst>(it->first);
-      auto memType = isLoad ? it->first->getType() : it->first->getOperand(0)->getType();
+  for (auto it = addrs.begin(); it != addrs.end(); ++it) {
+    LLVM_DEBUG(dbgs() << "For SCEV: ");
+    it->first->dump();
+    LLVM_DEBUG(dbgs() << "Formal arg mapped to argno: " << TagAddrIdx[it->first] << "\n");
 
-      Function *declaration;
-      Instruction *stridedInst;
 
-      if (memType->isFloatTy()) {
-        declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridefloat : Intrinsic::hwacha_storestridefloat);
-      } else if (memType->isDoubleTy()) {
-        declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridedouble : Intrinsic::hwacha_storestridedouble);
-      } else {
-        assert(false && "Unsupported Type for Strides");
-      }
+    Value* formalAddrArg = ArgNumToArgVal[TagAddrIdx[it->first] - 1]; //Some sort of weird off by one??
+    Value* formalStrideArg = nullptr;
 
-      if (isLoad) {
-        stridedInst = CallInst::Create(declaration,  {&*I2, &*std::next(I2)}, "", it->first);
-      } else {
-        stridedInst = CallInst::Create(declaration,  {it->first->getOperand(0), &*I2, &*std::next(I2)}, "", it->first);
-      }
-      
-      it->first->replaceAllUsesWith(stridedInst);
-      stridedInst->takeName(it->first);
-      it->first->eraseFromParent();
+    LLVM_DEBUG(dbgs() << "Formal addr args" << "\n");
+    formalAddrArg->dump();
 
-      ++I2;
-      ++I2;
-    } else {  
-      Instruction *newMemOp;
-      if(isa<LoadInst>(it->first)) {
-        newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
+    if (addrStrides.find(it->first) != addrStrides.end()) {
+      formalStrideArg = ArgNumToArgVal[TagStrideIdx[addrStrides[it->first]] - 1];
+      LLVM_DEBUG(dbgs() << "Formal stride args" << "\n");
+      formalStrideArg->dump();
+    }
+
+    for (auto instr : it->second) {
+      if (formalStrideArg != nullptr) {
+        auto Module = instr->getModule();
+        bool isLoad = isa<LoadInst>(instr);
+        auto memType = isLoad ? instr->getType() : instr->getOperand(0)->getType();
+
+        Function *declaration;
+        Instruction *stridedInst;
+
+        if (memType->isFloatTy()) {
+          declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridefloat : Intrinsic::hwacha_storestridefloat);
+        } else if (memType->isDoubleTy()) {
+          declaration = Intrinsic::getDeclaration(Module, isLoad ? Intrinsic::hwacha_loadstridedouble : Intrinsic::hwacha_storestridedouble);
+        } else {
+          assert(false && "Unsupported Type for Strides");
+        }
+
+        if (isLoad) {
+          stridedInst = CallInst::Create(declaration,  {formalAddrArg, formalStrideArg}, "", instr);
+        } else {
+          stridedInst = CallInst::Create(declaration,  {instr->getOperand(0), formalAddrArg, formalStrideArg}, "", instr);
+        }
+        
+        instr->replaceAllUsesWith(stridedInst);
+        stridedInst->takeName(instr);
+        instr->eraseFromParent();
+      } else {  
+        Instruction *newMemOp;
+        if(isa<LoadInst>(instr)) {
+          newMemOp = new LoadInst(formalAddrArg, "vec_addr_base", instr);
+        }
+        if(isa<StoreInst>(instr)) {
+          newMemOp = new StoreInst(instr->getOperand(0), formalAddrArg, "vec_addr_base", instr);
+        }
+        instr->replaceAllUsesWith(newMemOp);
+        newMemOp->takeName(instr);
+        instr->eraseFromParent();
       }
-      if(isa<StoreInst>(it->first)) {
-        newMemOp = new StoreInst(it->first->getOperand(0), &*I2, "vec_addr_base", it->first);
-      }
-      it->first->replaceAllUsesWith(newMemOp);
-      newMemOp->takeName(it->first);
-      it->first->eraseFromParent();
-      ++I2;
     }
   }
 
-  for(std::map<Instruction *, const SCEV *>::iterator it = scalars.begin(); it != scalars.end(); ++it) {
-    Instruction *newMemOp;
-    if(isa<LoadInst>(it->first)) {
-      newMemOp = new LoadInst(&*I2, "vec_addr_base", it->first);
-      it->first->replaceAllUsesWith(newMemOp);
-      newMemOp->takeName(it->first);
-      it->first->eraseFromParent();
+  for (auto it = scalars.begin(); it != scalars.end(); ++it) {
+    Value* formalAddrArg = ArgNumToArgVal[TagScalarIdx[it->first] - 1];
+    
+    for (auto instr : it->second) {
+      Instruction *newMemOp;
+      newMemOp = new LoadInst(formalAddrArg, "vec_addr_base", instr);
+      instr->replaceAllUsesWith(newMemOp);
+      newMemOp->takeName(instr);
+      instr->eraseFromParent();
     }
-    ++I2;
   }
 
 
@@ -985,8 +1017,6 @@ void RISCVVectorFetchMachOpt::vectorizeLoadOp(MachineInstr *I, const TargetRegis
 
   LLVM_DEBUG(dbgs() << "Vectorizing load op: " << "\n");
   LLVM_DEBUG(I->dump());
-
-  int stride = 1;
 
   //TODO: support invariant memops becoming scalar memops
   if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VARRegClass) {

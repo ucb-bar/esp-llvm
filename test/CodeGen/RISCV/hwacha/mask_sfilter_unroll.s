@@ -11,34 +11,34 @@ _pocl_launcher_mask_sfilter_unroll:     # @_pocl_launcher_mask_sfilter_unroll
 	@vp0	vadd	vv0, vs14, vv0
 	vadd	vs14, vs17, vs15
 	vslli	vs14, vs14, 1
-	@vp0	vlhu	vv8, va2
+	@vp0	vlhu	vv8, va1
 	@vp0	vcmpeq	vp1, vv8, vs0
 	@!vp1	vcjal	1, vs0, .LBB0_1
 	@vp1	vcjal	1, vs0, .LBB0_5
 .LBB0_1:                                # %if.then.i
-	@vp0	vlw	vv5, va4
+	@vp0	vlw	vv5, va3
 	@vp0	vfmul.s	vv5, vv5, vs6
-	@vp0	vlw	vv6, va3
+	@vp0	vlw	vv6, va2
 	@vp0	vfmul.s	vv6, vv6, vs5
 	@vp0	vfadd.s	vv5, vv6, vv5
-	@vp0	vlw	vv6, va5
+	@vp0	vlw	vv6, va4
 	@vp0	vfmul.s	vv6, vv6, vs7
 	@vp0	vfadd.s	vv5, vv5, vv6
-	@vp0	vlw	vv6, va6
+	@vp0	vlw	vv6, va5
 	@vp0	vfmul.s	vv6, vv6, vs8
 	@vp0	vfadd.s	vv5, vv5, vv6
-	@vp0	vlw	vv6, va7
+	@vp0	vlw	vv6, va6
 	@vp0	vfmul.s	vv6, vv6, vs9
 	@vp0	vfadd.s	vv5, vv5, vv6
-	@vp0	vlw	vv6, va8
+	@vp0	vlw	vv6, va7
 	@vp0	vfmul.s	vv6, vv6, vs10
 	@vp0	vfadd.s	vv5, vv5, vv6
-	@vp0	vlw	vv6, va9
+	@vp0	vlw	vv6, va8
 	@vp0	vfmul.s	vv6, vv6, vs11
 	@vp0	vfadd.s	vv5, vv5, vv6
-	@vp0	vlw	vv6, va1
+	@vp0	vlw	vv6, va10
 	@vp0	vfmul.s	vv6, vv6, vs13
-	@vp0	vlw	vv7, va10
+	@vp0	vlw	vv7, va9
 	@vp0	vfmul.s	vv7, vv7, vs12
 	@vp0	vfadd.s	vv5, vv5, vv7
 	@vp0	vfadd.s	vv5, vv5, vv6
@@ -55,12 +55,12 @@ _pocl_launcher_mask_sfilter_unroll:     # @_pocl_launcher_mask_sfilter_unroll
 	@vp1	vcjal	1, vs0, .LBB0_4
 	@!vp1	vcjal	1, vs0, .LBB0_3
 .LBB0_3:                                # %if.then.66.i
-	@vp0	vlw	vv5, va13
+	@vp0	vlw	vv5, va6
 	@vp0	vfmul.s	vv5, vv5, vs6
-	@vp0	vlw	vv6, va12
+	@vp0	vlw	vv6, va5
 	@vp0	vfmul.s	vv6, vv6, vs5
 	@vp0	vfadd.s	vv5, vv6, vv5
-	@vp0	vlw	vv6, va14
+	@vp0	vlw	vv6, va7
 	@vp0	vfmul.s	vv6, vv6, vs7
 	@vp0	vfadd.s	vv5, vv5, vv6
 	vaddi	vs4, vs0, -1
@@ -140,19 +140,21 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	sd	s10, 64(sp)
 	sd	s11, 56(sp)
 	ld	a2, 16(a0)
-	ld	t4, 0(a2)
+	ld	t3, 0(a2)
 	ld	a7, 40(a1)
 	ld	a6, 64(a1)
-	add	a2, a6, a7
-	slli	a3, a2, 1
-	ori	a4, a3, 1
-	mul	a4, t4, a4
+	add	a3, a6, a7
+	mul	a2, t3, a3
+	slli	a2, a2, 1
 	ld	t2, 56(a1)
-	add	a4, t2, a4
+	add	a2, t2, a2
 	ld	t0, 32(a1)
 	slli	a1, t0, 7
-	add	a4, a4, a1
-	slli	a4, a4, 2
+	add	a2, a2, a1
+	ld	a4, 24(a0)
+	ld	t1, 0(a4)
+	slli	a4, a2, 1
+	add	a4, t1, a4
 	ld	a5, 96(a0)
 	flw	ft0, 0(a5)
 	ld	a5, 88(a0)
@@ -172,55 +174,47 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	ld	a5, 32(a0)
 	flw	fa0, 0(a5)
 	ld	a5, 8(a0)
-	ld	t3, 0(a5)
-	ld	a5, 24(a0)
-	ld	t1, 0(a5)
+	ld	t4, 0(a5)
 	ld	a0, 0(a0)
 	ld	a0, 0(a0)
+	lh	a4, 0(a4)
+	sh	a4, 54(sp)
+	slli	a3, a3, 1
+	addi	a4, a3, -1
+	mul	a4, t3, a4
+	add	a4, t2, a4
+	add	a4, a4, a1
+	slli	a4, a4, 2
 	add	a4, a0, a4
-	lw	a5, 4(a4)
-	sw	a5, 52(sp)
-	mul	a2, t4, a2
-	slli	a2, a2, 1
-	add	a2, t2, a2
-	add	a2, a2, a1
-	slli	a5, a2, 1
-	add	a5, t1, a5
-	lh	a5, 0(a5)
-	sh	a5, 50(sp)
-	addi	a3, a3, -1
-	mul	a3, t4, a3
+	lw	a5, -4(a4)
+	sw	a5, 48(sp)
+	ori	a3, a3, 1
+	mul	a3, t3, a3
 	add	a3, t2, a3
 	add	a1, a3, a1
+	lw	a3, 0(a4)
+	sw	a3, 44(sp)
+	lw	a3, 4(a4)
+	sw	a3, 40(sp)
+	slli	a2, a2, 2
+	add	a3, a0, a2
+	lw	a4, -4(a3)
+	sw	a4, 36(sp)
+	lw	a4, 0(a3)
+	sw	a4, 32(sp)
+	lw	a3, 4(a3)
+	sw	a3, 28(sp)
 	slli	a1, a1, 2
 	add	a1, a0, a1
 	lw	a3, -4(a1)
-	sw	a3, 44(sp)
-	lw	a3, 0(a1)
-	sw	a3, 40(sp)
-	lw	a1, 4(a1)
-	sw	a1, 36(sp)
-	slli	a1, a2, 2
-	add	a2, a0, a1
-	lw	a3, -4(a2)
-	sw	a3, 32(sp)
-	lw	a3, 0(a2)
-	sw	a3, 28(sp)
-	lw	a3, 4(a2)
 	sw	a3, 24(sp)
-	lw	a3, -4(a4)
+	lw	a3, 0(a1)
 	sw	a3, 20(sp)
-	lw	a3, 0(a4)
-	sw	a3, 16(sp)
-	add	a1, t3, a1
+	lw	a1, 4(a1)
+	sw	a1, 16(sp)
+	add	a1, t4, a2
 	lw	a1, 0(a1)
 	sw	a1, 12(sp)
-	lw	a1, -4(a2)
-	sw	a1, 8(sp)
-	lw	a1, 0(a2)
-	sw	a1, 4(sp)
-	lw	a1, 4(a2)
-	sw	a1, 0(sp)
 	fmv.x.w	a1, fa0
 	fmv.x.w	a2, ft7
 	fmv.x.w	a3, ft6
@@ -230,8 +224,8 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	fmv.x.w	t6, ft2
 	fmv.x.w	s1, ft1
 	fmv.x.w	s2, ft0
-	addi	s3, sp, 52
-	addi	s4, sp, 50
+	addi	s3, sp, 54
+	addi	s4, sp, 48
 	addi	s5, sp, 44
 	addi	s6, sp, 40
 	addi	s7, sp, 36
@@ -240,8 +234,8 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	addi	s10, sp, 24
 	addi	s11, sp, 20
 	vmcs	vs1,a0
-	vmcs	vs2,t3
-	vmcs	vs3,t4
+	vmcs	vs2,t4
+	vmcs	vs3,t3
 	vmcs	vs4,t1
 	vmcs	vs5,a1
 	vmcs	vs6,a2
@@ -269,12 +263,6 @@ _pocl_launcher_mask_sfilter_unroll_workgroup: # @_pocl_launcher_mask_sfilter_unr
 	vmca	va10,a0
 	addi	a0, sp, 12
 	vmca	va11,a0
-	addi	a0, sp, 8
-	vmca	va12,a0
-	addi	a0, sp, 4
-	vmca	va13,a0
-	mv	a0, sp
-	vmca	va14,a0
 	vsetcfg	a0,5,3,1,2
 	li	a0, 4
 	vsetvl	a0,a0

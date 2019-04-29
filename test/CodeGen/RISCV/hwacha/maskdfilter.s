@@ -19,33 +19,33 @@ _pocl_launcher_mask_dfilter:            # @_pocl_launcher_mask_dfilter
 	fmv.d.x	ft6, vs3
 	fmv.d.x	ft7, vs2
 	fmv.d.x	fa0, vs1
-	@vp0	vld	vv0, va4
+	@vp0	vld	vv0, va3
 	@vp0	vfmul.d	vv0, vv0, ft7
-	@vp0	vld	vv1, va3
+	@vp0	vld	vv1, va2
 	@vp0	vfmul.d	vv1, vv1, fa0
 	@vp0	vfadd.d	vv0, vv1, vv0
-	@vp0	vld	vv1, va2
+	@vp0	vld	vv1, va4
 	@vp0	vfmul.d	vv1, vv1, ft6
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vld	vv1, va6
+	@vp0	vld	vv1, va5
 	@vp0	vfmul.d	vv1, vv1, ft5
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vld	vv1, va7
+	@vp0	vld	vv1, va6
 	@vp0	vfmul.d	vv1, vv1, ft4
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vld	vv1, va8
+	@vp0	vld	vv1, va7
 	@vp0	vfmul.d	vv1, vv1, ft3
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vld	vv1, va9
+	@vp0	vld	vv1, va8
 	@vp0	vfmul.d	vv1, vv1, ft2
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vld	vv1, va11
+	@vp0	vld	vv1, va10
 	@vp0	vfmul.d	vv1, vv1, ft0
-	@vp0	vld	vv2, va10
+	@vp0	vld	vv2, va9
 	@vp0	vfmul.d	vv2, vv2, ft1
 	@vp0	vfadd.d	vv0, vv0, vv2
 	@vp0	vfadd.d	vv0, vv0, vv1
-	@vp0	vsd	vv0, va5
+	@vp0	vsd	vv0, va11
 .LBB0_2:                                # %mask_dfilter.exit
 	vstop	
 .Lfunc_end0:
@@ -109,32 +109,32 @@ _pocl_launcher_mask_dfilter_workgroup:  # @_pocl_launcher_mask_dfilter_workgroup
 	add	a3, a3, a1
 	slli	a3, a3, 3
 	add	a3, a0, a3
-	ld	a4, 8(a3)
+	ld	a4, -8(a3)
 	sd	a4, 72(sp)
 	add	a2, t4, a2
 	add	a1, a2, a1
-	ld	a2, -8(a3)
+	ld	a2, 0(a3)
 	sd	a2, 64(sp)
-	slli	a1, a1, 3
 	slli	a2, t3, 3
-	add	a4, a5, a2
-	add	a2, a0, a2
-	add	a0, a0, a1
-	ld	a1, 0(a3)
-	sd	a1, 56(sp)
-	ld	a1, 0(a4)
-	sd	a1, 48(sp)
-	ld	a1, -8(a2)
-	sd	a1, 40(sp)
-	ld	a1, 0(a2)
-	sd	a1, 32(sp)
-	ld	a1, 8(a2)
-	sd	a1, 24(sp)
-	ld	a1, -8(a0)
-	sd	a1, 16(sp)
-	ld	a1, 0(a0)
-	sd	a1, 8(sp)
+	slli	a1, a1, 3
+	add	a1, a0, a1
+	add	a0, a0, a2
+	add	a2, a5, a2
+	ld	a3, 8(a3)
+	sd	a3, 56(sp)
+	ld	a3, -8(a0)
+	sd	a3, 48(sp)
+	ld	a3, 0(a0)
+	sd	a3, 40(sp)
 	ld	a0, 8(a0)
+	sd	a0, 32(sp)
+	ld	a0, -8(a1)
+	sd	a0, 24(sp)
+	ld	a0, 0(a1)
+	sd	a0, 16(sp)
+	ld	a0, 8(a1)
+	sd	a0, 8(sp)
+	ld	a0, 0(a2)
 	sd	a0, 0(sp)
 	addi	a0, sp, 86
 	addi	a1, sp, 72

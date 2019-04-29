@@ -5,12 +5,11 @@
 _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 # %bb.0:
 	vpset	vp0
-	veidx	vv0
-	@vp0	vlw	vv1, va1
-	@vp0	vfmul.s	vv1, vv1, vs1
-	@vp0	vlw	vv2, va2
-	@vp0	vfadd.s	vv1, vv2, vv1
-	@vp0	vsw	vv1, va3
+	@vp0	vlw	vv0, va1
+	@vp0	vfmul.s	vv0, vv0, vs1
+	@vp0	vlw	vv1, va2
+	@vp0	vfadd.s	vv0, vv1, vv0
+	@vp0	vsw	vv0, va2
 	vstop	
 .Lfunc_end0:
 	.size	_pocl_launcher_saxpy, .Lfunc_end0-_pocl_launcher_saxpy
@@ -36,17 +35,17 @@ _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 	ld	a0, 0(a0)
 	sw	a2, 12(sp)
 	add	a0, a0, a1
-	lw	a1, 0(a0)
-	sw	a1, 8(sp)
 	lw	a0, 0(a0)
-	sw	a0, 4(sp)
+	sw	a0, 8(sp)
 	fmv.x.w	a0, ft0
 	addi	a1, sp, 12
 	addi	a2, sp, 8
-	addi	a3, sp, 4
-	vsetcfg	a4,1,2,0,1
-	li	a4, 4
-	vsetvl	a4,a4
+	vmcs	vs1,a0
+	vmca	va1,a1
+	vmca	va2,a2
+	vsetcfg	a0,0,2,0,1
+	li	a0, 4
+	vsetvl	a0,a0
 	vf	_pocl_launcher_saxpy
 	addi	sp, sp, 16
 	ret

@@ -5,11 +5,11 @@
 _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 # %bb.0:                                # %body
 	vpset	vp0
-	@vp0	vlstw	vv0, va3, va4
-	@vp0	vlstw	vv1, va1, va2
-	@vp0	vfmul.s	vv1, vv1, vs1
-	@vp0	vfadd.s	vv0, vv0, vv1
-	@vp0	vsstw	vv0, va5, va6
+	@vp0	vlstw	vv0, va1, va3
+	@vp0	vfmul.s	vv0, vv0, vs1
+	@vp0	vlstw	vv1, va2, va3
+	@vp0	vfadd.s	vv0, vv1, vv0
+	@vp0	vsstw	vv0, va2, va3
 	vstop	
 .Lfunc_end0:
 	.size	_pocl_launcher_saxpy, .Lfunc_end0-_pocl_launcher_saxpy
@@ -24,19 +24,13 @@ _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 	sw	a0, 12(sp)
 	lw	a0, 0(a1)
 	sw	a0, 8(sp)
-	lw	a0, 0(a1)
-	sw	a0, 4(sp)
 	addi	a0, sp, 12
 	addi	a1, sp, 8
-	addi	a3, sp, 4
-	addi	a4, zero, 8
+	addi	a3, zero, 8
 	vmcs	vs1,a2
 	vmca	va1,a0
-	vmca	va2,a4
-	vmca	va3,a1
-	vmca	va4,a4
-	vmca	va5,a3
-	vmca	va6,a4
+	vmca	va2,a1
+	vmca	va3,a3
 	vsetcfg	a0,0,2,0,1
 	li	a0, 4
 	vsetvl	a0,a0

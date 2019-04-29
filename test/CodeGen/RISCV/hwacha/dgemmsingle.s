@@ -10,7 +10,7 @@ _pocl_launcher_dgemm_single:            # @_pocl_launcher_dgemm_single
 	@vp0	vfmul.d	vv0, vs1, vv0
 	@vp0	vld	vv1, va2
 	@vp0	vfadd.d	vv0, vv1, vv0
-	@vp0	vsd	vv0, va3
+	@vp0	vsd	vv0, va2
 	vstop	
 .Lfunc_end0:
 	.size	_pocl_launcher_dgemm_single, .Lfunc_end0-_pocl_launcher_dgemm_single
@@ -20,7 +20,7 @@ _pocl_launcher_dgemm_single:            # @_pocl_launcher_dgemm_single
 	.type	_pocl_launcher_dgemm_single_workgroup,@function
 _pocl_launcher_dgemm_single_workgroup:  # @_pocl_launcher_dgemm_single_workgroup
 # %bb.0:
-	addi	sp, sp, -32
+	addi	sp, sp, -16
 	ld	a2, 40(a1)
 	ld	a3, 64(a1)
 	add	a6, a3, a2
@@ -44,31 +44,27 @@ _pocl_launcher_dgemm_single_workgroup:  # @_pocl_launcher_dgemm_single_workgroup
 	ld	a4, 0(a4)
 	ld	a0, 16(a0)
 	ld	a0, 0(a0)
-	sd	a3, 24(sp)
+	sd	a3, 8(sp)
 	mul	a1, a1, a7
 	add	a3, a6, a1
 	add	a1, a5, a1
 	add	a1, a1, a2
 	slli	a1, a1, 3
 	add	a0, a0, a1
-	ld	a1, 0(a0)
-	sd	a1, 16(sp)
-	slli	a1, a3, 3
-	add	a1, a4, a1
 	ld	a0, 0(a0)
-	sd	a0, 8(sp)
-	addi	a0, sp, 24
-	addi	a2, sp, 16
-	addi	a3, sp, 8
-	vmca	va1,a0
+	sd	a0, 0(sp)
+	slli	a0, a3, 3
+	add	a0, a4, a0
+	addi	a1, sp, 8
+	mv	a2, sp
+	vmca	va1,a1
 	vmca	va2,a2
-	vmca	va3,a3
-	vmcs	vs1,a1
+	vmcs	vs1,a0
 	vsetcfg	a0,2,0,0,1
 	li	a0, 4
 	vsetvl	a0,a0
 	vf	_pocl_launcher_dgemm_single
-	addi	sp, sp, 32
+	addi	sp, sp, 16
 	ret
 .Lfunc_end1:
 	.size	_pocl_launcher_dgemm_single_workgroup, .Lfunc_end1-_pocl_launcher_dgemm_single_workgroup
