@@ -1,5 +1,5 @@
-; Function Attrs: noinline
-define dso_local void @output.s0.x.__block_id_x(i32 %t2, i8* noalias %input, i8* noalias %output) #11 {
+
+define dso_local i64 @output.s0.x.__block_id_x(i64 %vl, i32 %t2, i8* noalias %input, i8* noalias %output) #11 {
 body:
   %0 = call i64 @llvm.hwacha.veidx() #14
   %output.s0.x.__block_id_x = trunc i64 %0 to i32
@@ -12,12 +12,13 @@ body:
   %7 = sext i32 %output.s0.x.__block_id_x to i64
   %8 = getelementptr inbounds i32, i32* %6, i64 %7
   store i32 %5, i32* %8, align 4
-  ret void
+  ret i64 %vl
 }
 
 define dso_local void @kernel_output_s0_x___block_id_x(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
 body:
-  call void @output.s0.x.__block_id_x(i32 %t2, i8* %input, i8* %output)
+  %vl = add i64 0, 5
+  %vlret = call i64 @output.s0.x.__block_id_x(i64 %vl, i32 %t2, i8* %input, i8* %output)
   ret void
 }
 
@@ -27,4 +28,4 @@ declare i64 @llvm.hwacha.veidx() #8
 
 !opencl.kernels = !{!3}
 
-!3 = !{void (i32, i8*, i8*)* @output.s0.x.__block_id_x}
+!3 = !{i64 (i64, i32, i8*, i8*)* @output.s0.x.__block_id_x}

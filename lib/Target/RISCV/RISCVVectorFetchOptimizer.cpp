@@ -463,7 +463,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   // Create new function with additional args to replace old one
   FunctionType *NFTy = FunctionType::get(RetTy, Params, false);
-  Function *NF = Function::Create(NFTy, Function::InternalLinkage, F->getName());
+  Function *NF = Function::Create(NFTy, Function::ExternalLinkage, F->getName());
   NF->copyAttributesFrom(F);
 
   F->getParent()->getFunctionList().insert(F->getIterator(), NF);

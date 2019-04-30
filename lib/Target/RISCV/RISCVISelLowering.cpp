@@ -1836,12 +1836,16 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
     auto *CalleeFn = cast<Function>(E->getGlobal());
     isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+    CalleeFn->dump();
     if (isOpenCLKernel) {
       openCLMetadata = CalleeFn->getParent()->getNamedMetadata("hwacha.vfcfg");
       LLVM_DEBUG(dbgs() << "VFCFG METADATA");
       LLVM_DEBUG(openCLMetadata->dump());
     }
   }
+
+  LLVM_DEBUG(dbgs() << "LOWER CALL DAG DUMP" << "\n");
+  Chain.dump();
 
 
   analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI);
@@ -1992,6 +1996,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Glue = Chain.getValue(1);
   }
 
+
   // If the callee is a GlobalAddress/ExternalSymbol node, turn it into a
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
@@ -2003,6 +2008,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
         DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, RISCVII::MO_CALL);
   }
 
+  SDValue VsetvlNode;
   if(isOpenCLKernel) {
     // Read out the configuration from metadata
     if(openCLMetadata->getNumOperands() < 1)
@@ -2045,29 +2051,28 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     }
 
     //Chain = DAG.getCopyToReg(Chain, DL, vlreg, DAG.getConstant(0, DL, MVT::i64, true));
-    //TODO: Ask colin why this is vsetvl always set to zero??
     
-    // SDValue vsetvlOps[] = {Chain, DAG.getConstant(0, DL, MVT::i64, true), Glue};
+    SDValue vsetvlOps[] = {Chain, RegsToPass[0].second, Glue};
 
-    // LLVM_DEBUG(dbgs() << "VSETVL operands" << "\n");
-    // LLVM_DEBUG(vsetvlOps[0].dump());
-    // LLVM_DEBUG(vsetvlOps[1].dump());
-    // LLVM_DEBUG(vsetvlOps[2].dump());
-    // LLVM_DEBUG(dbgs() << vsetvlOps[0].getValueType().getEVTString() << "\n");
-    // LLVM_DEBUG(dbgs() << vsetvlOps[1].getValueType().getEVTString() << "\n");
-    // LLVM_DEBUG(dbgs() << vsetvlOps[2].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << "VSETVL operands" << "\n");
+    LLVM_DEBUG(vsetvlOps[0].dump());
+    LLVM_DEBUG(vsetvlOps[1].dump());
+    LLVM_DEBUG(vsetvlOps[2].dump());
+    LLVM_DEBUG(dbgs() << vsetvlOps[0].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetvlOps[1].getValueType().getEVTString() << "\n");
+    LLVM_DEBUG(dbgs() << vsetvlOps[2].getValueType().getEVTString() << "\n");
 
-    // NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
-    // auto VsetvlNode = DAG.getNode(RISCVISD::VSETVL, DL, NodeTys, vsetvlOps);// take the chain as res
+    NodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
+    VsetvlNode = DAG.getNode(RISCVISD::VSETVL, DL, NodeTys, vsetvlOps);// take the chain as res
 
 
-    // for (const SDValue &Op : VsetvlNode.getNode()->op_values()) {
-    //   LLVM_DEBUG(Op.dump());
-    //   LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
-    // }
+    for (const SDValue &Op : VsetvlNode.getNode()->op_values()) {
+      LLVM_DEBUG(Op.dump());
+      LLVM_DEBUG(dbgs() << Op.getValueType().getEVTString() << "\n");
+    }
 
-    // Glue = VsetvlNode.getValue(2);
-    // Chain = VsetvlNode.getValue(1);
+    Glue = VsetvlNode.getValue(2);
+    Chain = VsetvlNode.getValue(1);
   }
 
   // The first call operand is the chain and the second is the target address.
@@ -2118,29 +2123,34 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CCState RetCCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
   analyzeInputArgs(MF, RetCCInfo, Ins, /*IsRet=*/true);
 
-  // Copy all of the result registers out of their specified physreg.
-  for (auto &VA : RVLocs) {
-    // Copy the value out
-    SDValue RetValue =
-        DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
-    // Glue the RetValue to the end of the call sequence
-    Chain = RetValue.getValue(1);
-    Glue = RetValue.getValue(2);
+  if (isOpenCLKernel) {
+    InVals.push_back(VsetvlNode);
+  } else {
+    // Copy all of the result registers out of their specified physreg.
+    for (auto &VA : RVLocs) {
+      // Copy the value out
+      SDValue RetValue =
+          DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
+      // Glue the RetValue to the end of the call sequence
+      Chain = RetValue.getValue(1);
+      Glue = RetValue.getValue(2);
 
-    if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
-      assert(VA.getLocReg() == ArgGPRs[0] && "Unexpected reg assignment");
-      SDValue RetValue2 =
-          DAG.getCopyFromReg(Chain, DL, ArgGPRs[1], MVT::i32, Glue);
-      Chain = RetValue2.getValue(1);
-      Glue = RetValue2.getValue(2);
-      RetValue = DAG.getNode(RISCVISD::BuildPairF64, DL, MVT::f64, RetValue,
-                             RetValue2);
+      if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
+        assert(VA.getLocReg() == ArgGPRs[0] && "Unexpected reg assignment");
+        SDValue RetValue2 =
+            DAG.getCopyFromReg(Chain, DL, ArgGPRs[1], MVT::i32, Glue);
+        Chain = RetValue2.getValue(1);
+        Glue = RetValue2.getValue(2);
+        RetValue = DAG.getNode(RISCVISD::BuildPairF64, DL, MVT::f64, RetValue,
+                               RetValue2);
+      }
+
+      RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
+
+      InVals.push_back(RetValue);
     }
-
-    RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
-
-    InVals.push_back(RetValue);
   }
+
 
   return Chain;
 }
@@ -2167,6 +2177,11 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                  const SmallVectorImpl<ISD::OutputArg> &Outs,
                                  const SmallVectorImpl<SDValue> &OutVals,
                                  const SDLoc &DL, SelectionDAG &DAG) const {
+
+  if (isOpenCLKernelFunction(DAG.getMachineFunction().getFunction())) {
+    return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, Chain);
+  }
+
   // Stores the assignment of the return value to a location.
   SmallVector<CCValAssign, 16> RVLocs;
 
