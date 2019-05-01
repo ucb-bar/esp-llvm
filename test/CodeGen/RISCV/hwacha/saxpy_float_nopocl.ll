@@ -16,10 +16,10 @@ body:
   ret i64 %0
 }
 
-define dso_local void @_pocl_launcher_saxpy_workgroup(float*, float*, float) {
+define dso_local i64 @_pocl_launcher_saxpy_workgroup(float*, float*, float) {
   %vl = add i64 0, 1234
   %newvl = call i64 @_pocl_launcher_saxpy(i64 %vl, float* %0, float* %1, float %2)
-  ret void
+  ret i64 %newvl
 }
 
 !opencl.kernels = !{!2}

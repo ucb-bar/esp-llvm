@@ -754,6 +754,7 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
   MRI = &MF.getRegInfo();
 
   if(isOpenCLKernelFunction(MF.getFunction())) {
+    MF.setAlignment(3);
     unsigned defPredReg = MRI->createVirtualRegister(&RISCV::VPRRegClass);
     processOpenCLKernel(MF, defPredReg);
     convertToPredicates(MF, defPredReg);

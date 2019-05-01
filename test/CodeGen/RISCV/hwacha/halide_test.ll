@@ -16,9 +16,18 @@ body:
 }
 
 define dso_local void @kernel_output_s0_x___block_id_x(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
-body:
-  %vl = add i64 0, 5
-  %vlret = call i64 @output.s0.x.__block_id_x(i64 %vl, i32 %t2, i8* %input, i8* %output)
+entry:
+  br label %loop
+
+loop:
+  %counter = phi i64 [ 1, %entry ], [ %total, %loop ]
+  %wantedvl = sub i64 100, %counter
+  %vlret = call i64 @output.s0.x.__block_id_x(i64 %wantedvl, i32 %t2, i8* %input, i8* %output)
+  %total = add i64 %counter, %vlret
+  %exitcond = icmp eq i64 %total, 100
+  br i1 %exitcond, label %loop, label %afterloop
+
+afterloop:
   ret void
 }
 
@@ -29,3 +38,6 @@ declare i64 @llvm.hwacha.veidx() #8
 !opencl.kernels = !{!3}
 
 !3 = !{i64 (i64, i32, i8*, i8*)* @output.s0.x.__block_id_x}
+
+attributes #11 = { alignstack=8 }
+attributes #10 = { alignstack=8 }
