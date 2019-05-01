@@ -185,8 +185,10 @@ def: Pat<(r_vsetcfg i64:$dregs, i64:$wregs, i64:$hregs, i64:$pregsl), (VSETCFG i
 def: Pat<(int_hwacha_vsetvl GPR:$goal), (VSETVL GPR:$goal)>;
 
 let isCall = 1, isCodeGenOnly = 1 in {
-    def VFetch : InstV< (outs), (ins GPR:$target), "vf", "$target", [(r_callv regaddr:$target)]>, Requires<[HasXhwacha]>;
+    def VFetch : InstV< (outs), (ins GPR:$rs1, simm12:$imm12), "vf", "${imm12}(${rs1})", []>, Requires<[HasXhwacha]>;
   }
+
+def: Pat<(r_callv regaddr:$target), (VFetch GPR:$target, 0)>;
 
 //Moves
 

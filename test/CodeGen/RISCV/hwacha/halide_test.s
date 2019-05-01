@@ -34,7 +34,8 @@ kernel_output_s0_x___block_id_x:        # @kernel_output_s0_x___block_id_x
 	vmcs	vs4,a2
 	vsetcfg	a0,2,1,0,1
 	vsetvl	a0,a3
-	vf	output.s0.x.__block_id_x
+	la	a0, output.s0.x.__block_id_x
+	vf	0(a0)
 	ret
 .Lfunc_end1:
 	.size	kernel_output_s0_x___block_id_x, .Lfunc_end1-kernel_output_s0_x___block_id_x

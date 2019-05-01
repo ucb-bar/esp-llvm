@@ -34,7 +34,8 @@ _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 	vmca	va2,a1
 	vsetcfg	a0,0,2,0,1
 	vsetvl	a0,a3
-	vf	_pocl_launcher_saxpy
+	la	a0, _pocl_launcher_saxpy
+	vf	0(a0)
 	addi	sp, sp, 16
 	ret
 .Lfunc_end1:

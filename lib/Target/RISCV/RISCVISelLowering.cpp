@@ -2106,9 +2106,20 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   if(isOpenCLKernel) {
+    SDVTList LANodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
+    MachineSDNode* LANode = DAG.getMachineNode(RISCV::PseudoLA, DL, LANodeTys, {Ops[1], Ops[0], Glue});
+    LLVM_DEBUG(dbgs() << "PseudoLA MachineSDNode dump" << "\n");
+    LANode->dump();
+
+    Ops[0] = SDValue(LANode, 1);
+    Ops[1] = SDValue(LANode, 0);
+    Ops[Ops.size() - 1] = SDValue(LANode, 2);
+
     Chain = DAG.getNode(RISCVISD::CALLV, DL, NodeTys, Ops);
-  } else
+  } else {
     Chain = DAG.getNode(RISCVISD::CALL, DL, NodeTys, Ops);
+  }
+
   Glue = Chain.getValue(1);
 
   // Mark the end of the call, which is glued to the call itself.
