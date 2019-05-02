@@ -1,7 +1,7 @@
 	.text
 	.file	"saxpy_float_nopocl.ll"
 	.globl	_pocl_launcher_saxpy    # -- Begin function _pocl_launcher_saxpy
-	.p2align	2
+	.p2align	3
 	.type	_pocl_launcher_saxpy,@function
 _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 # %bb.0:                                # %body
@@ -22,12 +22,6 @@ _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
 # %bb.0:
 	addi	sp, sp, -16
 	sd	s0, 8(sp)
-	lw	a0, 0(a0)
-	sw	a0, 4(sp)
-	lw	a0, 0(a1)
-	sw	a0, 0(sp)
-	addi	a0, sp, 4
-	mv	a1, sp
 	addi	a3, zero, 1234
 	vmcs	vs1,a3
 	vmcs	vs4,a2

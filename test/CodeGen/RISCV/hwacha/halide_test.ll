@@ -1,28 +1,27 @@
-
-define dso_local i64 @output.s0.x.__block_id_x(i64 %vl, i32 %t2, i8* noalias %input, i8* noalias %output) #11 {
+define dso_local i64 @kernel_output_s0_x___block_id_x(i64 %vl, i64 %consumed, i32 %t2, i8* noalias %input, i8* noalias %output) local_unnamed_addr #0 {
 body:
-  %0 = call i64 @llvm.hwacha.veidx() #14
-  %output.s0.x.__block_id_x = trunc i64 %0 to i32
-  %1 = add nsw i32 %output.s0.x.__block_id_x, %t2
-  %2 = bitcast i8* %input to i32*
-  %3 = sext i32 %1 to i64
-  %4 = getelementptr inbounds i32, i32* %2, i64 %3
-  %5 = load i32, i32* %4, align 4
+  %0 = call i64 @llvm.hwacha.veidx() #11
+  %output.s0.x.__block_id_x = add nsw i64 %0, %consumed
+  %1 = sext i32 %t2 to i64
+  %2 = add nsw i64 %output.s0.x.__block_id_x, %1
+  %3 = bitcast i8* %input to i32*
+  %4 = getelementptr inbounds i32, i32* %3, i64 %2
+  %5 = load i32, i32* %4, align 4 
   %6 = bitcast i8* %output to i32*
-  %7 = sext i32 %output.s0.x.__block_id_x to i64
-  %8 = getelementptr inbounds i32, i32* %6, i64 %7
-  store i32 %5, i32* %8, align 4
+  %7 = getelementptr inbounds i32, i32* %6, i64 %output.s0.x.__block_id_x
+  store i32 %5, i32* %7, align 4
   ret i64 %vl
 }
 
-define dso_local void @kernel_output_s0_x___block_id_x(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
+
+define dso_local void @stripmine(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
 entry:
   br label %loop
 
 loop:
   %counter = phi i64 [ 1, %entry ], [ %total, %loop ]
   %wantedvl = sub i64 100, %counter
-  %vlret = call i64 @output.s0.x.__block_id_x(i64 %wantedvl, i32 %t2, i8* %input, i8* %output)
+  %vlret = call i64 @kernel_output_s0_x___block_id_x(i64 %wantedvl, i64 %counter, i32 %t2, i8* %input, i8* %output)
   %total = add i64 %counter, %vlret
   %exitcond = icmp eq i64 %total, 100
   br i1 %exitcond, label %loop, label %afterloop
@@ -37,7 +36,5 @@ declare i64 @llvm.hwacha.veidx() #8
 
 !opencl.kernels = !{!3}
 
-!3 = !{i64 (i64, i32, i8*, i8*)* @output.s0.x.__block_id_x}
+!3 = !{i64 (i64, i64, i32, i8*, i8*)* @kernel_output_s0_x___block_id_x}
 
-attributes #11 = { alignstack=8 }
-attributes #10 = { alignstack=8 }

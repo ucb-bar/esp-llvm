@@ -472,7 +472,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   LLVMContext &Ctx = NF->getParent()->getContext();
 
   for (auto it = TagAddrIdx.begin(); it != TagAddrIdx.end(); it++) {
-    NF->addAttribute(it->second, Attribute::ByVal);
+    //NF->addAttribute(it->second, Attribute::ByVal);
     NF->addAttribute(it->second, Attribute::get(Ctx, "VARRegClass"));
   }
 
@@ -576,7 +576,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
                                                         fnAttributes, retAttributes, ArrayRef<AttributeSet>()));
    
     for (unsigned i : TagCallAddrIdx) {
-      cast<CallInst>(New)->addAttribute(i, Attribute::ByVal);
+      //cast<CallInst>(New)->addAttribute(i, Attribute::ByVal);
       cast<CallInst>(New)->addAttribute(i, Attribute::get(Ctx, "VARRegClass"));
     }
 
