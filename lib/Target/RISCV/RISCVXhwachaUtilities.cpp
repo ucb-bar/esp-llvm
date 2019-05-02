@@ -7,7 +7,9 @@
 
 bool llvm::isOpenCLKernelFunction(const Function &F) {
   NamedMDNode* oclKernels = F.getParent()->getNamedMetadata("opencl.kernels");
-  oclKernels->dump();
+  if (oclKernels) {
+    oclKernels->dump();
+  }
 
   if (!oclKernels || oclKernels->getNumOperands() == 0) return false;
 
