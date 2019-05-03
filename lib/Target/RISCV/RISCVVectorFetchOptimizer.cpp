@@ -766,50 +766,47 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
 
 void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredReg,
     unsigned VVV, unsigned VVS, unsigned VSV, unsigned VSS, unsigned SSS) {
+
+  const TargetRegisterClass *destClass; 
+
   if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
     //Can only handle zero case
     assert((I->getOperand(1).getReg() == RISCV::X0 ||
             I->getOperand(1).getReg() == RISCV::X0) &&
            "Cannot convert binop with phys reg arg that is non zero");
     I->getOperand(1).setReg(RISCV::vs0);
-    if(MS->invar[I]) {
-      I->setDesc(TII->get(SSS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
-    } else {
-      if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
-        I->setDesc(TII->get(VSS));
-      } else {
-        I->setDesc(TII->get(VSV));
-      }
-      // Destination is always vector
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
-      I->addOperand(MachineOperand::CreateImm(0));
-      I->addOperand(MachineOperand::CreateReg(defPredReg, false));
-    }
-  } else if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
+  } 
+
+  if(TRI->isPhysicalRegister(I->getOperand(2).getReg())) {
     //Can only handle zero case
     assert((I->getOperand(2).getReg() == RISCV::X0 ||
             I->getOperand(2).getReg() == RISCV::X0) &&
            "Cannot convert binop with phys reg arg that is non zero");
     I->getOperand(2).setReg(RISCV::vs0);
-    if(MS->invar[I]) {
-      I->setDesc(TII->get(SSS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
+  } 
+
+  if(MS->invar[I]) {
+    //if we were invariant but have a vector src it means there was a vector load
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
+       MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVRRegClass) {
+      destClass = &RISCV::VVRRegClass;
+    } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass ||
+              MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWRegClass) {
+      destClass = &RISCV::VVWRegClass;
     } else {
-      if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
-        I->setDesc(TII->get(VSS));
-      } else {
-        I->setDesc(TII->get(VVS));
-      }
-      // Destination is always vector
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
-      I->addOperand(MachineOperand::CreateImm(0));
-      I->addOperand(MachineOperand::CreateReg(defPredReg, false));
+      destClass = &RISCV::VSRRegClass;
     }
-  } else if(MS->invar[I]) {
-    I->setDesc(TII->get(SSS));
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
   } else {
+    if (MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass && 
+        MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVWRegClass) {
+      destClass = &RISCV::VVWRegClass;
+    } else {
+      destClass = &RISCV::VVRRegClass;
+    }
+  }
+
+  if(destClass == &RISCV::VVRRegClass ||
+     destClass == &RISCV::VVWRegClass) {
     if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
       if(MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VSRRegClass) {
         I->setDesc(TII->get(VSS));
@@ -823,11 +820,14 @@ void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredRe
         I->setDesc(TII->get(VVV));
       }
     }
-    // Destination is always vector
-    MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
+
     I->addOperand(MachineOperand::CreateImm(0));
     I->addOperand(MachineOperand::CreateReg(defPredReg, false));
+  } else {
+    I->setDesc(TII->get(SSS));
   }
+
+  MRI->setRegClass(I->getOperand(0).getReg(), destClass);
 }
 
 
@@ -853,8 +853,9 @@ void RISCVVectorFetchMachOpt::vectorizeFPBinOp(MachineInstr *I,
     } else if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVHRegClass ||
               MRI->getRegClass(I->getOperand(2).getReg()) == &RISCV::VVHRegClass) {
       destClass = &RISCV::VVHRegClass;
-    } else
+    } else {
       destClass = &RISCV::VSRRegClass;
+    }
   }
   if(destClass == &RISCV::VVRRegClass ||
      destClass == &RISCV::VVWRegClass ||
@@ -954,7 +955,7 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
   LLVM_DEBUG(I->dump());
   LLVM_DEBUG(dbgs() << "Can be scalarized status: " << (MS->invar[I] ? "YES" : "NO") << "\n");
 
-  if(MS->invar[I]) {
+  if(MS->invar[I] && MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
     // Generate one instruction
     // vADDi vsdest, vssrc, imm
     I->setDesc(TII->get(IMM));
@@ -971,7 +972,7 @@ void RISCVVectorFetchMachOpt::vectorizeBinImmOp(MachineInstr *I, unsigned defPre
       MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VSRRegClass);
     } else {
       I->setDesc(TII->get(VVS));
-      MRI->setRegClass(I->getOperand(0).getReg(), &RISCV::VVRRegClass);
+      MRI->setRegClass(I->getOperand(0).getReg(), MRI->getRegClass(I->getOperand(1).getReg()));
       I->addOperand(MachineOperand::CreateImm(0));
       I->addOperand(MachineOperand::CreateReg(defPredReg, false));
     }
