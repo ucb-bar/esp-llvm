@@ -17,13 +17,13 @@ body:
 
 define dso_local void @stripmine(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
 entry:
-  %vlret0 = call i64 @kernel_output_s0_x___block_id_x(i64 "noelim" 5, i64 5, i32 5, i8* %input, i8* %output)
+  %vlret0 = call i64 @kernel_output_s0_x___block_id_x(i64 5, i64 5, i32 5, i8* %input, i8* %output)
   br label %loop
 
 loop:
   %counter = phi i64 [ 1, %entry ], [ %total, %loop ]
   %wantedvl = sub i64 100, %counter
-  %vlret = call i64 @kernel_output_s0_x___block_id_x(i64 "noelim" %wantedvl, i64 %counter, i32 %t2, i8* %input, i8* %output)
+  %vlret = call i64 @kernel_output_s0_x___block_id_x(i64 %wantedvl, i64 %counter, i32 %t2, i8* %input, i8* %output)
   %total = add i64 %counter, %vlret
   %exitcond = icmp eq i64 %total, 100
   br i1 %exitcond, label %loop, label %afterloop

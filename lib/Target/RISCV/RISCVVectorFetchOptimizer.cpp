@@ -241,7 +241,7 @@ CallGraphNode *RISCVVectorFetchIROpt::VectorFetchOpt(CallGraphNode *CGN) {
 }
 
 const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent, bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth) {
-  //psuedo code
+  // psuedo code
   // recursively descend looking for eidx
   // once found, while we are coming up the tree
   // + ignore the + nodes since hoisting veidx above them doesn't matter
@@ -268,14 +268,6 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
         return SE->getCouldNotCompute();
       }
       newops.push_back(subexp);
-      if(*found) {
-        if(parent == expr) { // root node
-          // add the veidx and the op
-          const SCEV *eidxExpr = SE->getMulExpr(*veidx,
-              SE->getConstant(expr->getType(), bytewidth));
-          //newops.push_back(eidxExpr);
-        }
-      }
       lfound = lfound || *found;
     }
     *found = lfound;
@@ -298,21 +290,27 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
           LLVM_DEBUG(dbgs() << "require a non-zero base: can't hoist\n");
           return SE->getCouldNotCompute(); // root node can't be *
         }
-        // check constant
+        // Check to see if there is a constant multiple out in front. 
         if(const SCEVConstant *num = dyn_cast<SCEVConstant>(mul->getOperand(0))){
           if(num->getValue()->getZExtValue() % bytewidth != 0) {
             LLVM_DEBUG(dbgs() << "require multiplier of eidx to be a multiple of bytewidth: can't hoist\n");
             return SE->getCouldNotCompute();
           }
-          if (num->getValue()->getZExtValue() != bytewidth) {
-            *stride = num;
+
+          // If we have exactly 2 args and the constant is bytewidth, we return null as stride to mark that unit stride suffices 
+          if (num->getValue()->getZExtValue() != bytewidth || mul->getNumOperands() > 2) {
+            SmallVector<const SCEV *, 8> strideTerms;
+            // Else we look through our operands, and take everything that's not zero (because the zero is the eidx we obliterated)
+            std::copy_if (newops.begin(), newops.end(), std::back_inserter(strideTerms),
+              [](const SCEV * scev){
+                  const SCEVConstant *num = dyn_cast<SCEVConstant>(scev);
+                  return !num || num->getValue()->getZExtValue() != 0;
+                });
+
+            *stride = SE->getMulExpr(strideTerms);
           }
         } else {
           LLVM_DEBUG(dbgs() << "require constant as bytewidth: can't hoist\n");
-          return SE->getCouldNotCompute();
-        }
-        if (mul->getNumOperands() > 2) {
-          LLVM_DEBUG(dbgs() << "Cannot multiply eidx by anything other than fixed constant\n");
           return SE->getCouldNotCompute();
         }
       }
@@ -332,7 +330,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
         if(parent->getSCEVType() == scAddExpr) {
           return SE->getConstant(expr->getType(),0);
         } else if(parent->getSCEVType() == scMulExpr) {
-          return SE->getConstant(expr->getType(), 0); //If eidx is part of a mul expression we obliterate the expression (since we can't hoist it out)
+          return SE->getConstant(expr->getType(), 0); //If eidx is part of a mul expression we obliterate the mul before handing it to the add expr (so that add only sees base)
         } else {
           return SE->getCouldNotCompute(); // TODO: do we need to handle casts
         }
@@ -742,6 +740,7 @@ MachineFunctionPass *llvm::createRISCVVectorFetchMachOpt() {
 }
 
 bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
+
   bool Changed = false;
 
   if (!MF.getSubtarget<RISCVSubtarget>().hasXhwacha())
@@ -758,6 +757,7 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
     unsigned defPredReg = MRI->createVirtualRegister(&RISCV::VPRRegClass);
     processOpenCLKernel(MF, defPredReg);
     convertToPredicates(MF, defPredReg);
+    Changed = true;
   }
 
   return Changed;
@@ -1827,7 +1827,7 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
         negate = MI.getOperand(MI.getNumOperands()-2).getImm();
       }
       ++mi;
-      bool changed = false;
+
       for (auto &MO : MI.operands()) {
         if(MO.isReg()) {
           // all register are physical now
@@ -1851,7 +1851,6 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             }
             //MRI->replaceRegWith(oldReg, newReg);
             MO.setReg(newReg);
-            changed = true;
           }
           if(vvH->contains(MO.getReg())) {
             unsigned offset = MO.getReg()-vvH->getRegister(0);
@@ -1873,7 +1872,6 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             }
             //MRI->replaceRegWith(oldReg, newReg);
             MO.setReg(newReg);
-            changed = true;
           }
         }
       }
