@@ -11,9 +11,9 @@ body:
   %7 = bitcast i8* %output to i32*
   %8 = getelementptr inbounds i32, i32* %7, i64 %output.s0.x.__block_id_x
   store i32 %6, i32* %8, align 4
-  ret i64 0
+  %vlret = call i64 @llvm.hwacha.vretvl()
+  ret i64 %vlret
 }
-
 
 define dso_local void @stripmine(i32 %t2, i8* noalias %input, i8* noalias %output) #10 {
 entry:
@@ -35,6 +35,7 @@ afterloop:
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.hwacha.veidx() #8
+declare i64 @llvm.hwacha.vretvl()
 
 !opencl.kernels = !{!3}
 

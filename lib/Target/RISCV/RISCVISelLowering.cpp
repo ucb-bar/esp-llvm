@@ -185,6 +185,8 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BlockAddress, XLenVT, Custom);
   setOperationAction(ISD::ConstantPool, XLenVT, Custom);
 
+  setOperationAction(ISD::INTRINSIC_W_CHAIN, MVT::Other, Custom);
+
   if (Subtarget.hasStdExtA()) {
     setMaxAtomicSizeInBitsSupported(Subtarget.getXLen());
     setMinCmpXchgSizeInBits(32);
@@ -446,6 +448,8 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     return lowerFRAMEADDR(Op, DAG);
   case ISD::RETURNADDR:
     return lowerRETURNADDR(Op, DAG);
+  case ISD::INTRINSIC_W_CHAIN:
+    return lowerINTRINSIC_W_CHAIN(Op, DAG);
   case ISD::ConstantFP:
     return lowerConstantFP(Op, DAG);
   case ISD::BITCAST: {
@@ -502,6 +506,21 @@ SDValue RISCVTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG) const {
     SDValue Addr = getTargetNode(N, DL, Ty, DAG, 0);
     return SDValue(DAG.getMachineNode(RISCV::PseudoLLA, DL, Ty, Addr), 0);
   }
+  }
+}
+
+SDValue RISCVTargetLowering::lowerINTRINSIC_W_CHAIN(SDValue Op,
+                                                     SelectionDAG &DAG) const {
+  LLVM_DEBUG(dbgs() << "Custom lowering intrinsic" << "\n");
+  unsigned IntrinsicID = cast<ConstantSDNode>(Op.getOperand(1))->getZExtValue();
+  SDValue Chain = cast<SDNode>(Op)->getOperand(0);
+  SDLoc DL(Op);
+
+  switch (IntrinsicID) {
+  default:
+    return SDValue(); // Don't custom lower most intrinsics
+  case Intrinsic::hwacha_vretvl:
+    return SDValue(DAG.getMachineNode(RISCV::PseudoLI, DL, {MVT::i64, MVT::Other}, {DAG.getConstant(0, DL, MVT::i64, true), Chain}), 0);
   }
 }
 
