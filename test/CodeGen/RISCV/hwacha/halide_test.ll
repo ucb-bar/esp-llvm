@@ -2,7 +2,7 @@
 ; RUN: llc -mtriple=riscv64 -mattr=+x -verify-machineinstrs < %s \
 ; RUN:   | FileCheck -check-prefix=RV64IFDX %s
 
-define dso_local i64 @kernel_output_s0_x___block_id_x(i64 "noelim" %vl, i64 %consumed, i32 %t2, i8* noalias %input, i8* noalias %output) local_unnamed_addr #0 {
+define dso_local i64 @kernel_output_s0_x___block_id_x(i64 %vl, i64 %consumed, i32 %t2, i8* noalias %input, i8* noalias %output) local_unnamed_addr #0 {
 ; RV64IFDX-LABEL: kernel_output_s0_x___block_id_x:
 ; RV64IFDX:       # %bb.0: # %body
 ; RV64IFDX-NEXT:    vpset vp0
@@ -23,11 +23,11 @@ body:
   %7 = bitcast i8* %output to i32*
   %8 = getelementptr inbounds i32, i32* %7, i64 %output.s0.x.__block_id_x
   store i32 %6, i32* %8, align 4
-  %vlret = call i64 @llvm.hwacha.vretvl()
+  %vlret = call i64 @llvm.hwacha.vretvl(i64 %vl)
   ret i64 %vlret
 }
 
-define dso_local i64 @kernel_output.s0.x.__block_id_x_trunc(i64 "noelim" %vl, i32 %t2, i8* noalias %input, i8* noalias %output) #11 {
+define dso_local i64 @kernel_output.s0.x.__block_id_x_trunc(i64 %vl, i32 %t2, i8* noalias %input, i8* noalias %output) #11 {
 body:
   %0 = call i64 @llvm.hwacha.veidx() #14
   %output.s0.x.__block_id_x = trunc i64 %0 to i32
@@ -41,7 +41,7 @@ body:
   %8 = getelementptr inbounds i32, i32* %6, i64 %7
   store i32 %5, i32* %8, align 4
 
-  %vlret = call i64 @llvm.hwacha.vretvl()
+  %vlret = call i64 @llvm.hwacha.vretvl(i64 %vl)
   ret i64 %vlret
 }
 
@@ -133,7 +133,7 @@ afterloop:
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.hwacha.veidx() #8
-declare i64 @llvm.hwacha.vretvl()
+declare i64 @llvm.hwacha.vretvl(i64)
 
 !opencl.kernels = !{!3, !4}
 

@@ -4,10 +4,10 @@
 
 ; Function Attrs: nounwind
 declare i64 @llvm.hwacha.veidx() #0
-declare i64 @llvm.hwacha.vretvl()
+declare i64 @llvm.hwacha.vretvl(i64)
 
 ; Function Attrs: noinline nounwind
-define dso_local i64 @_pocl_launcher_saxpy(i64 "noelim", float*, double*, double) {
+define dso_local i64 @_pocl_launcher_saxpy(i64, float*, double*, double) {
 ; RV64IFDX-LABEL: _pocl_launcher_saxpy:
 ; RV64IFDX:       # %bb.0:
 ; RV64IFDX-NEXT:    vpset vp0
@@ -29,7 +29,7 @@ define dso_local i64 @_pocl_launcher_saxpy(i64 "noelim", float*, double*, double
   %add.i = fadd double %6, %mul.i
   store double %add.i, double* %arrayidx2.i, align 4
 
-  %vlret = call i64 @llvm.hwacha.vretvl()
+  %vlret = call i64 @llvm.hwacha.vretvl(i64 %0)
   ret i64 %vlret
 }
 

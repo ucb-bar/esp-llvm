@@ -17,8 +17,8 @@ let TargetPrefix = "hwacha" in {
   def int_hwacha_veidx : Intrinsic<[llvm_i64_ty], [], [IntrNoMem]>;
   def int_hwacha_vsetvl : Intrinsic<[llvm_i64_ty], [llvm_i64_ty], [IntrHasSideEffects]>;
 
-  // An intrinsic that does nothing (prevents halide from messing with branch). How useful!
-  def int_hwacha_vretvl : Intrinsic<[llvm_i64_ty], [], []>;
+  // An pseudo intrinsic that does nothing (prevents halide from messing with branch). How useful!
+  def int_hwacha_vretvl : Intrinsic<[llvm_i64_ty], [llvm_i64_ty], []>;
 
   // All the strided stuff
   def int_hwacha_loadstridefloat : Intrinsic<[llvm_float_ty], [llvm_float_ptr_ty, llvm_i64_ty], [IntrReadMem]>;

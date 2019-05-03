@@ -6,7 +6,7 @@
 declare i64 @llvm.hwacha.veidx() #0
 
 ; Function Attrs: noinline nounwind
-define dso_local i64 @_pocl_launcher_saxpy_varstride(i64 "noelim" %vl, float*, float*, float, i64 %stride) {
+define dso_local i64 @_pocl_launcher_saxpy_varstride(i64 %vl, float*, float*, float, i64 %stride) {
 ; RV64IFDX-LABEL: _pocl_launcher_saxpy_varstride:
 ; RV64IFDX:       # %bb.0: # %body
 ; RV64IFDX-NEXT:    vpset vp0
@@ -21,11 +21,11 @@ body:
   %tomul = load float, float* %arrayidx.i, align 4
   store float %tomul, float* %arrayidx.i, align 4
 
-  %vlret = call i64 @llvm.hwacha.vretvl()
+  %vlret = call i64 @llvm.hwacha.vretvl(i64 %vl)
   ret i64 %vlret
 }
 
-define dso_local i64 @_pocl_launcher_saxpy(i64 "noelim" %vl, float*, float*, float) {
+define dso_local i64 @_pocl_launcher_saxpy(i64 %vl, float*, float*, float) {
 ; RV64IFDX-LABEL: _pocl_launcher_saxpy:
 ; RV64IFDX:       # %bb.0: # %body
 ; RV64IFDX-NEXT:    vpset vp0
@@ -47,7 +47,7 @@ body:
   %add.i = fadd float %toadd, %mul.i
   store float %add.i, float* %arrayidx2.i, align 4
 
-  %vlret = call i64 @llvm.hwacha.vretvl()
+  %vlret = call i64 @llvm.hwacha.vretvl(i64 %vl)
   ret i64 %vlret
 }
 
@@ -92,7 +92,7 @@ define dso_local void @_pocl_launcher_saxpy_workgroup(float*, float*, float) {
 attributes #0 = { nounwind }
 attributes #1 = { noinline }
 
-declare i64 @llvm.hwacha.vretvl()
+declare i64 @llvm.hwacha.vretvl(i64)
 
 !opencl.kernels = !{!2, !3}
 
