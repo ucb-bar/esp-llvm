@@ -21,6 +21,8 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/Support/Debug.h"
 
+#define DEBUG_TYPE "machine-pdg"
+
 #include <set>
 #include <algorithm>
 
@@ -184,8 +186,9 @@ bool MachineProgramDependenceGraph::runOnMachineFunction(MachineFunction &F) {
   LI = &getAnalysis<MachineLoopInfo>();
   MF = &F;
 
-  printf("RUNNING PDG\n");
-  MF->dump();
+  LLVM_DEBUG(dbgs() << "RUNNING PDG" << "\n");
+  LLVM_DEBUG(MF->dump());
+
   Calculate(F);
 
   return false;

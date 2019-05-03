@@ -15,6 +15,8 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/Support/Debug.h"
 
+#define DEBUG_TYPE "pdg"
+
 #include <set>
 #include <algorithm>
 
@@ -161,8 +163,9 @@ bool ProgramDependenceGraph::runOnFunction(Function &F) {
   LI = &getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
   MF = &F;
 
-  printf("RUNNING PDG\n");
-  MF->dump();
+  LLVM_DEBUG(dbgs() << "Running PDG" << "\n");
+  LLVM_DEBUG(MF->dump());
+
   Calculate(F);
 
   return false;
