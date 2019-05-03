@@ -78,7 +78,7 @@ def regaddr : ComplexPattern<iPTR, 1, "selectRegAddr">;
 
 multiclass InstVR2<string name, SDPatternOperator op> {
   let isPseudo = 1, isCodeGenOnly = 1, mayStore = 0, mayLoad = 0, hasSideEffects = 0 in {
-  def _VV : RVInst<(outs VVR:$dst), (ins VVR:$src1, pred:$p),
+  def _VV : RVInst<(outs VVR:$dst), (ins VVANY:$src1, pred:$p),
     "@$p\t"#name#"", "$dst, $src1", [], InstFormatOther>;
   def _VS : RVInst<(outs VVR:$dst), (ins VSR:$src1, pred:$p),
     "@$p\t"#name#"", "$dst, $src1", [], InstFormatOther>;

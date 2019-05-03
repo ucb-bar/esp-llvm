@@ -1081,10 +1081,12 @@ void RISCVVectorFetchMachOpt::vectorizeCvtOp(MachineInstr *I, const TargetRegist
   const TargetRegisterClass *destClass = destRC;
   if(MS->invar[I]) {
     //if we were invariant but have a vector src it means there was a vector load
-    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass) {
+    if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVRRegClass ||
+       MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VVWRegClass) {
       destClass = destRC;
-    } else
+    } else {
       destClass = &RISCV::VSRRegClass;
+    }
   }
   if(destClass == destRC) {
     if(MRI->getRegClass(I->getOperand(1).getReg()) == &RISCV::VSRRegClass) {
@@ -1449,6 +1451,9 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         //       RISCV::VFCVT_S_H_RDY_SS);
         //   continue;
         case RISCV::FMV_W_X:
+          vectorizeFMV(&*I);
+          continue;
+        case RISCV::FMV_D_X:
           vectorizeFMV(&*I);
           continue;
         case RISCV::FADD_D:
