@@ -128,14 +128,6 @@ define i32 @test_call_defined_many_args(i32 %a) nounwind {
 ; RV32I-NEXT:    addi sp, sp, -16
 ; RV32I-NEXT:    sw ra, 12(sp)
 ; RV32I-NEXT:    sw a0, 4(sp)
-; RV32I-NEXT:    sw a0, 0(sp)
-; RV32I-NEXT:    mv a1, a0
-; RV32I-NEXT:    mv a2, a0
-; RV32I-NEXT:    mv a3, a0
-; RV32I-NEXT:    mv a4, a0
-; RV32I-NEXT:    mv a5, a0
-; RV32I-NEXT:    mv a6, a0
-; RV32I-NEXT:    mv a7, a0
 ; RV32I-NEXT:    call defined_many_args
 ; RV32I-NEXT:    lw ra, 12(sp)
 ; RV32I-NEXT:    addi sp, sp, 16

@@ -1,15 +1,16 @@
 define dso_local i64 @kernel_output_s0_x___block_id_x(i64 %vl, i64 %consumed, i32 %t2, i8* noalias %input, i8* noalias %output) local_unnamed_addr #0 {
 body:
-  %0 = call i64 @llvm.hwacha.veidx() #11
+  %0 = call i64 @llvm.hwacha.veidx() #12
   %output.s0.x.__block_id_x = add nsw i64 %0, %consumed
   %1 = sext i32 %t2 to i64
   %2 = add nsw i64 %output.s0.x.__block_id_x, %1
   %3 = bitcast i8* %input to i32*
   %4 = getelementptr inbounds i32, i32* %3, i64 %2
-  %5 = load i32, i32* %4, align 4 
-  %6 = bitcast i8* %output to i32*
-  %7 = getelementptr inbounds i32, i32* %6, i64 %output.s0.x.__block_id_x
-  store i32 %5, i32* %7, align 4
+  %5 = load i32, i32* %4, align 4
+  %6 = mul i32 %5, 2
+  %7 = bitcast i8* %output to i32*
+  %8 = getelementptr inbounds i32, i32* %7, i64 %output.s0.x.__block_id_x
+  store i32 %6, i32* %8, align 4
   ret i64 %vl
 }
 

@@ -9,41 +9,17 @@
 define void @test() nounwind {
 ; RV32I-FPELIM-LABEL: test:
 ; RV32I-FPELIM:       # %bb.0:
-; RV32I-FPELIM-NEXT:    lui a0, 74565
-; RV32I-FPELIM-NEXT:    addi a0, a0, 1664
-; RV32I-FPELIM-NEXT:    sub sp, sp, a0
-; RV32I-FPELIM-NEXT:    lui a0, 74565
-; RV32I-FPELIM-NEXT:    addi a0, a0, 1664
-; RV32I-FPELIM-NEXT:    add sp, sp, a0
 ; RV32I-FPELIM-NEXT:    ret
 ;
 ; RV32I-WITHFP-LABEL: test:
 ; RV32I-WITHFP:       # %bb.0:
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1680
-; RV32I-WITHFP-NEXT:    sub sp, sp, a0
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1676
-; RV32I-WITHFP-NEXT:    add a0, sp, a0
-; RV32I-WITHFP-NEXT:    sw ra, 0(a0)
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1672
-; RV32I-WITHFP-NEXT:    add a0, sp, a0
-; RV32I-WITHFP-NEXT:    sw s0, 0(a0)
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1680
-; RV32I-WITHFP-NEXT:    add s0, sp, a0
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1672
-; RV32I-WITHFP-NEXT:    add a0, sp, a0
-; RV32I-WITHFP-NEXT:    lw s0, 0(a0)
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1676
-; RV32I-WITHFP-NEXT:    add a0, sp, a0
-; RV32I-WITHFP-NEXT:    lw ra, 0(a0)
-; RV32I-WITHFP-NEXT:    lui a0, 74565
-; RV32I-WITHFP-NEXT:    addi a0, a0, 1680
-; RV32I-WITHFP-NEXT:    add sp, sp, a0
+; RV32I-WITHFP-NEXT:    addi sp, sp, -16
+; RV32I-WITHFP-NEXT:    sw ra, 12(sp)
+; RV32I-WITHFP-NEXT:    sw s0, 8(sp)
+; RV32I-WITHFP-NEXT:    addi s0, sp, 16
+; RV32I-WITHFP-NEXT:    lw s0, 8(sp)
+; RV32I-WITHFP-NEXT:    lw ra, 12(sp)
+; RV32I-WITHFP-NEXT:    addi sp, sp, 16
 ; RV32I-WITHFP-NEXT:    ret
   %tmp = alloca [ 305419896 x i8 ] , align 4
   ret void

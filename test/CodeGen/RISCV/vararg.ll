@@ -1082,7 +1082,6 @@ define void @va3_caller() nounwind {
 ; ILP32-ILP32F-FPELIM:       # %bb.0:
 ; ILP32-ILP32F-FPELIM-NEXT:    addi sp, sp, -16
 ; ILP32-ILP32F-FPELIM-NEXT:    sw ra, 12(sp)
-; ILP32-ILP32F-FPELIM-NEXT:    addi a0, zero, 2
 ; ILP32-ILP32F-FPELIM-NEXT:    addi a1, zero, 1111
 ; ILP32-ILP32F-FPELIM-NEXT:    mv a2, zero
 ; ILP32-ILP32F-FPELIM-NEXT:    mv a4, zero
@@ -1098,7 +1097,6 @@ define void @va3_caller() nounwind {
 ; ILP32-ILP32F-WITHFP-NEXT:    sw ra, 12(sp)
 ; ILP32-ILP32F-WITHFP-NEXT:    sw s0, 8(sp)
 ; ILP32-ILP32F-WITHFP-NEXT:    addi s0, sp, 16
-; ILP32-ILP32F-WITHFP-NEXT:    addi a0, zero, 2
 ; ILP32-ILP32F-WITHFP-NEXT:    addi a1, zero, 1111
 ; ILP32-ILP32F-WITHFP-NEXT:    mv a2, zero
 ; ILP32-ILP32F-WITHFP-NEXT:    mv a4, zero
@@ -1113,7 +1111,6 @@ define void @va3_caller() nounwind {
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM:       # %bb.0:
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    addi sp, sp, -16
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    sw ra, 12(sp)
-; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    addi a0, zero, 2
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    addi a1, zero, 1111
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    mv a2, zero
 ; RV32D-ILP32-ILP32F-ILP32D-FPELIM-NEXT:    mv a4, zero
@@ -1129,7 +1126,6 @@ define void @va3_caller() nounwind {
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    sd ra, 8(sp)
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    addi a0, zero, 1
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    slli a2, a0, 62
-; LP64-LP64F-LP64D-FPELIM-NEXT:    addi a0, zero, 2
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    addi a1, zero, 1111
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    call va3
 ; LP64-LP64F-LP64D-FPELIM-NEXT:    ld ra, 8(sp)
@@ -1144,7 +1140,6 @@ define void @va3_caller() nounwind {
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    addi s0, sp, 16
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    addi a0, zero, 1
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    slli a2, a0, 62
-; LP64-LP64F-LP64D-WITHFP-NEXT:    addi a0, zero, 2
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    addi a1, zero, 1111
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    call va3
 ; LP64-LP64F-LP64D-WITHFP-NEXT:    ld s0, 0(sp)

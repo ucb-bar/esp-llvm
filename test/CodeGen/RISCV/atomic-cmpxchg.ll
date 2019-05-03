@@ -2178,7 +2178,7 @@ define void @cmpxchg_i64_acquire_monotonic(i64* %ptr, i64 %cmp, i64 %val) {
 ; RV32I-NEXT:    mv a1, sp
 ; RV32I-NEXT:    mv a2, a3
 ; RV32I-NEXT:    mv a3, a4
-; RV32I-NEXT:    addi  a4, zero, 2
+; RV32I-NEXT:    addi a4, zero, 2
 ; RV32I-NEXT:    mv a5, zero
 ; RV32I-NEXT:    call __atomic_compare_exchange_8
 ; RV32I-NEXT:    lw ra, 12(sp)

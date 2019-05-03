@@ -25,6 +25,12 @@ define double @func(double %d, i32 %n) nounwind {
 ; RV32IFD-NEXT:    fld ft0, 16(sp)
 ; RV32IFD-NEXT:    fld ft1, 8(sp)
 ; RV32IFD-NEXT:    fadd.d ft0, ft0, ft1
+; RV32IFD-NEXT:    fsd ft0, 16(sp)
+; RV32IFD-NEXT:    lw a0, 16(sp)
+; RV32IFD-NEXT:    lw a1, 20(sp)
+; RV32IFD-NEXT:    lw ra, 28(sp)
+; RV32IFD-NEXT:    addi sp, sp, 32
+; RV32IFD-NEXT:    ret
 ; RV32IFD-NEXT:  .LBB0_2: # %return
 ; RV32IFD-NEXT:    fsd ft0, 16(sp)
 ; RV32IFD-NEXT:    lw a0, 16(sp)
@@ -49,6 +55,10 @@ define double @func(double %d, i32 %n) nounwind {
 ; RV64IFD-NEXT:    fmv.d.x ft0, a0
 ; RV64IFD-NEXT:    fld ft1, 0(sp)
 ; RV64IFD-NEXT:    fadd.d ft0, ft0, ft1
+; RV64IFD-NEXT:    fmv.x.d a0, ft0
+; RV64IFD-NEXT:    ld ra, 8(sp)
+; RV64IFD-NEXT:    addi sp, sp, 16
+; RV64IFD-NEXT:    ret
 ; RV64IFD-NEXT:  .LBB0_2: # %return
 ; RV64IFD-NEXT:    fmv.x.d a0, ft0
 ; RV64IFD-NEXT:    ld ra, 8(sp)

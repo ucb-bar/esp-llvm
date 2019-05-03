@@ -7,6 +7,8 @@ kernel_output_s0_x___block_id_x:        # @kernel_output_s0_x___block_id_x
 # %bb.0:                                # %body
 	vpset	vp0
 	@vp0	vlw	vv0, va1
+	vaddi	vs1, vs0, 1
+	@vp0	vsll	vv0, vv0, vs1
 	@vp0	vsw	vv0, va2
 	vstop	
 .Lfunc_end0:
