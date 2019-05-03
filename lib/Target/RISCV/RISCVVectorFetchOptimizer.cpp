@@ -192,7 +192,7 @@ ModulePass *llvm::createRISCVVectorFetchIROpt() {
   return new RISCVVectorFetchIROpt();
 }
 bool RISCVVectorFetchIROpt::runOnModule(Module &M) {
-    M.dump();
+    LLVM_DEBUG(M.dump());
     CallGraph& cg = getAnalysis<CallGraphWrapperPass>().getCallGraph();
 
     scc_iterator<CallGraph*> cgSccIter = scc_begin(&cg);
@@ -205,7 +205,7 @@ bool RISCVVectorFetchIROpt::runOnModule(Module &M) {
         ++cgSccIter;
     }
 
-    M.dump();
+    LLVM_DEBUG(M.dump());
 
     return false;
 }
@@ -264,7 +264,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
       const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
-        printf("\ttwo uses of veidx: can't hoist\n");
+        LLVM_DEBUG(dbgs() << "\ttwo uses of veidx: can't hoist\n");
         return SE->getCouldNotCompute();
       }
       newops.push_back(subexp);
@@ -289,30 +289,30 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
       const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
       if(subexp == SE->getCouldNotCompute()) return subexp;
       if(lfound && *found) {
-        printf("two uses of veidx: can't hoist\n");
+        LLVM_DEBUG(dbgs() << "two uses of veidx: can't hoist\n");
         return SE->getCouldNotCompute();
       }
       newops.push_back(subexp);
       if(*found) {
         if(parent == expr) { // root node
-          printf("require a non-zero base: can't hoist\n");
+          LLVM_DEBUG(dbgs() << "require a non-zero base: can't hoist\n");
           return SE->getCouldNotCompute(); // root node can't be *
         }
         // check constant
         if(const SCEVConstant *num = dyn_cast<SCEVConstant>(mul->getOperand(0))){
           if(num->getValue()->getZExtValue() % bytewidth != 0) {
-            printf("require multiplier of eidx to be a multiple of bytewidth: can't hoist\n");
+            LLVM_DEBUG(dbgs() << "require multiplier of eidx to be a multiple of bytewidth: can't hoist\n");
             return SE->getCouldNotCompute();
           }
           if (num->getValue()->getZExtValue() != bytewidth) {
             *stride = num;
           }
         } else {
-          printf("require constant as bytewidth: can't hoist\n");
+          LLVM_DEBUG(dbgs() << "require constant as bytewidth: can't hoist\n");
           return SE->getCouldNotCompute();
         }
         if (mul->getNumOperands() > 2) {
-          printf("Cannot multiply eidx by anything other than fixed constant\n");
+          LLVM_DEBUG(dbgs() << "Cannot multiply eidx by anything other than fixed constant\n");
           return SE->getCouldNotCompute();
         }
       }
@@ -353,7 +353,7 @@ const SCEV *RISCVVectorFetchIROpt::attemptToHoistOffset(const SCEV *&expr, const
     const SCEV *subexp = attemptToHoistOffset(op, expr, found, stride, bytewidth, veidx, F, recursionDepth + 2);
     if(subexp == SE->getCouldNotCompute()) return subexp;
     if(*found) {
-      printf("Cannot cast veidx: can't hoist\n");
+      LLVM_DEBUG(dbgs() << "Cannot cast veidx: can't hoist\n");
       return SE->getCouldNotCompute();
     }
     *found = lfound;
@@ -386,8 +386,8 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
       const SCEV *expr = SE->getSCEV(isStore ? cast<StoreInst>(MII)->getPointerOperand() : cast<LoadInst>(MII)->getPointerOperand());
       
       LLVM_DEBUG(dbgs() << "Found load/store inst in opencl kernel, trying to hoist\n");
-      MII->dump();
-      expr->dump();
+      LLVM_DEBUG(MII->dump());
+      LLVM_DEBUG(expr->dump());
 
       const SCEV *ptrBase = SE->getPointerBase(expr);
       LLVM_DEBUG(dbgs() << "Ptrbase Dump" << "\n");
@@ -409,13 +409,13 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
       if(newSCEV != SE->getCouldNotCompute()) {
         LLVM_DEBUG(dbgs() << "Transformed SCEV:" << "\n");
-        LLVM_DEBUG(dbgs() << (void*) newSCEV << "\n");
+        LLVM_DEBUG(dbgs() << reinterpret_cast<const void *>(newSCEV) << "\n");
         LLVM_DEBUG(newSCEV->dump());
    
         if(found) {
           addrs[newSCEV].push_back(&*MII);
           if (stride != nullptr) {
-            LLVM_DEBUG(dbgs() << (void*) stride << "\n");
+            LLVM_DEBUG(dbgs() << reinterpret_cast<const void *>(stride) << "\n");
             LLVM_DEBUG(stride->dump());
             addrStrides[newSCEV] = *(strides.insert(stride).first); 
           }
@@ -558,7 +558,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     for (auto it = strides.begin(); it != strides.end(); it++) {
       const SCEV *newSCEV = SCEVParameterRewriter::rewrite(*it, *SE, argMap);
       Value *base = Expander.expandCodeFor(newSCEV, newSCEV->getType(), Call);
-      Call->getParent()->dump();
+      LLVM_DEBUG(Call->getParent()->dump());
       Args.push_back(base);
       TagCallStrideIdx.push_back(Args.size());
     }
@@ -627,7 +627,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   std::map<unsigned, Value*> ArgNumToArgVal;
   for (Function::arg_iterator E = NF->arg_end(); I2 != E; I2++) {
     LLVM_DEBUG(dbgs() << "Mapping argno: " << (&*I2)->getArgNo() << " to val: ");
-    (&*I2)->dump();
+    LLVM_DEBUG((&*I2)->dump());
     LLVM_DEBUG(dbgs() << "\n");
     ArgNumToArgVal[(&*I2)->getArgNo()] = &*I2;
   }
@@ -638,7 +638,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   // Loop over the remaining args createing new loads to use the
   for (auto it = addrs.begin(); it != addrs.end(); ++it) {
     LLVM_DEBUG(dbgs() << "For SCEV: ");
-    it->first->dump();
+    LLVM_DEBUG(it->first->dump());
     LLVM_DEBUG(dbgs() << "Formal arg mapped to argno: " << TagAddrIdx[it->first] << "\n");
 
 
@@ -646,12 +646,12 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     Value* formalStrideArg = nullptr;
 
     LLVM_DEBUG(dbgs() << "Formal addr args" << "\n");
-    formalAddrArg->dump();
+    LLVM_DEBUG(formalAddrArg->dump());
 
     if (addrStrides.find(it->first) != addrStrides.end()) {
       formalStrideArg = ArgNumToArgVal[TagStrideIdx[addrStrides[it->first]] - 1];
       LLVM_DEBUG(dbgs() << "Formal stride args" << "\n");
-      formalStrideArg->dump();
+      LLVM_DEBUG(formalStrideArg->dump());
     }
 
     for (auto instr : it->second) {
@@ -1546,8 +1546,8 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
             break;
           }
         default:
-          printf("Unable to handle Opcode:%u in OpenCL kernel\n", I->getOpcode());
-          I->dump();
+          LLVM_DEBUG(dbgs() << "Unable to handle Opcode: " << I->getOpcode() << " in OpenCL kernel\n");
+          LLVM_DEBUG(I->dump());
           continue;
       }
       if(I == --MFI->end()) {// last instruction of bb has imp uses of vregs defined to hack around reg alloc
@@ -1559,11 +1559,11 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
     }
     //end of bb loop
   }
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 }
 
 void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned defPredReg) {
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   // pseudo algo
   // 1. turn terminators into predicates (keep track of bb->pred mapping)
   // 2. for each basic block look up cdg parent and use that predicate reg
@@ -1741,7 +1741,7 @@ void RISCVVectorFetchMachOpt::convertToPredicates(MachineFunction &MF, unsigned 
       }
     }
   }
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
 }
 
 
@@ -1933,7 +1933,7 @@ bool RISCVVectorFetchPreEmitOpt::runOnMachineFunction(MachineFunction &MF) {
   if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
-  MF.dump();
+  LLVM_DEBUG(MF.dump());
   TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
   for (auto &MBB : MF) {
     unsigned predReg = 0;

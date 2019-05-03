@@ -1612,7 +1612,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
 
   bool isOpenCLKernel = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction());
   LLVM_DEBUG(dbgs() << "Corresponding Function" << "\n");
-  DAG.getMachineFunction().getFunction().dump();
+  LLVM_DEBUG(DAG.getMachineFunction().getFunction().dump());
   LLVM_DEBUG(dbgs() << "IS OPENCLKENERL?" << " " << isOpenCLKernel << "\n");
   analyzeInputArgs(MF, CCInfo, Ins, /*IsRet=*/false);
 
@@ -1836,7 +1836,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
     auto *CalleeFn = cast<Function>(E->getGlobal());
     isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
-    CalleeFn->dump();
+    LLVM_DEBUG(CalleeFn->dump());
     if (isOpenCLKernel) {
       openCLMetadata = CalleeFn->getParent()->getNamedMetadata("hwacha.vfcfg");
       LLVM_DEBUG(dbgs() << "VFCFG METADATA");
@@ -1845,7 +1845,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   LLVM_DEBUG(dbgs() << "LOWER CALL DAG DUMP" << "\n");
-  Chain.dump();
+  LLVM_DEBUG(Chain.dump());
 
 
   analyzeOutputArgs(MF, ArgCCInfo, Outs, /*IsRet=*/false, &CLI);
@@ -2109,7 +2109,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     SDVTList LANodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
     MachineSDNode* LANode = DAG.getMachineNode(RISCV::PseudoLA, DL, LANodeTys, {Ops[1], Ops[0], Glue});
     LLVM_DEBUG(dbgs() << "PseudoLA MachineSDNode dump" << "\n");
-    LANode->dump();
+    LLVM_DEBUG(LANode->dump());
 
     Ops[0] = SDValue(LANode, 1);
     Ops[1] = SDValue(LANode, 0);
