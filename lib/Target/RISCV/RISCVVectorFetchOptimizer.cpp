@@ -1876,6 +1876,7 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
           }
         }
       }
+      
       if(MI.getOpcode() == TargetOpcode::COPY) {
         // use predReg and negate to correctly predicate this copy
         TII->copyPhysReg(*MI.getParent(), &MI, MI.getDebugLoc(),

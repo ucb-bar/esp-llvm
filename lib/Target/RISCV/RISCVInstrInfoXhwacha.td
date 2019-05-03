@@ -208,7 +208,7 @@ let mayStore = 0, mayLoad = 0, hasSideEffects = 0 in {
 let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
   // Indexed Load
 
-  def VLXW : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+  def VLXW : InstV<(outs VVANY:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXH : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxh", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -216,7 +216,7 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
              "@$p\tvlxhu", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXD_F : InstV<(outs VVR:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxd", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VLXW_F : InstV<(outs VVW:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
+  def VLXW_F : InstV<(outs VVANY:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxw", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VLXH_F : InstV<(outs VVH:$dest), (ins VSR:$src1, VVR:$src2, pred:$p),
              "@$p\tvlxh", "$dest, $src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -239,7 +239,7 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
              "vlshu", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
 
   // Strided Load
-  def VLSTW : InstV<(outs VVW:$dest), (ins VAR:$base, VAR:$stride, pred:$p),
+  def VLSTW : InstV<(outs VVANY:$dest), (ins VAR:$base, VAR:$stride, pred:$p),
              "@$p\tvlstw", "$dest, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
 
   def VLSTD: InstV<(outs VVR:$dest), (ins VAR:$base, VAR:$stride, pred:$p),
@@ -247,7 +247,7 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
 
 
   // Strided Store
-  def VSSTW : InstV<(outs), (ins VVW:$src, VAR:$base, VAR:$stride, pred:$p),
+  def VSSTW : InstV<(outs), (ins VVANY:$src, VAR:$base, VAR:$stride, pred:$p),
              "@$p\tvsstw", "$src, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
   def VSSTD : InstV<(outs), (ins VVR:$src, VAR:$base, VAR:$stride, pred:$p),
              "@$p\tvsstw", "$src, $base, $stride", []>, Requires<[HasXhwacha]>;  //vlstw vv1, rBaseAddr, rStride
@@ -255,7 +255,7 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
   let isVariant = 1 in {
     def VLD : InstV<(outs VVR:$dest), (ins VAR:$src1, pred:$p),
              "@$p\tvld", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLW : InstV<(outs VVW:$dest), (ins VAR:$src1, pred:$p),
+    def VLW : InstV<(outs VVANY:$dest), (ins VAR:$src1, pred:$p),
                "@$p\tvlw", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLH : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
                "@$p\tvlh", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -263,7 +263,7 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
                "@$p\tvlhu", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLD_F : InstV<(outs VVR:$dest), (ins VAR:$src1, pred:$p),
                "@$p\tvld", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VLW_F : InstV<(outs VVW:$dest), (ins VAR:$src1, pred:$p),
+    def VLW_F : InstV<(outs VVANY:$dest), (ins VAR:$src1, pred:$p),
                "@$p\tvlw", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VLH_F : InstV<(outs VVH:$dest), (ins VAR:$src1, pred:$p),
                "@$p\tvlh", "$dest, $src1", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -274,11 +274,11 @@ let mayLoad = 1, mayStore = 0, hasSideEffects = 0 in {
 }
 
 let mayStore = 1, mayLoad = 0, hasSideEffects = 0 in {
-  def VSXW : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3, pred:$p),
+  def VSXW : InstV<(outs), (ins VVANY:$src1, VSR:$src2, VVR:$src3, pred:$p),
              "@$p\tvsxw", "$src1, $src2, $src3", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSXD_F : InstV<(outs), (ins VVR:$src1, VSR:$src2, VVR:$src3, pred:$p),
              "@$p\tvsxd", "$src1, $src2, $src3", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-  def VSXW_F : InstV<(outs), (ins VVW:$src1, VSR:$src2, VVR:$src3, pred:$p),
+  def VSXW_F : InstV<(outs), (ins VVANY:$src1, VSR:$src2, VVR:$src3, pred:$p),
              "@$p\tvsxw", "$src1, $src2, $src3", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
   def VSXH_F : InstV<(outs), (ins VVH:$src1, VSR:$src2, VVR:$src3, pred:$p),
              "@$p\tvsxh", "$src1, $src2, $src3", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -294,11 +294,11 @@ let mayStore = 1, mayLoad = 0, hasSideEffects = 0 in {
 
 
   let isVariant = 1 in {
-    def VSW : InstV<(outs), (ins VVW:$src1, VAR:$src2, pred:$p),
+    def VSW : InstV<(outs), (ins VVANY:$src1, VAR:$src2, pred:$p),
                "@$p\tvsw", "$src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VSD_F : InstV<(outs), (ins VVR:$src1, VAR:$src2, pred:$p),
                "@$p\tvsd", "$src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
-    def VSW_F : InstV<(outs), (ins VVW:$src1, VAR:$src2, pred:$p),
+    def VSW_F : InstV<(outs), (ins VVANY:$src1, VAR:$src2, pred:$p),
                "@$p\tvsw", "$src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
     def VSH_F : InstV<(outs), (ins VVH:$src1, VAR:$src2, pred:$p),
                "@$p\tvsh", "$src1, $src2", []>, Requires<[HasXhwacha]>;  //vlxw vv2, vs1, vv1
@@ -346,21 +346,21 @@ def: Pat<(int_hwacha_storestridefloat FPR32:$src, GPR:$base, GPR:$stride), (stri
 let isPseudo = 1 in {
   let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
     //Integer arithmetic register-register
-    defm VADD : InstVR3<"vadd", add, VVR>, Requires<[HasXhwacha]>;
-    defm VSUB : InstVR3<"vsub", sub, VVR>, Requires<[HasXhwacha]>;
-    defm VOR : InstVR3<"vor", or, VVR>, Requires<[HasXhwacha]>;
-    defm VSLL : InstVR3<"vsll", shl, VVR>, Requires<[HasXhwacha]>;
-    defm VSRL : InstVR3<"vsrl", srl, VVR>, Requires<[HasXhwacha]>;
-    defm VSRA : InstVR3<"vsra", sra, VVR>, Requires<[HasXhwacha]>;
-    defm VMUL : InstVR3<"vmul", mul, VVR>, Requires<[HasXhwacha]>;
+    defm VADD : InstVR3<"vadd", add, VVANY>, Requires<[HasXhwacha]>;
+    defm VSUB : InstVR3<"vsub", sub, VVANY>, Requires<[HasXhwacha]>;
+    defm VOR : InstVR3<"vor", or, VVANY>, Requires<[HasXhwacha]>;
+    defm VSLL : InstVR3<"vsll", shl, VVANY>, Requires<[HasXhwacha]>;
+    defm VSRL : InstVR3<"vsrl", srl, VVANY>, Requires<[HasXhwacha]>;
+    defm VSRA : InstVR3<"vsra", sra, VVANY>, Requires<[HasXhwacha]>;
+    defm VMUL : InstVR3<"vmul", mul, VVANY>, Requires<[HasXhwacha]>;
     defm VSLT : InstVR3Int<"vslt", setlt>, Requires<[HasXhwacha]>;
 
-    defm VADDW : InstVR3<"vaddw", add, VVR>, Requires<[HasXhwacha]>;
-    defm VSUBW : InstVR3<"vsubw", sub, VVR>, Requires<[HasXhwacha]>;
-    defm VSLLW : InstVR3<"vsllw", shl, VVR>, Requires<[HasXhwacha]>;
-    defm VSRLW : InstVR3<"vsrlw", srl, VVR>, Requires<[HasXhwacha]>;
-    defm VSRAW : InstVR3<"vsraw", sra, VVR>, Requires<[HasXhwacha]>;
-    defm VMULW : InstVR3<"vmulw", mul, VVR>, Requires<[HasXhwacha]>;
+    defm VADDW : InstVR3<"vaddw", add, VVANY>, Requires<[HasXhwacha]>;
+    defm VSUBW : InstVR3<"vsubw", sub, VVANY>, Requires<[HasXhwacha]>;
+    defm VSLLW : InstVR3<"vsllw", shl, VVANY>, Requires<[HasXhwacha]>;
+    defm VSRLW : InstVR3<"vsrlw", srl, VVANY>, Requires<[HasXhwacha]>;
+    defm VSRAW : InstVR3<"vsraw", sra, VVANY>, Requires<[HasXhwacha]>;
+    defm VMULW : InstVR3<"vmulw", mul, VVANY>, Requires<[HasXhwacha]>;
 
     def VSLLI: InstI<"vslli" , ?, ?, shl, VSR, VSR>, Requires<[HasXhwacha]>;
     def VSRLI: InstI<"vsrli" , ?, ?, srl, VSR, VSR>, Requires<[HasXhwacha]>;
@@ -383,10 +383,10 @@ let isPseudo = 1 in {
     //def VOR64  : InstR<"vor"  , ?, ?, or    , VR64, VR64>, Requires<[HasXhwacha]>;
     //def VAND64 : InstR<"vand" , ?, ?, and   , VR64, VR64>, Requires<[HasXhwacha]>;
     //def VMUL64 : InstR<"vmul", ?, ?, mul   , VR64, VR64>, Requires<[HasXhwacha]>;
-    defm VFMUL_S_RDY : InstVR3<"vfmul.s", fmul, VVW>, Requires<[HasXhwacha]>;
-    defm VFDIV_S_RDY : InstVR3<"vfdiv.s", fdiv, VVW>, Requires<[HasXhwacha]>;
-    defm VFADD_S_RDY : InstVR3<"vfadd.s", fadd, VVW>, Requires<[HasXhwacha]>;
-    defm VFSUB_S_RDY : InstVR3<"vfsub.s", fsub, VVW>, Requires<[HasXhwacha]>;
+    defm VFMUL_S_RDY : InstVR3<"vfmul.s", fmul, VVANY>, Requires<[HasXhwacha]>;
+    defm VFDIV_S_RDY : InstVR3<"vfdiv.s", fdiv, VVANY>, Requires<[HasXhwacha]>;
+    defm VFADD_S_RDY : InstVR3<"vfadd.s", fadd, VVANY>, Requires<[HasXhwacha]>;
+    defm VFSUB_S_RDY : InstVR3<"vfsub.s", fsub, VVANY>, Requires<[HasXhwacha]>;
     defm VFMUL_D_RDY : InstVR3<"vfmul.d", fmul, VVR>, Requires<[HasXhwacha]>;
     defm VFADD_D_RDY : InstVR3<"vfadd.d", fadd, VVR>, Requires<[HasXhwacha]>;
     defm VFSUB_D_RDY : InstVR3<"vfsub.d", fsub, VVR>, Requires<[HasXhwacha]>;

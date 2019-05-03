@@ -870,3 +870,12 @@ let RegAltNameIndices = [ABIRegAltName] in {
     let AllocationPriority = 1;
   }
 
+  //Meta regclss that holds both vvw and vvr. Used to prevent LLVM from complaining about invalid instr after regfix
+  def VVANY : RegisterClass<"RISCV", [i64,f64], 64, (add
+    (sequence "vv%uD", 0, 255), (sequence "vv%uW", 0, 255))>
+   {
+    let isAllocatable = 0;
+    let CopyCost = -1;
+    let AllocationPriority = 0;
+  }
+
