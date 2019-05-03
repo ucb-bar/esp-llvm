@@ -26,18 +26,29 @@ stripmine:                              # @stripmine
 	sd	s3, 16(sp)
 	sd	s4, 8(sp)
 	sd	s5, 0(sp)
-	mv	s2, a2
-	mv	s3, a1
+	mv	s3, a2
+	mv	s4, a1
+	mv	s2, a0
+	addi	a0, a1, 40
+	addi	a1, a2, 20
+	addi	a2, zero, 5
+	vmcs	vs1,a2
+	vmca	va1,a0
+	vmca	va2,a1
+	vsetcfg	a0,0,1,0,1
+	vsetvl	a0,a2
+	la	a0, kernel_output_s0_x___block_id_x
+	vf	0(a0)
 	addi	s0, zero, 1
-	sext.w	s4, a0
+	sext.w	s2, s2
 	addi	s5, zero, 100
 .LBB1_1:                                # %loop
                                         # =>This Inner Loop Header: Depth=1
 	slli	a0, s0, 2
-	add	a0, s2, a0
-	add	a1, s0, s4
+	add	a0, s3, a0
+	add	a1, s0, s2
 	slli	a1, a1, 2
-	add	a1, s3, a1
+	add	a1, s4, a1
 	sub	a2, s5, s0
 	vmcs	vs1,a2
 	vmca	va1,a1
