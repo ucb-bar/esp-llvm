@@ -1851,13 +1851,16 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
   bool isOpenCLKernel = false;
-  NamedMDNode* openCLMetadata;
+  MDNode* openCLMetadata;
   if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
     auto *CalleeFn = cast<Function>(E->getGlobal());
     isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
     LLVM_DEBUG(CalleeFn->dump());
     if (isOpenCLKernel) {
-      openCLMetadata = CalleeFn->getParent()->getNamedMetadata("hwacha.vfcfg");
+      openCLMetadata = CalleeFn->getMetadata("hwacha.vfcfg");
+      if (!openCLMetadata) {
+        llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
+      }
       LLVM_DEBUG(dbgs() << "VFCFG METADATA");
       LLVM_DEBUG(openCLMetadata->dump());
     }
@@ -2032,10 +2035,10 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // Read out the configuration from metadata
     if(openCLMetadata->getNumOperands() < 1)
       llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
-    auto* vfcfgD = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(0))->getValue());
-    auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(1))->getValue());
-    auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(2))->getValue());
-    auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0)->getOperand(3))->getValue());
+    auto* vfcfgD = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(0))->getValue());
+    auto* vfcfgS = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(1))->getValue());
+    auto* vfcfgH = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(2))->getValue());
+    auto* vfcfgP = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(openCLMetadata->getOperand(3))->getValue());
     
     SmallVector<SDValue, 8> vsetcfgOps;
     vsetcfgOps.push_back(Chain);

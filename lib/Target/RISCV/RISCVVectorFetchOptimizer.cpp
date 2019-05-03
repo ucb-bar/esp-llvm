@@ -43,10 +43,7 @@ namespace {
   struct RISCVVectorFetchIROpt : public ModulePass {
     Scalarization       *MS;
     ScalarEvolution     *SE;
-    std::map<const SCEV *, std::vector<Instruction *>> addrs; //scev addr -> instrs
-    std::set<const SCEV *> strides;
-    std::map<const SCEV *, const SCEV *> addrStrides; //scev addr -> stride 
-    std::map<const SCEV *, std::vector<Instruction *>> scalars;
+
   private:
     virtual const SCEV *attemptToHoistOffset(const SCEV *&expr, const SCEV *&parent,
         bool *found, const SCEV **stride, unsigned bytewidth, const SCEV **veidx, Function *F, int recursionDepth);
@@ -372,7 +369,11 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
 
   //SCEVs are themselves immutable and interally uniqued so we can just use pointer equality 
 
-  std::map<Instruction*, const SCEV*> strideLengthsForMem; 
+  std::map<const SCEV *, std::vector<Instruction *>> addrs; //scev addr -> instrs
+  std::set<const SCEV *> strides;
+  std::map<const SCEV *, const SCEV *> addrStrides; //scev addr -> stride 
+  std::map<const SCEV *, std::vector<Instruction *>> scalars;
+
 
   for(Function::iterator BBI = F->begin(), MBBE = F->end(); BBI != MBBE; ++BBI) {
     for(BasicBlock::iterator MII = BBI->begin(), MIE = BBI->end(); MII != MIE; ++MII) {
@@ -1904,19 +1905,19 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
 
   LLVM_DEBUG(MF.getFunction().dump());
 
-  NamedMDNode* vfcfg = const_cast<Module*>(MF.getMMI().getModule())->getOrInsertNamedMetadata("hwacha.vfcfg");
+  //NamedMDNode* vfcfg = const_cast<Module*>(MF.getMMI().getModule())->getOrInsertNamedMetadata("hwacha.vfcfg");
   Type *Int64 = IntegerType::get(MF.getFunction().getContext(), 64);
-  Metadata *cfg[4] = {ConstantAsMetadata::get(ConstantInt::get(Int64, numDRegs)),
+  Metadata *cfg[5] = {ConstantAsMetadata::get(ConstantInt::get(Int64, numDRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numWRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numHRegs)),
                       ConstantAsMetadata::get(ConstantInt::get(Int64, numPRegs))};
-  assert(vfcfg != nullptr);
-  LLVM_DEBUG(dbgs() << "VFGCF INSERTED");
+  //assert(vfcfg != nullptr);
+  LLVM_DEBUG(dbgs() << "VFCFG INSERTED");
   auto functionContext = MDNode::get(MF.getFunction().getContext(), cfg);
   LLVM_DEBUG(functionContext->dump());
-  vfcfg->addOperand(functionContext);
+  const_cast<Function&>(MF.getFunction()).setMetadata("hwacha.vfcfg", functionContext);
 
-  LLVM_DEBUG(vfcfg->getOperand(0)->dump());
+  LLVM_DEBUG(MF.getFunction().getMetadata("hwacha.vfcfg")->dump());
   return true;
 }
 

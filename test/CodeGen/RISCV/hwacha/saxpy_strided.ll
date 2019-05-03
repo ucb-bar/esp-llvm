@@ -7,13 +7,9 @@ body:
   %idx = call i64 @llvm.hwacha.veidx() #0
   %mulidx = mul i64 %idx, %stride
   %arrayidx.i = getelementptr float, float* %0, i64 %mulidx
-  %tomul = load float, float* %arrayidx.i, align 4
-  %mul.i = fmul float %tomul, %2
 
-  %arrayidx2.i = getelementptr float, float* %1, i64 %mulidx
-  %toadd = load float, float* %arrayidx2.i, align 4
-  %add.i = fadd float %toadd, %mul.i
-  store float %add.i, float* %arrayidx2.i, align 4
+  %tomul = load float, float* %arrayidx.i, align 4
+  store float %tomul, float* %arrayidx.i, align 4
   
   %vlret = call i64 @llvm.hwacha.vretvl()
   ret i64 %vlret
