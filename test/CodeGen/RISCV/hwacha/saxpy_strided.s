@@ -31,7 +31,7 @@ _pocl_launcher_saxpy:                   # @_pocl_launcher_saxpy
 	.p2align	2
 	.type	_pocl_launcher_saxpy_workgroup,@function
 _pocl_launcher_saxpy_workgroup:         # @_pocl_launcher_saxpy_workgroup
-# %bb.0:
+# %bb.0: 
 	addi	sp, sp, -16
 	sd	s0, 8(sp)
 	sd	s1, 0(sp)

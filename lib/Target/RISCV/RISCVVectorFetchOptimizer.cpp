@@ -768,6 +768,9 @@ bool RISCVVectorFetchMachOpt::runOnMachineFunction(MachineFunction &MF) {
 void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredReg,
     unsigned VVV, unsigned VVS, unsigned VSV, unsigned VSS, unsigned SSS) {
 
+  LLVM_DEBUG(dbgs() << "Found binary op to vectorize" << "\n");
+  LLVM_DEBUG(I->dump());
+
   const TargetRegisterClass *destClass; 
 
   if(TRI->isPhysicalRegister(I->getOperand(1).getReg())) {
@@ -834,7 +837,7 @@ void RISCVVectorFetchMachOpt::vectorizeBinOp(MachineInstr *I, unsigned defPredRe
 
 void RISCVVectorFetchMachOpt::vectorizeFMV(MachineInstr *I) {
   //Copy probably optimized out
-  LLVM_DEBUG(dbgs() << "foo bar " << I->getNumOperands());
+  // LLVM_DEBUG(dbgs() << "foo bar " << I->getNumOperands());
   MRI->setRegClass(I->getOperand(0).getReg(), MRI->getRegClass(I->getOperand(1).getReg()));
   I->setDesc(TII->get(TargetOpcode::COPY));
 }
@@ -1403,6 +1406,10 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           vectorizeLoadOp(&*I, &RISCV::VVWRegClass, defPredReg,
               RISCV::VLW, RISCV::VLXW, RISCV::VLSW);
           continue;
+        case RISCV::LD    :
+          vectorizeLoadOp(&*I, &RISCV::VVRRegClass, defPredReg,
+              RISCV::VLD, RISCV::VLXD_F, RISCV::VLSD_F);
+          continue;
         case RISCV::FSD   :
           vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSD_F, RISCV::VSXD_F);
@@ -1424,6 +1431,10 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
         case RISCV::SW   :
           vectorizeStoreOp(&*I, defPredReg,
               RISCV::VSW, RISCV::VSXW);
+          continue;
+        case RISCV::SD   :
+          vectorizeStoreOp(&*I, defPredReg,
+              RISCV::VSD_F, RISCV::VSXD_F);
           continue;
         case RISCV::FCVT_S_D :
           vectorizeCvtOp(&*I, &RISCV::VVWRegClass, defPredReg,
@@ -1454,6 +1465,12 @@ void RISCVVectorFetchMachOpt::processOpenCLKernel(MachineFunction &MF, unsigned 
           vectorizeFMV(&*I);
           continue;
         case RISCV::FMV_D_X:
+          vectorizeFMV(&*I);
+          continue;
+        case RISCV::FMV_X_W:
+          vectorizeFMV(&*I);
+          continue;
+        case RISCV::FMV_X_D:
           vectorizeFMV(&*I);
           continue;
         case RISCV::FADD_D:
@@ -1784,6 +1801,9 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
   if(!isOpenCLKernelFunction((MF.getFunction())))
     return false;
 
+  LLVM_DEBUG(dbgs() << "Beginning vector regfix pass" << "\n");
+  LLVM_DEBUG(MF.dump());
+
   MachineRegisterInfo *MRI = &MF.getRegInfo();
   TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
   //We are changing vv*W and vv*H regs to vv*D regs respecting the register number ordering
@@ -1847,6 +1867,8 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
               if(succ->isLiveIn(oldReg)) {
                 succ->removeLiveIn(oldReg);
                 succ->addLiveIn(newReg);
+
+                //WTF is this doing? Wouldn't the successor block be reached eventually in the above loop anyway??
                 for(auto &succsucc : succ->successors()) {
                   if(succsucc->isLiveIn(oldReg)) {
                     succsucc->removeLiveIn(oldReg);
@@ -1856,6 +1878,10 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
               }
             }
             //MRI->replaceRegWith(oldReg, newReg);
+            if(MBB.isLiveIn(oldReg)) {
+              MBB.removeLiveIn(oldReg);
+              MBB.addLiveIn(newReg);
+            }
             MO.setReg(newReg);
           }
           if(vvH->contains(MO.getReg())) {
@@ -1877,6 +1903,10 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
               }
             }
             //MRI->replaceRegWith(oldReg, newReg);
+            if(MBB.isLiveIn(oldReg)) {
+              MBB.removeLiveIn(oldReg);
+              MBB.addLiveIn(newReg);
+            }
             MO.setReg(newReg);
           }
         }
@@ -1909,7 +1939,8 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  LLVM_DEBUG(MF.getFunction().dump());
+  LLVM_DEBUG(dbgs() << "After vector regfix pass" << "\n");
+  LLVM_DEBUG(MF.dump());
 
   //NamedMDNode* vfcfg = const_cast<Module*>(MF.getMMI().getModule())->getOrInsertNamedMetadata("hwacha.vfcfg");
   Type *Int64 = IntegerType::get(MF.getFunction().getContext(), 64);

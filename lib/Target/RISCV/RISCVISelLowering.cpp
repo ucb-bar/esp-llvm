@@ -520,7 +520,7 @@ SDValue RISCVTargetLowering::lowerINTRINSIC_W_CHAIN(SDValue Op,
   default:
     return SDValue(); // Don't custom lower most intrinsics
   case Intrinsic::hwacha_vretvl:
-    return SDValue(DAG.getMachineNode(RISCV::PseudoLI, DL, {MVT::i64, MVT::Other}, {DAG.getConstant(0, DL, MVT::i64, true), Chain}), 0);
+   return SDValue(DAG.getMachineNode(RISCV::PseudoLI, DL, {MVT::i64, MVT::Other}, {DAG.getConstant(0, DL, MVT::i64, true), Chain}), 0);
   }
 }
 
@@ -1142,6 +1142,14 @@ static const MCPhysReg ArgVARs[] = {
   RISCV::va22, RISCV::va23, RISCV::va24, RISCV::va25, 
 };
 
+static const MCPhysReg ArgVVRs[] = {
+  RISCV::vv0D, RISCV::vv1D, RISCV::vv2D
+};
+
+static const MCPhysReg ArgVVWs[] = {
+  RISCV::vv0W, RISCV::vv1W, RISCV::vv2W
+};
+
 // Pass a 2*XLEN argument that has been split into two XLEN values through
 // registers or the stack as necessary.
 static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
@@ -1313,6 +1321,10 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
     Reg = State.AllocateReg(ArgVSRs);
   else if (OpenCLArgType == OpenCLLowering::VARREG)
     Reg = State.AllocateReg(ArgVARs);
+  else if (OpenCLArgType == OpenCLLowering::VVRREG)
+    Reg = State.AllocateReg(ArgVVRs);
+  else if (OpenCLArgType == OpenCLLowering::VVWREG)
+    Reg = State.AllocateReg(ArgVVWs);
   else if (ValVT == MVT::f32 && !UseGPRForF32)
     Reg = State.AllocateReg(ArgFPR32s, ArgFPR64s);
   else if (ValVT == MVT::f64 && !UseGPRForF64)
@@ -1378,7 +1390,13 @@ void RISCVTargetLowering::analyzeInputArgs(
     auto OpenCLArgType = OpenCLLowering::NONE;
     if (isOpenCLKernel) {
       bool isVARRegClass = MF.getFunction().getAttributes().hasParamAttr(i, "VARRegClass");
-      OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRREG;
+      if (isVARRegClass) {
+        OpenCLArgType = OpenCLLowering::VARREG;
+      } else if (MF.getFunction().getAttributes().hasParamAttr(i, "VReg")) {
+        OpenCLArgType = (ArgVT == MVT::i64 || ArgVT == MVT::f64) ? OpenCLLowering::VVRREG : OpenCLLowering::VVWREG;
+      } else {
+        OpenCLArgType = OpenCLLowering::VSRREG;
+      }
     }
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
@@ -1396,15 +1414,17 @@ void RISCVTargetLowering::analyzeOutputArgs(
     const SmallVectorImpl<ISD::OutputArg> &Outs, bool IsRet, CallLoweringInfo *CLI) const {
   unsigned NumArgs = Outs.size();
 
-  bool isOpenCLKernel = false;
+  bool isOpenCLKernelCall = false;
+  bool isOpenCLKernelRet = isOpenCLKernelFunction(MF.getFunction());
   const Function* CalleeFn;
 
   if (CLI != nullptr) {
     if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(CLI->Callee)) {
       CalleeFn = cast<Function>(E->getGlobal());
-      isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+      isOpenCLKernelCall = isOpenCLKernelFunction(*CalleeFn);
     }
   }
+
 
   for (unsigned i = 0; i != NumArgs; i++) {
     MVT ArgVT = Outs[i].VT;
@@ -1413,9 +1433,11 @@ void RISCVTargetLowering::analyzeOutputArgs(
 
 
     auto OpenCLArgType = OpenCLLowering::NONE;
-    if (isOpenCLKernel) {
+    if (isOpenCLKernelCall) {
       bool isVARRegClass = CalleeFn->getAttributes().hasParamAttr(i, "VARRegClass");
       OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRREG;
+    } else if (isOpenCLKernelRet) {
+      OpenCLArgType = (ArgVT == MVT::i64 || ArgVT == MVT::f64) ? OpenCLLowering::VVRREG : OpenCLLowering::VVWREG;
     }
 
     RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
@@ -1486,13 +1508,16 @@ static SDValue unpackFromRegLoc(SelectionDAG &DAG, SDValue Chain,
 // The caller is responsible for loading the full value if the argument is
 // passed with CCValAssign::Indirect.
 static SDValue unpackFromVectorRegLoc(SelectionDAG &DAG, SDValue Chain,
-                                const CCValAssign &VA, const SDLoc &DL, bool isVARRegClass) {
+                                const CCValAssign &VA, const SDLoc &DL, OpenCLLowering::ArgType OpenCLArgType) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
   EVT LocVT = VA.getLocVT();
   SDValue Val;
 
-  unsigned VReg = RegInfo.createVirtualRegister(isVARRegClass ? &RISCV::VARRegClass : &RISCV::VSRRegClass);
+  unsigned VReg = RegInfo.createVirtualRegister(OpenCLArgType == OpenCLLowering::VARREG ? &RISCV::VARRegClass :
+                                                OpenCLArgType == OpenCLLowering::VVRREG ? &RISCV::VVRRegClass :
+                                                OpenCLArgType == OpenCLLowering::VVWREG ? &RISCV::VVWRegClass :
+                                                  &RISCV::VSRRegClass);
   RegInfo.addLiveIn(VA.getLocReg(), VReg);
   Val = DAG.getCopyFromReg(Chain, DL, VReg, LocVT);
 
@@ -1646,9 +1671,20 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     else if (VA.isRegLoc()) {
      if (isOpenCLKernel) {
        LLVM_DEBUG(dbgs() << "ValNo " << VA.getValNo() << "\n");
-       bool isVARRegClass = MF.getFunction().getAttributes().hasParamAttr(VA.getValNo(), "VARRegClass");
-       LLVM_DEBUG(dbgs() << "isVARRegClass?: " << isVARRegClass << "\n");
-       ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL, isVARRegClass);
+      OpenCLLowering::ArgType argType;
+       
+       if (/*bool isVARRegClass =*/ MF.getFunction().getAttributes().hasParamAttr(VA.getValNo(), "VARRegClass")) {
+        argType = OpenCLLowering::VARREG;
+       }
+       else if (/*bool isVectorReg =*/ MF.getFunction().getAttributes().hasParamAttr(VA.getValNo(), "VReg")) {
+         argType = (VA.getValVT() == MVT::f64 || VA.getValVT() == MVT::i64) ? OpenCLLowering::VVRREG : OpenCLLowering::VVWREG;
+       } else {
+         argType = OpenCLLowering::VSRREG;
+       }
+
+       LLVM_DEBUG(dbgs() << "RegClass: " << argType << "\n");
+
+       ArgValue = unpackFromVectorRegLoc(DAG, Chain, VA, DL, argType);
      }
      else {
         ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
@@ -2156,11 +2192,17 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CCState RetCCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
   analyzeInputArgs(MF, RetCCInfo, Ins, /*IsRet=*/true);
 
-  if (isOpenCLKernel) {
-    InVals.push_back(VsetvlNode);
-  } else {
+    bool first = true;
+  
     // Copy all of the result registers out of their specified physreg.
     for (auto &VA : RVLocs) {
+
+      if (isOpenCLKernel && first) {
+        InVals.push_back(VsetvlNode);
+        first = false;
+        continue;
+      }
+
       // Copy the value out
       SDValue RetValue =
           DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
@@ -2181,7 +2223,6 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
       RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
 
       InVals.push_back(RetValue);
-    }
   }
 
 
@@ -2211,10 +2252,6 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
                                  const SmallVectorImpl<SDValue> &OutVals,
                                  const SDLoc &DL, SelectionDAG &DAG) const {
 
-  if (isOpenCLKernelFunction(DAG.getMachineFunction().getFunction())) {
-    return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, Chain);
-  }
-
   // Stores the assignment of the return value to a location.
   SmallVector<CCValAssign, 16> RVLocs;
 
@@ -2224,11 +2261,15 @@ RISCVTargetLowering::LowerReturn(SDValue Chain, CallingConv::ID CallConv,
 
   analyzeOutputArgs(DAG.getMachineFunction(), CCInfo, Outs, /*IsRet=*/true, nullptr);
 
+  if (isOpenCLKernelFunction(DAG.getMachineFunction().getFunction()) && RVLocs.size() <= 1) {
+    return DAG.getNode(RISCVISD::RET_FLAG, DL, MVT::Other, Chain);
+  }
+
   SDValue Glue;
   SmallVector<SDValue, 4> RetOps(1, Chain);
 
   // Copy the result values into the output registers.
-  for (unsigned i = 0, e = RVLocs.size(); i < e; ++i) {
+  for (unsigned i = isOpenCLKernelFunction(DAG.getMachineFunction().getFunction()) ? 1 : 0, e = RVLocs.size(); i < e; ++i) {
     SDValue Val = OutVals[i];
     CCValAssign &VA = RVLocs[i];
     assert(VA.isRegLoc() && "Can only return in registers!");

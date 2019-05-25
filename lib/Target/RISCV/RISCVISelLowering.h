@@ -67,7 +67,9 @@ namespace OpenCLLowering {
   enum ArgType {
   NONE,
   VSRREG,
-  VARREG
+  VARREG,
+  VVWREG,
+  VVRREG
 };
 }
 
