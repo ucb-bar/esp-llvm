@@ -1425,7 +1425,6 @@ void RISCVTargetLowering::analyzeOutputArgs(
     }
   }
 
-
   for (unsigned i = 0; i != NumArgs; i++) {
     MVT ArgVT = Outs[i].VT;
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
@@ -1436,7 +1435,7 @@ void RISCVTargetLowering::analyzeOutputArgs(
     if (isOpenCLKernelCall) {
       bool isVARRegClass = CalleeFn->getAttributes().hasParamAttr(i, "VARRegClass");
       OpenCLArgType = isVARRegClass ? OpenCLLowering::VARREG : OpenCLLowering::VSRREG;
-    } else if (isOpenCLKernelRet) {
+    } else if (isOpenCLKernelRet && i != 0) {
       OpenCLArgType = (ArgVT == MVT::i64 || ArgVT == MVT::f64) ? OpenCLLowering::VVRREG : OpenCLLowering::VVWREG;
     }
 
@@ -1886,14 +1885,27 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState ArgCCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
 
-  bool isOpenCLKernel = false;
+  bool isOpenCLKernelCall = false;
   MDNode* openCLMetadata;
   if (GlobalAddressSDNode *E = dyn_cast<GlobalAddressSDNode>(Callee)) {
     auto *CalleeFn = cast<Function>(E->getGlobal());
-    isOpenCLKernel = isOpenCLKernelFunction(*CalleeFn);
+    isOpenCLKernelCall = isOpenCLKernelFunction(*CalleeFn);
     LLVM_DEBUG(CalleeFn->dump());
-    if (isOpenCLKernel) {
-      openCLMetadata = CalleeFn->getMetadata("hwacha.vfcfg");
+    if (isOpenCLKernelCall) {
+
+      bool isPrologue = CalleeFn->hasMetadata("prologue");
+      bool isEpilogue = CalleeFn->hasMetadata("epilogue");
+      LLVM_DEBUG(dbgs() << "isPrologue? " << isPrologue << " isEpilogue? " << isEpilogue << "\n");
+
+      if (isPrologue || isEpilogue) {
+        Function *referencedKernel = dyn_cast<Function>(dyn_cast<ValueAsMetadata>(
+          CalleeFn->getMetadata(isPrologue ? "prologue" : "epilogue")->getOperand(0))->getValue());
+        assert(referencedKernel && "Prologue/Epilogue has invalid function reference");
+        openCLMetadata = referencedKernel->getMetadata("hwacha.vfcfg");
+      } else {
+        openCLMetadata = CalleeFn->getMetadata("hwacha.vfcfg");
+      }
+
       if (!openCLMetadata) {
         llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
       }
@@ -2047,7 +2059,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   SDValue Glue;
 
   // Build a sequence of copy-to-reg nodes, chained and glued together.
-  for (auto &Reg : RegsToPass) {
+  for (auto &Reg : RegsToPass) {  
     Chain = DAG.getCopyToReg(Chain, DL, Reg.first, Reg.second, Glue);
     LLVM_DEBUG(dbgs() << "Regs to Pass:" << "\n");
     LLVM_DEBUG(Chain.dump());
@@ -2067,7 +2079,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   }
 
   SDValue VsetvlNode;
-  if(isOpenCLKernel) {
+  if(isOpenCLKernelCall) {
     // Read out the configuration from metadata
     if(openCLMetadata->getNumOperands() < 1)
       llvm_unreachable("hwacha vfcfg metadata not set prior to vf call lowering");
@@ -2163,7 +2175,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     return DAG.getNode(RISCVISD::TAIL, DL, NodeTys, Ops);
   }
 
-  if(isOpenCLKernel) {
+  if(isOpenCLKernelCall) {
     SDVTList LANodeTys = DAG.getVTList(MVT::i64, MVT::Other, MVT::Glue);
     MachineSDNode* LANode = DAG.getMachineNode(RISCV::PseudoLA, DL, LANodeTys, {Ops[1], Ops[0], Glue});
     LLVM_DEBUG(dbgs() << "PseudoLA MachineSDNode dump" << "\n");
@@ -2192,37 +2204,37 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   CCState RetCCInfo(CallConv, IsVarArg, MF, RVLocs, *DAG.getContext());
   analyzeInputArgs(MF, RetCCInfo, Ins, /*IsRet=*/true);
 
-    bool first = true;
-  
-    // Copy all of the result registers out of their specified physreg.
-    for (auto &VA : RVLocs) {
+  bool first = true;
 
-      if (isOpenCLKernel && first) {
-        InVals.push_back(VsetvlNode);
-        first = false;
-        continue;
-      }
+  // Copy all of the result registers out of their specified physreg.
+  for (auto &VA : RVLocs) {
 
-      // Copy the value out
-      SDValue RetValue =
-          DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
-      // Glue the RetValue to the end of the call sequence
-      Chain = RetValue.getValue(1);
-      Glue = RetValue.getValue(2);
+    if (isOpenCLKernelCall && first) {
+      InVals.push_back(VsetvlNode);
+      first = false;
+      continue;
+    }
 
-      if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
-        assert(VA.getLocReg() == ArgGPRs[0] && "Unexpected reg assignment");
-        SDValue RetValue2 =
-            DAG.getCopyFromReg(Chain, DL, ArgGPRs[1], MVT::i32, Glue);
-        Chain = RetValue2.getValue(1);
-        Glue = RetValue2.getValue(2);
-        RetValue = DAG.getNode(RISCVISD::BuildPairF64, DL, MVT::f64, RetValue,
-                               RetValue2);
-      }
+    // Copy the value out
+    SDValue RetValue =
+        DAG.getCopyFromReg(Chain, DL, VA.getLocReg(), VA.getLocVT(), Glue);
+    // Glue the RetValue to the end of the call sequence
+    Chain = RetValue.getValue(1);
+    Glue = RetValue.getValue(2);
 
-      RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
+    if (VA.getLocVT() == MVT::i32 && VA.getValVT() == MVT::f64) {
+      assert(VA.getLocReg() == ArgGPRs[0] && "Unexpected reg assignment");
+      SDValue RetValue2 =
+          DAG.getCopyFromReg(Chain, DL, ArgGPRs[1], MVT::i32, Glue);
+      Chain = RetValue2.getValue(1);
+      Glue = RetValue2.getValue(2);
+      RetValue = DAG.getNode(RISCVISD::BuildPairF64, DL, MVT::f64, RetValue,
+                              RetValue2);
+    }
 
-      InVals.push_back(RetValue);
+    RetValue = convertLocVTToValVT(DAG, RetValue, VA, DL);
+
+    InVals.push_back(RetValue);
   }
 
 

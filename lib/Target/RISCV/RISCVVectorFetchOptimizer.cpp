@@ -506,6 +506,27 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
     }
   }
 
+  LLVM_DEBUG(dbgs() << "Migrating other function metadata info (e.g. prologue/epilogue)" << "\n");
+  SmallVector<std::pair< unsigned, MDNode *>, 8> meta;
+  F->getAllMetadata(meta);
+  for (auto j : meta) {
+    j.second->dump();
+    NF->setMetadata(j.first, j.second);
+    Function *k =
+      dyn_cast<Function>(
+        dyn_cast<ValueAsMetadata>(NF->getMetadata(j.first)->getOperand(0))->getValue());
+    if (k) {
+      bool isPrologue = NF->hasMetadata("prologue");
+      bool isEpilogue = NF->hasMetadata("epilogue");
+      LLVM_DEBUG(dbgs() << k->getName() << " | " << F->getName() << " isPrologue? " << isPrologue << " isEpilogue? " << isEpilogue << "\n");
+      if (k->getName() == F->getName()) {
+        LLVM_DEBUG(dbgs() << "Replacing func info" << "\n");
+        NF->getMetadata(j.first)->replaceOperandWith(0, llvm::ValueAsMetadata::get(NF));
+      }
+    }
+  }
+
+
   while (!F->use_empty()) {
     CallSite CS(F->user_back());
     assert(CS.getCalledFunction() == F);

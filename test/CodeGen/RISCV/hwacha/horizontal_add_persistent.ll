@@ -1,22 +1,29 @@
 declare i64 @llvm.hwacha.veidx()
 
-define dso_local {i64, float} @horizontal_add(i64, float*, float "VReg") {
+define dso_local {i64, float} @horizontal_add(i64, float*, float*, float, float "VReg") {
 body:
   %idx = call i64 @llvm.hwacha.veidx()
   %arrayidx.i = getelementptr float, float* %1, i64 %idx
-  %toadd = load float, float* %arrayidx.i, align 4
-  %added = fadd float %toadd, %2
+  %tomul = load float, float* %arrayidx.i, align 4
+  %mul.i = fmul float %tomul, %3
+
+  %arrayidx2.i = getelementptr float, float* %2, i64 %idx
+  %toadd = load float, float* %arrayidx2.i, align 4
+  %add.i = fadd float %toadd, %mul.i
+
+  %stored = fadd float %4, %add.i ; accumulate into vreg
+
 
   %vlret = call i64 @llvm.hwacha.vretvl(i64 %0)
 
   %rv1 = insertvalue { i64, float } undef, i64 %vlret, 0
-  %rv2 = insertvalue { i64, float } %rv1, float %added, 1
+  %rv2 = insertvalue { i64, float } %rv1, float %stored, 1
 
   ret {i64, float} %rv2
 }
 
 
-define dso_local {i64, float} @init_vector(i64, float*) { ; I need to double check syntax for this metadata
+define dso_local {i64, float} @init_vector(i64, float*) !prologue !2 { ; I need to double check syntax for this metadata
 body:
   %idx = call i64 @llvm.hwacha.veidx()
   %arrayidx.i = getelementptr float, float* %1, i64 %idx
@@ -44,21 +51,21 @@ body:
   ret {i64} %rv1
 }
 
-define dso_local i64 @horizontal_add_launcher(float*, float*) {
+define dso_local i64 @horizontal_add_launcher(float*, float*, float) {
   %vl = add i64 0, 1234
 
   %prologueRet = call {i64, float} @init_vector(i64 %vl, float* %0)
 
   %prologueVL = extractvalue { i64, float } %prologueRet, 0
-  %initAdd = extractvalue { i64, float } %prologueRet, 1
+  %initAccum = extractvalue { i64, float } %prologueRet, 1
 
   ; Should have shifted %0 by prologueVL elements to be correct but whatever
-  %ret = call {i64, float} @horizontal_add(i64 %prologueVL, float* %0, float %initAdd)
+  %ret = call {i64, float} @horizontal_add(i64 %prologueVL, float* %0, float* %1, float %2, float %initAccum)
 
   %newvl = extractvalue { i64, float } %ret, 0
   %accum = extractvalue { i64, float } %ret, 1
 
-  %ret2 = call {i64, float} @horizontal_add(i64 %vl, float* %0, float %accum)
+  %ret2 = call {i64, float} @horizontal_add(i64 %vl, float* %0, float* %1, float %2, float %accum)
 
   %newvl2 = extractvalue { i64, float } %ret2, 0
   %accum2 = extractvalue { i64, float } %ret2, 1
@@ -72,6 +79,6 @@ define dso_local i64 @horizontal_add_launcher(float*, float*) {
 
 declare i64 @llvm.hwacha.vretvl(i64)
 
-!2 = !{{i64, float} (i64, float*, float)* @horizontal_add}
+!2 = !{{i64, float} (i64, float*, float*, float, float)* @horizontal_add}
 !3 = !{{i64, float} (i64, float*)* @init_vector}
 !4 = !{{i64} (i64, float*, float)* @store_vector}
