@@ -1862,6 +1862,31 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
       numPRegs++;
     }
   }
+
+  // If we are in prologue/epilogue we used this reg map to determine new reg
+  // This ensures we have same physreg across different kernels
+  std::map<unsigned, unsigned> prologue_epilogueRegMap;
+  bool isPrologue = MF.getFunction().hasMetadata("prologue") ;
+  bool isEpilogue = MF.getFunction().hasMetadata("epilogue");
+  if (isPrologue || isEpilogue) {
+    LLVM_DEBUG(dbgs() << "Reconstructing postregfix map in prologue/epilogue");
+    Function *referencedKernel = dyn_cast<Function>(dyn_cast<ValueAsMetadata>(
+      MF.getFunction().getMetadata(isPrologue ? "prologue" : "epilogue")->getOperand(0))->getValue());
+    
+    auto regmapMeta = referencedKernel->getMetadata("regmap");
+
+    for (unsigned i = 0; i < regmapMeta->getNumOperands(); i++) {
+      auto ithregpair = dyn_cast<llvm::MDTuple>(regmapMeta->getOperand(i));
+      auto* oldreg = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(ithregpair->getOperand(0))->getValue());
+      auto* newreg = dyn_cast<llvm::ConstantInt>(dyn_cast<llvm::ConstantAsMetadata>(ithregpair->getOperand(1))->getValue());
+      LLVM_DEBUG(dbgs() << "Old/New pairs: " << oldreg->getValue().getLimitedValue() 
+          << " " << newreg->getValue().getLimitedValue() << "\n");
+      prologue_epilogueRegMap[(unsigned)(oldreg->getValue().getLimitedValue())] = (unsigned)(newreg->getValue().getLimitedValue());
+    }
+  }
+
+  std::map<unsigned, unsigned> constructedRegMap;
+
   for (auto &MBB : MF) {
     unsigned predReg = 0;
     unsigned negate = 0;
@@ -1882,6 +1907,17 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             unsigned offset = MO.getReg()-vvW->getRegister(0);
             unsigned oldReg = MO.getReg();
             unsigned newReg = vvD->getRegister(wStart+offset);
+
+            constructedRegMap[oldReg] = newReg;
+            if (isPrologue || isEpilogue) {
+              auto q = prologue_epilogueRegMap.find(oldReg);
+              assert(q != prologue_epilogueRegMap.end() &&
+               "Using a physreg in prologue/epilogue that was not used in corresponding kernel");
+              newReg = q->second;
+
+              LLVM_DEBUG(dbgs() << "Re-assigning same physreg to prologue as was used in kernel\n");
+            }
+
             // change live ins in the sucessor BBs
             // TODO: do we need to follow through all successors?
             for(auto &succ : MBB.successors()) {
@@ -1909,6 +1945,15 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
             unsigned offset = MO.getReg()-vvH->getRegister(0);
             unsigned oldReg = MO.getReg();
             unsigned newReg = vvD->getRegister(hStart+offset);
+
+            constructedRegMap[oldReg] = newReg;
+            if (isPrologue || isEpilogue) {
+              auto q = prologue_epilogueRegMap.find(oldReg);
+              assert(q != prologue_epilogueRegMap.end() &&
+               "Using a physreg in prologue/epilogue that was not used in corresponding kernel");
+              newReg = q->second;
+            }
+
             // change live ins in the sucessor BBs
             // TODO: do we need to follow through all successors?
             for(auto &succ : MBB.successors()) {
@@ -1976,6 +2021,29 @@ bool RISCVVectorFetchRegFix::runOnMachineFunction(MachineFunction &MF) {
   const_cast<Function&>(MF.getFunction()).setMetadata("hwacha.vfcfg", functionContext);
 
   LLVM_DEBUG(MF.getFunction().getMetadata("hwacha.vfcfg")->dump());
+
+  std::vector<Metadata *> metadata;
+  for (auto &regs : constructedRegMap) {
+    Metadata *cfg[2] = {ConstantAsMetadata::get(ConstantInt::get(Int64, regs.first)),
+     ConstantAsMetadata::get(ConstantInt::get(Int64, regs.second))};
+    metadata.push_back(MDNode::get(MF.getFunction().getContext(), cfg));
+  }
+  if (metadata.size() > 0) {
+    LLVM_DEBUG(dbgs() << "Regmap context" << "\n");
+
+    auto regMapContext = MDNode::get(MF.getFunction().getContext(), metadata);
+    for (unsigned i = 0; i < regMapContext->getNumOperands(); i++) {
+      LLVM_DEBUG(regMapContext->getOperand(i)->dump());
+    }
+
+
+    const_cast<Function&>(MF.getFunction()).setMetadata("regmap", regMapContext);
+  }
+
+
+
+
+
   return true;
 }
 
