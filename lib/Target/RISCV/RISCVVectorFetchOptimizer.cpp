@@ -510,7 +510,7 @@ CallGraphNode *RISCVVectorFetchIROpt::processOpenCLKernel(Function *F) {
   SmallVector<std::pair< unsigned, MDNode *>, 8> meta;
   F->getAllMetadata(meta);
   for (auto j : meta) {
-    j.second->dump();
+    LLVM_DEBUG(j.second->dump());
     NF->setMetadata(j.first, j.second);
     Function *k =
       dyn_cast<Function>(
